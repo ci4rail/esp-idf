@@ -9,7 +9,7 @@
 #include <assert.h>
 #include "esp_efuse_table.h"
 
-// md5_digest_table e460a50d9f80fa56cb87cd54ff055feb
+// md5_digest_table 6aaac59bd3f6d31bea4aef43b1f0d78a
 // This file was generated from the file esp_efuse_table.csv. DO NOT CHANGE THIS FILE MANUALLY.
 // If you want to change some fields, you need to change esp_efuse_table.csv file
 // then run `efuse_common_table` or `efuse_custom_table` command it will generate this file.
@@ -153,10 +153,6 @@ static const esp_efuse_desc_t RD_DIS_KEY5[] = {
 
 static const esp_efuse_desc_t RD_DIS_SYS_DATA_PART2[] = {
     {EFUSE_BLK0, 38, 1}, 	 // Read protection for EFUSE_BLK10. SYS_DATA_PART2,
-};
-
-static const esp_efuse_desc_t DIS_RTC_RAM_BOOT[] = {
-    {EFUSE_BLK0, 39, 1}, 	 // Disable boot from RTC RAM,
 };
 
 static const esp_efuse_desc_t DIS_ICACHE[] = {
@@ -353,8 +349,8 @@ static const esp_efuse_desc_t MAC_FACTORY[] = {
 };
 
 static const esp_efuse_desc_t MAC_EXT[] = {
-    {EFUSE_BLK1, 123, 8}, 	 // Factory MAC addr [6],
-    {EFUSE_BLK1, 131, 8}, 	 // Factory MAC addr [7],
+    {EFUSE_BLK1, 123, 8}, 	 // Extend MAC addr [0],
+    {EFUSE_BLK1, 131, 8}, 	 // Extend MAC addr [1],
 };
 
 static const esp_efuse_desc_t SPI_PAD_CONFIG_CLK[] = {
@@ -676,11 +672,6 @@ const esp_efuse_desc_t* ESP_EFUSE_RD_DIS_SYS_DATA_PART2[] = {
     NULL
 };
 
-const esp_efuse_desc_t* ESP_EFUSE_DIS_RTC_RAM_BOOT[] = {
-    &DIS_RTC_RAM_BOOT[0],    		// Disable boot from RTC RAM
-    NULL
-};
-
 const esp_efuse_desc_t* ESP_EFUSE_DIS_ICACHE[] = {
     &DIS_ICACHE[0],    		// Disable Icache
     NULL
@@ -922,8 +913,8 @@ const esp_efuse_desc_t* ESP_EFUSE_MAC_FACTORY[] = {
 };
 
 const esp_efuse_desc_t* ESP_EFUSE_MAC_EXT[] = {
-    &MAC_EXT[6],    		// Factory MAC addr [6]
-    &MAC_EXT[7],    		// Factory MAC addr [7]
+    &MAC_EXT[0],    		// Extend MAC addr [0]
+    &MAC_EXT[1],    		// Extend MAC addr [1]
     NULL
 };
 

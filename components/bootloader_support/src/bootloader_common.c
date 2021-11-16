@@ -19,10 +19,13 @@
 #include "esp32c3/rom/spi_flash.h"
 #elif CONFIG_IDF_TARGET_ESP32H2
 #include "esp32h2/rom/spi_flash.h"
+#elif CONFIG_IDF_TARGET_ESP8684
+#include "esp8684/rom/spi_flash.h"
 #endif
 #include "esp_rom_crc.h"
 #include "esp_rom_gpio.h"
 #include "esp_rom_sys.h"
+#include "esp_rom_efuse.h"
 #include "esp_flash_partitions.h"
 #include "bootloader_flash_priv.h"
 #include "bootloader_common.h"
@@ -191,8 +194,19 @@ void bootloader_common_vddsdio_configure(void)
 #endif // CONFIG_BOOTLOADER_VDDSDIO_BOOST
 }
 
-
 RESET_REASON bootloader_common_get_reset_reason(int cpu_no)
 {
     return (RESET_REASON)esp_rom_get_reset_reason(cpu_no);
+}
+
+uint8_t bootloader_flash_get_cs_io(void)
+{
+    uint8_t cs_io;
+    const uint32_t spiconfig = esp_rom_efuse_get_flash_gpio_info();
+    if (spiconfig == ESP_ROM_EFUSE_FLASH_DEFAULT_SPI) {
+        cs_io = SPI_CS0_GPIO_NUM;
+    } else {
+        cs_io = (spiconfig >> 18) & 0x3f;
+    }
+    return cs_io;
 }

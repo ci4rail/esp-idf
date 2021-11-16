@@ -15,7 +15,7 @@
 #include "esp_log.h"
 #include "soc/efuse_periph.h"
 #include "bootloader_random.h"
-#include "soc/apb_ctrl_reg.h"
+#include "soc/syscon_reg.h"
 #include "sys/param.h"
 
 static __attribute__((unused)) const char *TAG = "efuse";
@@ -32,6 +32,8 @@ void esp_efuse_reset(void)
     esp_efuse_utility_reset();
 }
 
+#if !CONFIG_IDF_TARGET_ESP8684
+// IDF-3818
 uint32_t esp_efuse_read_secure_version(void)
 {
     uint32_t secure_version = 0;
@@ -73,3 +75,4 @@ esp_err_t esp_efuse_update_secure_version(uint32_t secure_version)
     }
     return ESP_OK;
 }
+#endif

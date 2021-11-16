@@ -1,16 +1,8 @@
-// Copyright 2020 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2020-2021 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /*
  * Soc capabilities file, describing the following chip attributes:
@@ -47,38 +39,48 @@
 #define SOC_USB_OTG_SUPPORTED           1
 #define SOC_PCNT_SUPPORTED              1
 #define SOC_ULP_SUPPORTED               1
-#define SOC_RTC_SLOW_MEM_SUPPORTED      1
 #define SOC_CCOMP_TIMER_SUPPORTED       1
 #define SOC_DIG_SIGN_SUPPORTED          1
 #define SOC_HMAC_SUPPORTED              1
 #define SOC_ASYNC_MEMCPY_SUPPORTED      1
-#define SOC_EFUSE_SECURE_BOOT_KEY_DIGESTS 3
-#define SOC_EFUSE_REVOKE_BOOT_KEY_DIGESTS 1
-#define SOC_TEMP_SENSOR_SUPPORTED       1
-#define SOC_CACHE_SUPPORT_WRAP          1
-#define SOC_FLASH_ENCRYPTION_XTS_AES      1
-#define SOC_FLASH_ENCRYPTION_XTS_AES_256 1
-#define SOC_PSRAM_DMA_CAPABLE           1
-#define SOC_XT_WDT_SUPPORTED            1
+#define SOC_EFUSE_SECURE_BOOT_KEY_DIGESTS   3
+#define SOC_EFUSE_REVOKE_BOOT_KEY_DIGESTS   1
+#define SOC_ICACHE_ACCESS_RODATA_SUPPORTED  1
+#define SOC_TEMP_SENSOR_SUPPORTED           1
+#define SOC_CACHE_SUPPORT_WRAP              1
+#define SOC_FLASH_ENCRYPTION_XTS_AES        1
+#define SOC_FLASH_ENCRYPTION_XTS_AES_256    1
+#define SOC_RTC_FAST_MEM_SUPPORTED      1
+#define SOC_RTC_SLOW_MEM_SUPPORTED      1
+#define SOC_PSRAM_DMA_CAPABLE               1
+#define SOC_XT_WDT_SUPPORTED                1
+#define SOC_SUPPORT_SECURE_BOOT_REVOKE_KEY             1
+
 
 /*-------------------------- ADC CAPS ----------------------------------------*/
-#define SOC_ADC_PERIPH_NUM              (2)
-#define SOC_ADC_PATT_LEN_MAX            (16)
-#define SOC_ADC_CHANNEL_NUM(PERIPH_NUM) (10)
-#define SOC_ADC_MAX_CHANNEL_NUM         (10)
-#define SOC_ADC_MAX_BITWIDTH            (13)
-#define SOC_ADC_HW_CALIBRATION_V1       (1) /*!< support HW offset calibration */
+/*!< SAR ADC Module*/
+#define SOC_ADC_RTC_CTRL_SUPPORTED              1
+#define SOC_ADC_ARBITER_SUPPORTED               1
+#define SOC_ADC_FILTER_SUPPORTED                1
+#define SOC_ADC_MONITOR_SUPPORTED               1
+#define SOC_ADC_PERIPH_NUM                      (2)
+#define SOC_ADC_CHANNEL_NUM(PERIPH_NUM)         (10)
+#define SOC_ADC_MAX_CHANNEL_NUM                 (10)
 
+/*!< Digital */
+#define SOC_ADC_DIGI_CONTROLLER_NUM             (2)
+#define SOC_ADC_PATT_LEN_MAX                    (32) /*!< Two pattern table, each contains 16 items. Each item takes 1 byte */
+#define SOC_ADC_DIGI_MAX_BITWIDTH               (12)
+/*!< F_sample = F_digi_con / 2 / interval. F_digi_con = 5M for now. 30 <= interva <= 4095 */
+#define SOC_ADC_SAMPLE_FREQ_THRES_HIGH          83333
+#define SOC_ADC_SAMPLE_FREQ_THRES_LOW           611
 
-/**
- * Check if adc support digital controller (DMA) mode.
- * @value
- *      - 1 : support;
- *      - 0 : not support;
- */
-#define SOC_ADC_SUPPORT_DMA_MODE(PERIPH_NUM) ((PERIPH_NUM==0)? 1: 1)
-#define SOC_ADC_SUPPORT_RTC_CTRL        1
-#define SOC_ADC_ARBITER_SUPPORTED       1
+/*!< RTC */
+#define SOC_ADC_MAX_BITWIDTH                    (13)
+
+/*!< Calibration */
+#define SOC_ADC_CALIBRATION_V1_SUPPORTED        (1) /*!< support HW offset calibration version 1*/
+
 
 /*-------------------------- BROWNOUT CAPS -----------------------------------*/
 #define SOC_BROWNOUT_RESET_SUPPORTED 1
@@ -120,6 +122,7 @@
 #define SOC_DEDIC_GPIO_IN_CHANNELS_NUM  (8) /*!< 8 inward channels on each CPU core */
 #define SOC_DEDIC_GPIO_ALLOW_REG_ACCESS (1) /*!< Allow access dedicated GPIO channel by register */
 #define SOC_DEDIC_GPIO_HAS_INTERRUPT    (1) /*!< Dedicated GPIO has its own interrupt source */
+#define SOC_DEDIC_GPIO_OUT_AUTO_ENABLE  (1) /*!< Dedicated GPIO output attribution is enabled automatically */
 
 /*-------------------------- I2C CAPS ----------------------------------------*/
 // ESP32-S2 have 2 I2C.
@@ -152,6 +155,8 @@
 #define SOC_LCD_I80_BUS_WIDTH      (24) /*!< Intel 8080 bus width */
 
 /*-------------------------- LEDC CAPS ---------------------------------------*/
+#define SOC_LEDC_HAS_TIMER_SPECIFIC_MUX  (1)
+#define SOC_LEDC_SUPPORT_REF_TICK    (1)
 #define SOC_LEDC_SUPPORT_XTAL_CLOCK  (1)
 #define SOC_LEDC_CHANNEL_NUM         (8)
 #define SOC_LEDC_TIMER_BIT_WIDE_NUM  (14)
@@ -235,12 +240,12 @@
 #define SOC_TIMER_GROUP_TOTAL_TIMERS (SOC_TIMER_GROUPS * SOC_TIMER_GROUP_TIMERS_PER_GROUP)
 
 /*-------------------------- TOUCH SENSOR CAPS -------------------------------*/
-#define SOC_TOUCH_SENSOR_NUM                (15)    /*! 15 Touch channels */
-#define SOC_TOUCH_PROXIMITY_CHANNEL_NUM     (3)  /* Sopport touch proximity channel number. */
+#define SOC_TOUCH_VERSION_2                 (1)     /*!<Hardware version of touch sensor */
+#define SOC_TOUCH_SENSOR_NUM                (15)    /*!<15 Touch channels */
+#define SOC_TOUCH_PROXIMITY_CHANNEL_NUM     (3)     /* Sopport touch proximity channel number. */
 
 #define SOC_TOUCH_PAD_THRESHOLD_MAX         (0x1FFFFF)  /*!<If set touch threshold max value, The touch sensor can't be in touched status */
 #define SOC_TOUCH_PAD_MEASURE_WAIT_MAX      (0xFF)  /*!<The timer frequency is 8Mhz, the max value is 0xff */
-#define SOC_TOUCH_PAD_WAKE_SUPPORTED        (1)     /*!<Supports waking up from touch pad trigger */
 
 /*-------------------------- TWAI CAPS ---------------------------------------*/
 #define SOC_TWAI_BRP_MIN                2
@@ -331,5 +336,9 @@
 
 #define SOC_PM_SUPPORT_WIFI_PD          (1)
 
+#define SOC_PM_SUPPORT_TOUCH_SENSOR_WAKEUP        (1)     /*!<Supports waking up from touch pad trigger */
+
+/*-------------------------- COEXISTENCE HARDWARE PTI CAPS -------------------------------*/
+#define SOC_COEX_HW_PTI                 (1)
 /* ---------------------------- Compatibility ------------------------------- */
 // No contents

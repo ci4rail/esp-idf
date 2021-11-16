@@ -5,7 +5,9 @@
 
 #pragma once
 
+/*-------------------------- COMMON CAPS ---------------------------------------*/
 #define SOC_CPU_CORES_NUM               1
+#define SOC_DEDICATED_GPIO_SUPPORTED    1
 #define SOC_GDMA_SUPPORTED              1
 #define SOC_TWAI_SUPPORTED              1
 #define SOC_BT_SUPPORTED                1
@@ -13,11 +15,13 @@
 #define SOC_HMAC_SUPPORTED              1
 #define SOC_ASYNC_MEMCPY_SUPPORTED      1
 #define SOC_USB_SERIAL_JTAG_SUPPORTED   1
-
-/*-------------------------- COMMON CAPS ---------------------------------------*/
 #define SOC_SUPPORTS_SECURE_DL_MODE         1
 #define SOC_EFUSE_SECURE_BOOT_KEY_DIGESTS   3
+#define SOC_ICACHE_ACCESS_RODATA_SUPPORTED  1
 #define SOC_TEMP_SENSOR_SUPPORTED           1
+#define SOC_RTC_FAST_MEM_SUPPORTED          1
+#define SOC_RTC_SLOW_MEM_SUPPORTED          0
+#define SOC_SUPPORT_SECURE_BOOT_REVOKE_KEY                 1
 
 
 /*-------------------------- AES CAPS -----------------------------------------*/
@@ -37,7 +41,7 @@
 #define SOC_ADC_MAX_BITWIDTH                    (12)
 #define SOC_ADC_DIGI_FILTER_NUM                 (2)
 #define SOC_ADC_DIGI_MONITOR_NUM                (2)
-#define SOC_ADC_HW_CALIBRATION_V1               (1) /*!< support HW offset calibration */
+#define SOC_ADC_CALIBRATION_V1_SUPPORTED        (1) /*!< support HW offset calibration version 1*/
 #define SOC_ADC_SUPPORT_DMA_MODE(PERIPH_NUM)    1
 //F_sample = F_digi_con / 2 / interval. F_digi_con = 5M for now. 30 <= interva <= 4095
 #define SOC_ADC_SAMPLE_FREQ_THRES_HIGH          83333
@@ -91,6 +95,11 @@
 
 // Support to configure sleep status
 #define SOC_GPIO_SUPPORT_SLP_SWITCH  (1)
+
+/*-------------------------- Dedicated GPIO CAPS -----------------------------*/
+#define SOC_DEDIC_GPIO_OUT_CHANNELS_NUM (8) /*!< 8 outward channels on each CPU core */
+#define SOC_DEDIC_GPIO_IN_CHANNELS_NUM  (8) /*!< 8 inward channels on each CPU core */
+#define SOC_DEDIC_PERIPH_AUTO_ENABLE    (1) /*!< The dedicated GPIO peripheral is enabled automatically */
 
 /*-------------------------- I2C CAPS ----------------------------------------*/
 // ESP32-C3 have 2 I2C.

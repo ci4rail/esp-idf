@@ -14,7 +14,6 @@
 #include "soc/rtc_periph.h"
 #include "soc/soc_caps.h"
 #include "hal/i2s_types.h"
-#include "driver/periph_ctrl.h"
 #include "esp_intr_alloc.h"
 
 #if SOC_I2S_SUPPORTS_ADC
@@ -78,7 +77,7 @@ typedef struct  {
  *
  */
 typedef struct {
-    int mck_io_num;     /*!< MCK in out pin*/
+    int mck_io_num;     /*!< MCK in out pin. Note that ESP32 supports setting MCK on GPIO0/GPIO1/GPIO3 only*/
     int bck_io_num;     /*!< BCK in out pin*/
     int ws_io_num;      /*!< WS in out pin*/
     int data_out_num;   /*!< DATA out pin*/
@@ -221,7 +220,7 @@ esp_err_t i2s_set_pdm_tx_up_sample(i2s_port_t i2s_num, const i2s_pdm_tx_upsample
  *     - ESP_OK              Success
  *     - ESP_ERR_INVALID_ARG Parameter error
  *     - ESP_ERR_NO_MEM      Out of memory
- *     - ESP_ERR_NOT_FOUND   I2S port is not found or has been installed by others (e.g. LCD i80)
+ *     - ESP_ERR_INVALID_STATE  Current I2S port is in use
  */
 esp_err_t i2s_driver_install(i2s_port_t i2s_num, const i2s_config_t *i2s_config, int queue_size, void *i2s_queue);
 

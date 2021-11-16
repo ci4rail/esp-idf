@@ -53,6 +53,18 @@
 #include "esp32h2/rom/secure_boot.h"
 #include "soc/extmem_reg.h"
 #include "soc/cache_memory.h"
+#elif CONFIG_IDF_TARGET_ESP8684
+#include "esp8684/rom/cache.h"
+#include "esp8684/rom/efuse.h"
+#include "esp8684/rom/ets_sys.h"
+#include "esp8684/rom/spi_flash.h"
+#include "esp8684/rom/crc.h"
+#include "esp8684/rom/rtc.h"
+#include "esp8684/rom/uart.h"
+#include "esp8684/rom/gpio.h"
+#include "esp8684/rom/secure_boot.h"
+#include "soc/extmem_reg.h"
+#include "soc/cache_memory.h"
 #else // CONFIG_IDF_TARGET_*
 #error "Unsupported IDF_TARGET"
 #endif
@@ -76,6 +88,7 @@
 #include "bootloader_utility.h"
 #include "bootloader_sha.h"
 #include "bootloader_console.h"
+#include "bootloader_soc.h"
 #include "esp_efuse.h"
 
 static const char *TAG = "boot";
@@ -636,6 +649,12 @@ static void load_image(const esp_image_metadata_t *image_data)
     ESP_LOGI(TAG, "Disabling RNG early entropy source...");
     bootloader_random_disable();
 
+    /* Disable glitch reset after all the security checks are completed.
+     * Glitch detection can be falsely triggered by EMI interference (high RF TX power, etc)
+     * and to avoid such false alarms, disable it.
+     */
+    bootloader_ana_clock_glitch_reset_config(false);
+
     // copy loaded segments to RAM, set up caches for mapped segments, and start application
     unpack_load_app(image_data);
 }
@@ -698,18 +717,12 @@ static void set_cache_and_start_app(
 #if CONFIG_IDF_TARGET_ESP32
     Cache_Read_Disable(0);
     Cache_Flush(0);
-#elif CONFIG_IDF_TARGET_ESP32S2
+#elif SOC_ICACHE_ACCESS_RODATA_SUPPORTED
     uint32_t autoload = Cache_Suspend_ICache();
     Cache_Invalidate_ICache_All();
-#elif CONFIG_IDF_TARGET_ESP32S3
+#else // access rodata with DCache
     uint32_t autoload = Cache_Suspend_DCache();
     Cache_Invalidate_DCache_All();
-#elif CONFIG_IDF_TARGET_ESP32C3
-    uint32_t autoload = Cache_Suspend_ICache();
-    Cache_Invalidate_ICache_All();
-#elif CONFIG_IDF_TARGET_ESP32H2
-    uint32_t autoload = Cache_Suspend_ICache();
-    Cache_Invalidate_ICache_All();
 #endif
 
     /* Clear the MMU entries that are already set up,
@@ -732,11 +745,7 @@ static void set_cache_and_start_app(
     rc = cache_flash_mmu_set(0, 0, drom_load_addr_aligned, drom_addr & MMU_FLASH_MASK, 64, drom_page_count);
 #elif CONFIG_IDF_TARGET_ESP32S2
     rc = Cache_Ibus_MMU_Set(MMU_ACCESS_FLASH, drom_load_addr & 0xffff0000, drom_addr & 0xffff0000, 64, drom_page_count, 0);
-#elif CONFIG_IDF_TARGET_ESP32S3
-    rc = Cache_Dbus_MMU_Set(MMU_ACCESS_FLASH, drom_load_addr & 0xffff0000, drom_addr & 0xffff0000, 64, drom_page_count, 0);
-#elif CONFIG_IDF_TARGET_ESP32C3
-    rc = Cache_Dbus_MMU_Set(MMU_ACCESS_FLASH, drom_load_addr & 0xffff0000, drom_addr & 0xffff0000, 64, drom_page_count, 0);
-#elif CONFIG_IDF_TARGET_ESP32H2
+#else // map rodata with DBUS
     rc = Cache_Dbus_MMU_Set(MMU_ACCESS_FLASH, drom_load_addr & 0xffff0000, drom_addr & 0xffff0000, 64, drom_page_count, 0);
 #endif
     ESP_LOGV(TAG, "rc=%d", rc);
@@ -750,7 +759,8 @@ static void set_cache_and_start_app(
              irom_addr & MMU_FLASH_MASK, irom_load_addr_aligned, irom_size, irom_page_count);
 #if CONFIG_IDF_TARGET_ESP32
     rc = cache_flash_mmu_set(0, 0, irom_load_addr_aligned, irom_addr & MMU_FLASH_MASK, 64, irom_page_count);
-#elif CONFIG_IDF_TARGET_ESP32S2
+#else // access text with IBUS
+#if CONFIG_IDF_TARGET_ESP32S2
     uint32_t iram1_used = 0;
     if (irom_load_addr + irom_size > IRAM1_ADDRESS_LOW) {
         iram1_used = 1;
@@ -760,12 +770,7 @@ static void set_cache_and_start_app(
         rc = Cache_Ibus_MMU_Set(MMU_ACCESS_FLASH, IRAM1_ADDRESS_LOW, 0, 64, 64, 1);
         REG_CLR_BIT(EXTMEM_PRO_ICACHE_CTRL1_REG, EXTMEM_PRO_ICACHE_MASK_IRAM1);
     }
-    rc = Cache_Ibus_MMU_Set(MMU_ACCESS_FLASH, irom_load_addr & 0xffff0000, irom_addr & 0xffff0000, 64, irom_page_count, 0);
-#elif CONFIG_IDF_TARGET_ESP32S3
-    rc = Cache_Ibus_MMU_Set(MMU_ACCESS_FLASH, irom_load_addr & 0xffff0000, irom_addr & 0xffff0000, 64, irom_page_count, 0);
-#elif CONFIG_IDF_TARGET_ESP32C3
-    rc = Cache_Ibus_MMU_Set(MMU_ACCESS_FLASH, irom_load_addr & 0xffff0000, irom_addr & 0xffff0000, 64, irom_page_count, 0);
-#elif CONFIG_IDF_TARGET_ESP32H2
+#endif
     rc = Cache_Ibus_MMU_Set(MMU_ACCESS_FLASH, irom_load_addr & 0xffff0000, irom_addr & 0xffff0000, 64, irom_page_count, 0);
 #endif
     ESP_LOGV(TAG, "rc=%d", rc);
@@ -787,23 +792,16 @@ static void set_cache_and_start_app(
 #if !CONFIG_FREERTOS_UNICORE
     REG_CLR_BIT(EXTMEM_DCACHE_CTRL1_REG, EXTMEM_DCACHE_SHUT_CORE1_BUS);
 #endif
-#elif CONFIG_IDF_TARGET_ESP32C3
-    REG_CLR_BIT(EXTMEM_ICACHE_CTRL1_REG, EXTMEM_ICACHE_SHUT_IBUS);
-    REG_CLR_BIT(EXTMEM_ICACHE_CTRL1_REG, EXTMEM_ICACHE_SHUT_DBUS);
-#elif CONFIG_IDF_TARGET_ESP32H2
+#else // ESP32C3, ESP32H2
     REG_CLR_BIT(EXTMEM_ICACHE_CTRL1_REG, EXTMEM_ICACHE_SHUT_IBUS);
     REG_CLR_BIT(EXTMEM_ICACHE_CTRL1_REG, EXTMEM_ICACHE_SHUT_DBUS);
 #endif
 #if CONFIG_IDF_TARGET_ESP32
     Cache_Read_Enable(0);
-#elif CONFIG_IDF_TARGET_ESP32S2
+#elif SOC_ICACHE_ACCESS_RODATA_SUPPORTED
     Cache_Resume_ICache(autoload);
-#elif CONFIG_IDF_TARGET_ESP32S3
+#else // access rodata with DCache
     Cache_Resume_DCache(autoload);
-#elif CONFIG_IDF_TARGET_ESP32C3
-    Cache_Resume_ICache(autoload);
-#elif CONFIG_IDF_TARGET_ESP32H2
-    Cache_Resume_ICache(autoload);
 #endif
     // Application will need to do Cache_Flush(1) and Cache_Read_Enable(1)
 

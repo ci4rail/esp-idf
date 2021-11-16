@@ -38,7 +38,7 @@ if(CONFIG_TINYUSB)
         "additions/include"
         "tinyusb/lib/networking"
         # The FreeRTOS API include convention in tinyusb is different from esp-idf
-        "${freertos_component_dir}/include/freertos"
+        "${freertos_component_dir}/FreeRTOS-Kernel/include/freertos"
         )
 
     list(APPEND srcs
@@ -84,7 +84,7 @@ endif() # CONFIG_TINYUSB
 idf_component_register(SRCS ${srcs}
                        INCLUDE_DIRS ${includes_public}
                        PRIV_INCLUDE_DIRS ${includes_private}
-                       PRIV_REQUIRES "vfs"
+                       PRIV_REQUIRES "vfs" "usb"
                        )
 
 if(CONFIG_TINYUSB)

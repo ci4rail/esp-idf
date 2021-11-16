@@ -1,16 +1,8 @@
-// Copyright 2019 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2019-2021 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include "utils/includes.h"
 #include "utils/common.h"
@@ -123,6 +115,8 @@ bool  wpa_attach(void)
     if(ret) {
         ret = (esp_wifi_register_tx_cb_internal(eapol_txcb, WIFI_TXCB_EAPOL_ID) == ESP_OK);
     }
+    esp_set_scan_ie();
+    esp_set_assoc_ie();
     return ret;
 }
 
@@ -171,21 +165,26 @@ bool  wpa_deattach(void)
     return true;
 }
 
-void  wpa_sta_connect(uint8_t *bssid)
+int wpa_sta_connect(uint8_t *bssid)
 {
     /* use this API to set AP specific IEs during connection */
     int ret = 0;
     ret = wpa_config_profile();
     if (ret == 0) {
         ret = wpa_config_bss(bssid);
-        WPA_ASSERT(ret == 0);
+        if (ret) {
+            wpa_printf(MSG_DEBUG, "Rejecting bss, validation failed");
+            return ret;
+        }
     }
+
+    return 0;
 }
 
 void wpa_config_done(void)
 {
     /* used in future for setting scan and assoc IEs */
-    esp_set_rm_enabled_ie();
+    esp_set_assoc_ie();
 }
 
 int wpa_parse_wpa_ie_wrapper(const u8 *wpa_ie, size_t wpa_ie_len, wifi_wpa_ie_t *data)
@@ -230,6 +229,7 @@ static void wpa_sta_disconnected_cb(uint8_t reason_code)
 static inline void esp_supplicant_common_init(struct wpa_funcs *wpa_cb)
 {
 	wpa_cb->wpa_sta_rx_mgmt = NULL;
+	wpa_cb->wpa_sta_profile_match = NULL;
 }
 static inline void esp_supplicant_common_deinit(void)
 {
@@ -241,7 +241,7 @@ int esp_supplicant_init(void)
     int ret = ESP_OK;
     struct wpa_funcs *wpa_cb;
 
-    wpa_cb = (struct wpa_funcs *)os_malloc(sizeof(struct wpa_funcs));
+    wpa_cb = (struct wpa_funcs *)os_zalloc(sizeof(struct wpa_funcs));
     if (!wpa_cb) {
         return ESP_ERR_NO_MEM;
     }
@@ -253,6 +253,7 @@ int esp_supplicant_init(void)
     wpa_cb->wpa_sta_disconnected_cb = wpa_sta_disconnected_cb;
     wpa_cb->wpa_sta_in_4way_handshake = wpa_sta_in_4way_handshake;
 
+#ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
     wpa_cb->wpa_ap_join       = wpa_ap_join;
     wpa_cb->wpa_ap_remove     = wpa_ap_remove;
     wpa_cb->wpa_ap_get_wpa_ie = wpa_ap_get_wpa_ie;
@@ -260,6 +261,7 @@ int esp_supplicant_init(void)
     wpa_cb->wpa_ap_get_peer_spp_msg  = wpa_ap_get_peer_spp_msg;
     wpa_cb->wpa_ap_init       = hostap_init;
     wpa_cb->wpa_ap_deinit     = hostap_deinit;
+#endif
 
     wpa_cb->wpa_config_parse_string  = wpa_config_parse_string;
     wpa_cb->wpa_parse_wpa_ie  = wpa_parse_wpa_ie_wrapper;

@@ -150,7 +150,7 @@ function run_tests()
     pushd ${IDF_PATH}/examples/get-started/hello_world
     GIT_COMMITTER_NAME="No One" GIT_COMMITTER_EMAIL="noone@espressif.com" git tag mytag -a -m "mytag" || failure "Git cannot create tag"
     idf.py reconfigure &> log.log || failure "Failed to build"
-    str="App \"hello-world\" version: mytag"
+    str="App \"hello_world\" version: mytag"
     grep "${str}" log.log || { cat log.log ; failure "Project version should be the custom tag"; }
     idf_version=$(idf.py --version)
     if [[ "$idf_version" == *"mytag"* ]]; then
@@ -251,7 +251,7 @@ function run_tests()
     # and therefore should rebuild
     assert_rebuilt esp-idf/newlib/CMakeFiles/${IDF_COMPONENT_PREFIX}_newlib.dir/newlib_init.c.obj
     assert_rebuilt esp-idf/nvs_flash/CMakeFiles/${IDF_COMPONENT_PREFIX}_nvs_flash.dir/src/nvs_api.cpp.obj
-    assert_rebuilt esp-idf/freertos/CMakeFiles/${IDF_COMPONENT_PREFIX}_freertos.dir/port/xtensa/xtensa_vectors.S.obj
+    assert_rebuilt esp-idf/freertos/CMakeFiles/${IDF_COMPONENT_PREFIX}_freertos.dir/FreeRTOS-Kernel/portable/xtensa/xtensa_vectors.S.obj
     mv sdkconfig.bak sdkconfig
 
     print_status "Updating project CMakeLists.txt triggers full recompile"
@@ -266,7 +266,7 @@ function run_tests()
     # similar to previous test
     assert_rebuilt esp-idf/newlib/CMakeFiles/${IDF_COMPONENT_PREFIX}_newlib.dir/newlib_init.c.obj
     assert_rebuilt esp-idf/nvs_flash/CMakeFiles/${IDF_COMPONENT_PREFIX}_nvs_flash.dir/src/nvs_api.cpp.obj
-    assert_rebuilt esp-idf/freertos/CMakeFiles/${IDF_COMPONENT_PREFIX}_freertos.dir/port/xtensa/xtensa_vectors.S.obj
+    assert_rebuilt esp-idf/freertos/CMakeFiles/${IDF_COMPONENT_PREFIX}_freertos.dir/FreeRTOS-Kernel/portable/xtensa/xtensa_vectors.S.obj
     mv sdkconfig.bak sdkconfig
 
     print_status "Can build with Ninja (no idf.py)"
@@ -438,20 +438,6 @@ function run_tests()
     clean_build_dir
     rm sdkconfig
 
-    print_status "Can build with auto generated CMakeLists.txt"
-    clean_build_dir
-    mv CMakeLists.txt CMakeLists.bak
-    ${IDF_PATH}/tools/cmake/convert_to_cmake.py .
-    idf.py build || failure "Auto generated CMakeLists.txt build failed"
-    mv CMakeLists.bak CMakeLists.txt
-    assert_built ${APP_BINS} ${BOOTLOADER_BINS} ${PARTITION_BIN}
-
-    print_status "Can find toolchain file in component directory"
-    clean_build_dir
-    mv ${IDF_PATH}/tools/cmake/toolchain-esp32.cmake ${IDF_PATH}/components/esp32/
-    (idf.py reconfigure > /dev/null && grep "${IDF_PATH}/components/esp32/toolchain-esp32.cmake" build/CMakeCache.txt) || failure  "Failed to find toolchain file in component directory"
-    mv ${IDF_PATH}/components/esp32/toolchain-esp32.cmake ${IDF_PATH}/tools/cmake/
-
     print_status "Setting EXTRA_COMPONENT_DIRS works"
     clean_build_dir
     (idf.py reconfigure | grep "$PWD/main") || failure  "Failed to verify original `main` directory"
@@ -532,7 +518,7 @@ function run_tests()
     fi
 
     print_status "Displays partition table when executing target partition_table"
-    idf.py partition_table | grep -E "# ESP-IDF .+ Partition Table"
+    idf.py partition-table | grep -E "# ESP-IDF .+ Partition Table"
     rm -r build
 
     print_status "Make sure a full build never runs '/usr/bin/env python' or similar"
@@ -868,6 +854,16 @@ endmenu\n" >> ${IDF_PATH}/Kconfig
     idf.py docs --no-browser --language en --version v4.2.1 | grep "https://docs.espressif.com/projects/esp-idf/en/v4.2.1" || failure "'idf.py docs --no-browser --language en --version v4.2.1' failed"
     idf.py docs --no-browser --language en --version v4.2.1 --target esp32 | grep "https://docs.espressif.com/projects/esp-idf/en/v4.2.1/esp32" || failure "'idf.py docs --no-browser --language en --version v4.2.1 --target esp32' failed"
     idf.py docs --no-browser --language en --version v4.2.1 --target esp32 --starting-page get-started | grep "https://docs.espressif.com/projects/esp-idf/en/v4.2.1/esp32/get-started" || failure "'idf.py docs --no-browser --language en --version v4.2.1 --target esp32 --starting-page get-started' failed"
+
+    print_status "Deprecation warning check"
+    # click warning
+    idf.py post_debug &> tmp.log
+    grep "Warning: Command \"post_debug\" is deprecated and will be removed in v5.0." tmp.log || (failure "Missing deprecation warning with command \"post_debug\"")
+    rm tmp.log
+    # cmake warning
+    idf.py efuse_common_table &> tmp.log
+    grep "Warning: Command efuse_common_table is deprecated and will be removed in the next major release." tmp.log || (failure "Missing deprecation warning with command \"efuse_common_table\"")
+    rm tmp.log
 
     print_status "All tests completed"
     if [ -n "${FAILURES}" ]; then

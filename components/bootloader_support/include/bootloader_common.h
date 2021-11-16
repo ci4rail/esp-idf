@@ -20,6 +20,8 @@
 #include "esp32c3/rom/rtc.h"
 #elif CONFIG_IDF_TARGET_ESP32H2
 #include "esp32h2/rom/rtc.h"
+#elif CONFIG_IDF_TARGET_ESP8684
+#include "esp8684/rom/rtc.h"
 #endif
 
 #ifdef __cplusplus
@@ -118,6 +120,15 @@ bool bootloader_common_label_search(const char *list, char *label);
  * @param drv GPIO drive level (determined by clock frequency)
  */
 void bootloader_configure_spi_pins(int drv);
+
+/**
+ * @brief Get flash CS IO
+ *
+ * Can be determined by eFuse values, or the default value
+ *
+ * @return Flash CS IO
+ */
+uint8_t bootloader_flash_get_cs_io(void);
 
 /**
  * @brief Calculates a sha-256 for a given partition or returns a appended digest.

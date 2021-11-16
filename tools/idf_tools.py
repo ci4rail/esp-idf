@@ -295,6 +295,8 @@ def unpack(filename, destination):  # type: (str, str) -> None
     info('Extracting {0} to {1}'.format(filename, destination))
     if filename.endswith(('.tar.gz', '.tgz')):
         archive_obj = tarfile.open(filename, 'r:gz')  # type: Union[TarFile, ZipFile]
+    elif filename.endswith(('.tar.xz')):
+        archive_obj = tarfile.open(filename, 'r:xz')
     elif filename.endswith('zip'):
         archive_obj = ZipFile(filename)
     else:
@@ -1052,6 +1054,9 @@ def export_targets_to_idf_env_json(targets):  # type: (list[str]) -> None
             break
 
     try:
+        if global_idf_tools_path:  # mypy fix for Optional[str] in the next call
+            # the directory doesn't exist if this is run on a clean system the first time
+            mkdir_p(global_idf_tools_path)
         with open(os.path.join(global_idf_tools_path, IDF_ENV_FILE), 'w') as w:  # type: ignore
             json.dump(idf_env_json, w, indent=4)
     except (IOError, OSError):
@@ -1514,7 +1519,7 @@ def action_install_python_env(args):  # type: ignore
             subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--user', 'virtualenv'],
                                   stdout=sys.stdout, stderr=sys.stderr)
 
-        subprocess.check_call([sys.executable, '-m', 'virtualenv', idf_python_env_path],
+        subprocess.check_call([sys.executable, '-m', 'virtualenv', '--seeder', 'pip', idf_python_env_path],
                               stdout=sys.stdout, stderr=sys.stderr)
     run_args = [virtualenv_python, '-m', 'pip', 'install', '--no-warn-script-location']
     requirements_txt = os.path.join(global_idf_path, 'requirements.txt')

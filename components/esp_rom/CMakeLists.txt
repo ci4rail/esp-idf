@@ -48,6 +48,9 @@ endif()
 if(BOOTLOADER_BUILD)
     if(target STREQUAL "esp32")
         rom_linker_script("newlib-funcs")
+        if(NOT CONFIG_SPI_FLASH_ROM_DRIVER_PATCH)
+            rom_linker_script("spiflash")
+        endif()
         if(CONFIG_ESP32_REV_MIN_3)
             rom_linker_script("eco3")
         endif()
@@ -64,6 +67,10 @@ if(BOOTLOADER_BUILD)
 
     elseif(target STREQUAL "esp32h2")
         rom_linker_script("newlib")
+
+    elseif(target STREQUAL "esp8684")
+        rom_linker_script("newlib")
+        rom_linker_script("mbedtls")
     endif()
 
 else() # Regular app build
@@ -130,6 +137,15 @@ else() # Regular app build
     elseif(target STREQUAL "esp32h2")
         rom_linker_script("newlib")
         rom_linker_script("version")
+
+        if(CONFIG_NEWLIB_NANO_FORMAT)
+            rom_linker_script("newlib-nano")
+        endif()
+
+    elseif(target STREQUAL "esp8684")
+        rom_linker_script("newlib")
+        rom_linker_script("version")
+        rom_linker_script("mbedtls")
 
         if(CONFIG_NEWLIB_NANO_FORMAT)
             rom_linker_script("newlib-nano")

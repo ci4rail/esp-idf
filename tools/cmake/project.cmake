@@ -111,6 +111,7 @@ function(__project_info test_components)
     include(${sdkconfig_cmake})
     idf_build_get_property(COMPONENT_KCONFIGS KCONFIGS)
     idf_build_get_property(COMPONENT_KCONFIGS_PROJBUILD KCONFIG_PROJBUILDS)
+    idf_build_get_property(debug_prefix_map_gdbinit DEBUG_PREFIX_MAP_GDBINIT)
 
     # Write project description JSON file
     idf_build_get_property(build_dir BUILD_DIR)
@@ -157,13 +158,14 @@ function(__project_init components_var test_components_var)
 
     function(__project_component_dir component_dir)
         get_filename_component(component_dir "${component_dir}" ABSOLUTE)
+        # The directory itself is a valid idf component
         if(EXISTS ${component_dir}/CMakeLists.txt)
             idf_build_component(${component_dir})
         else()
+            # otherwise, check whether the subfolders are potential idf components
             file(GLOB component_dirs ${component_dir}/*)
             foreach(component_dir ${component_dirs})
-                if(EXISTS ${component_dir}/CMakeLists.txt)
-                    get_filename_component(base_dir ${component_dir} NAME)
+                if(IS_DIRECTORY ${component_dir})
                     __component_dir_quick_check(is_component ${component_dir})
                     if(is_component)
                         idf_build_component(${component_dir})
@@ -205,9 +207,11 @@ function(__project_init components_var test_components_var)
     file(GLOB bootloader_component_dirs "${CMAKE_CURRENT_LIST_DIR}/bootloader_components/*")
     list(SORT bootloader_component_dirs)
     foreach(bootloader_component_dir ${bootloader_component_dirs})
-        __component_dir_quick_check(is_component ${bootloader_component_dir})
-        if(is_component)
-            __kconfig_bootloader_component_add("${bootloader_component_dir}")
+        if(IS_DIRECTORY ${bootloader_component_dir})
+            __component_dir_quick_check(is_component ${bootloader_component_dir})
+            if(is_component)
+                __kconfig_bootloader_component_add("${bootloader_component_dir}")
+            endif()
         endif()
     endforeach()
 
@@ -441,7 +445,11 @@ macro(project project_name)
 
     if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
         set(mapfile "${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}.map")
-        target_link_libraries(${project_elf} "-Wl,--cref -Wl,--Map=${mapfile}")
+        set(idf_target "${IDF_TARGET}")
+        string(TOUPPER ${idf_target} idf_target)
+        target_link_libraries(${project_elf} "-Wl,--cref" "-Wl,--defsym=IDF_TARGET_${idf_target}=0"
+        "-Wl,--Map=\"${mapfile}\"")
+        unset(idf_target)
     endif()
 
     set_property(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" APPEND PROPERTY
@@ -458,15 +466,15 @@ macro(project project_name)
 
     # Add size targets, depend on map file, run idf_size.py
     add_custom_target(size
-        DEPENDS ${project_elf}
+        DEPENDS ${mapfile}
         COMMAND ${idf_size} ${mapfile}
         )
     add_custom_target(size-files
-        DEPENDS ${project_elf}
+        DEPENDS ${mapfile}
         COMMAND ${idf_size} --files ${mapfile}
         )
     add_custom_target(size-components
-        DEPENDS ${project_elf}
+        DEPENDS ${mapfile}
         COMMAND ${idf_size} --archives ${mapfile}
         )
 

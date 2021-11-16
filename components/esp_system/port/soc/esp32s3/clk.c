@@ -1,17 +1,9 @@
 
-// Copyright 2015-2020 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include <stdint.h>
 #include <sys/cdefs.h>
@@ -32,7 +24,7 @@
 #include "soc/i2s_reg.h"
 #include "hal/cpu_hal.h"
 #include "hal/wdt_hal.h"
-#include "driver/periph_ctrl.h"
+#include "esp_private/periph_ctrl.h"
 #include "bootloader_clock.h"
 #include "soc/syscon_reg.h"
 
@@ -76,6 +68,12 @@ static void select_rtc_slow_clk(slow_clk_sel_t slow_clk);
  __attribute__((weak)) void esp_clk_init(void)
 {
     rtc_config_t cfg = RTC_CONFIG_DEFAULT();
+    soc_reset_reason_t rst_reas;
+    rst_reas = esp_rom_get_reset_reason(0);
+    //When power on, we need to set `cali_ocode` to 1, to do a OCode calibration, which will calibrate the rtc reference voltage to a tested value
+    if (rst_reas == RESET_REASON_CHIP_POWER_ON) {
+        cfg.cali_ocode = 1;
+    }
     rtc_init(cfg);
 
     assert(rtc_clk_xtal_freq_get() == RTC_XTAL_FREQ_40M);

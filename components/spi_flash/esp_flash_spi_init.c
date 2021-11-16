@@ -1,16 +1,8 @@
-// Copyright 2015-2019 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include "sdkconfig.h"
 #include "esp_flash.h"
@@ -27,6 +19,7 @@
 #include "hal/gpio_hal.h"
 #include "esp_flash_internal.h"
 #include "esp_rom_gpio.h"
+#include "esp_private/spi_flash_os.h"
 #if CONFIG_IDF_TARGET_ESP32
 #include "esp32/rom/spi_flash.h"
 #elif CONFIG_IDF_TARGET_ESP32S2
@@ -34,9 +27,13 @@
 #elif CONFIG_IDF_TARGET_ESP32S3
 #include "esp32s3/rom/spi_flash.h"
 #elif CONFIG_IDF_TARGET_ESP32C3
+#include "esp32c3/rom/efuse.h"
 #include "esp32c3/rom/spi_flash.h"
 #elif CONFIG_IDF_TARGET_ESP32H2
 #include "esp32h2/rom/spi_flash.h"
+#elif CONFIG_IDF_TARGET_ESP8684
+#include "esp8684/rom/efuse.h"
+#include "esp8684/rom/spi_flash.h"
 #endif
 
 __attribute__((unused)) static const char TAG[] = "spi_flash";
@@ -56,6 +53,8 @@ esp_flash_t *esp_flash_default_chip = NULL;
 #define DEFAULT_FLASH_SPEED ESP_FLASH_26MHZ
 #elif defined CONFIG_ESPTOOLPY_FLASHFREQ_20M
 #define DEFAULT_FLASH_SPEED ESP_FLASH_20MHZ
+#elif defined CONFIG_ESPTOOLPY_FLASHFREQ_120M
+#define DEFAULT_FLASH_SPEED ESP_FLASH_120MHZ
 #else
 #error Flash frequency not defined! Check the ``CONFIG_ESPTOOLPY_FLASHFREQ_*`` options.
 #endif
@@ -68,6 +67,10 @@ esp_flash_t *esp_flash_default_chip = NULL;
 #define DEFAULT_FLASH_MODE  SPI_FLASH_DIO
 #elif defined(CONFIG_ESPTOOLPY_FLASHMODE_DOUT)
 #define DEFAULT_FLASH_MODE  SPI_FLASH_DOUT
+#elif defined(CONFIG_ESPTOOLPY_FLASH_SAMPLE_MODE_STR)
+#define DEFAULT_FLASH_MODE SPI_FLASH_OPI_STR
+#elif defined(CONFIG_ESPTOOLPY_FLASH_SAMPLE_MODE_DTR)
+#define DEFAULT_FLASH_MODE SPI_FLASH_OPI_DTR
 #else
 #define DEFAULT_FLASH_MODE SPI_FLASH_FASTRD
 #endif
@@ -101,8 +104,7 @@ esp_flash_t *esp_flash_default_chip = NULL;
     .input_delay_ns = 0,\
     .cs_setup = 1,\
 }
-#elif CONFIG_IDF_TARGET_ESP32C3
-#include "esp32c3/rom/efuse.h"
+#elif CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP8684
 #if !CONFIG_SPI_FLASH_AUTO_SUSPEND
 #define ESP_FLASH_HOST_CONFIG_DEFAULT()  (memspi_host_config_t){ \
     .host_id = SPI1_HOST,\
@@ -285,10 +287,23 @@ esp_err_t esp_flash_init_default_chip(void)
     const esp_rom_spiflash_chip_t *legacy_chip = &g_rom_flashchip;
     memspi_host_config_t cfg = ESP_FLASH_HOST_CONFIG_DEFAULT();
 
-    #if !CONFIG_IDF_TARGET_ESP32
+    #if !CONFIG_IDF_TARGET_ESP32 && !CONFIG_IDF_TARGET_ESP8684
     // For esp32s2 spi IOs are configured as from IO MUX by default
     cfg.iomux = esp_rom_efuse_get_flash_gpio_info() == 0 ?  true : false;
     #endif
+
+    #if CONFIG_ESPTOOLPY_OCT_FLASH
+    cfg.octal_mode_en = 1;
+    cfg.default_io_mode = DEFAULT_FLASH_MODE;
+    #endif
+
+    // For chips need time tuning, get value directely from system here.
+    #if SOC_SPI_MEM_SUPPORT_TIME_TUNING
+    if (spi_timing_is_tuned()) {
+        cfg.using_timing_tuning = 1;
+        spi_timing_get_flash_timing_param(&cfg.timing_reg);
+    }
+    #endif // SOC_SPI_MEM_SUPPORT_TIME_TUNING
 
     //the host is already initialized, only do init for the data and load it to the host
     esp_err_t err = memspi_host_init_pointers(&esp_flash_default_host, &cfg);
@@ -298,7 +313,7 @@ esp_err_t esp_flash_init_default_chip(void)
 
     // ROM TODO: account for non-standard default pins in efuse
     // ROM TODO: to account for chips which are slow to power on, maybe keep probing in a loop here
-    err = esp_flash_init(&default_chip);
+    err = esp_flash_init_main(&default_chip);
     if (err != ESP_OK) {
         return err;
     }
