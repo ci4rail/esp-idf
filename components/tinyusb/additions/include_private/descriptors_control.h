@@ -40,7 +40,7 @@ enum {
 
 //------------- Configuration Descriptor -------------//
 enum {
-#   if CFG_TUD_CDC || CFG_TUD_NET
+#   if CFG_TUD_CDC || CFG_TUD_NCM
     ITF_NUM_CDC = 0,
     ITF_NUM_CDC_DATA,
 #   endif
@@ -58,7 +58,7 @@ enum {
 
 enum {
     TUSB_DESC_TOTAL_LEN = TUD_CONFIG_DESC_LEN + CFG_TUD_CDC * TUD_CDC_DESC_LEN + CFG_TUD_MSC * TUD_MSC_DESC_LEN +
-                       CFG_TUD_HID * TUD_HID_DESC_LEN + CFG_TUD_NET * TUD_CDC_ECM_DESC_LEN
+                       CFG_TUD_HID * TUD_HID_DESC_LEN + CFG_TUD_NCM * TUD_CDC_ECM_DESC_LEN
 };
 
 bool tusb_desc_set;

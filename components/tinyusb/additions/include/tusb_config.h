@@ -99,7 +99,7 @@ extern "C" {
 #define CFG_TUD_MSC                 CONFIG_TINYUSB_MSC_ENABLED
 #define CFG_TUD_HID                 CONFIG_TINYUSB_HID_ENABLED
 #define CFG_TUD_MIDI                CONFIG_TINYUSB_MIDI_ENABLED
-#define CFG_TUD_NET                 CONFIG_TINYUSB_NET_ENABLED
+#define CFG_TUD_NCM                 CONFIG_TINYUSB_NET_ENABLED
 #define CFG_TUD_CUSTOM_CLASS        CONFIG_TINYUSB_CUSTOM_CLASS_ENABLED
 
 #ifdef __cplusplus

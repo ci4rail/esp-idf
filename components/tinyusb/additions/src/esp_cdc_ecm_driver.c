@@ -31,6 +31,8 @@
 #include "esp_log.h"
 #include "esp_event.h"
 
+#include "usbd.h"
+
 const static char *TAG = "CDC-ECM Driver";
 
 typedef struct {
@@ -141,7 +143,7 @@ esp_err_t esp_cdc_ecm_transmit(void* h, void* buffer, size_t len)
         }
 
         /* if the network driver can accept another packet, we make it happen */
-        if (tud_network_can_xmit()) {
+        if (tud_network_can_xmit(len)) {
             /* pass length for tud_network_xmit_cb */
             tud_network_xmit(buffer, (uint16_t) len);
             return ESP_OK;

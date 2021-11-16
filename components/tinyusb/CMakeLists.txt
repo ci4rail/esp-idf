@@ -72,7 +72,7 @@ if(CONFIG_TINYUSB)
 
     if(CONFIG_TINYUSB_NET_ENABLED)
         list(APPEND srcs
-            "tinyusb/src/class/net/net_device.c"
+            "tinyusb/src/class/net/ncm_device.c"
             "tinyusb/lib/networking/rndis_reports.c"
             "additions/src/esp_cdc_ecm_driver.c"
             "additions/src/esp_cdc_ecm_netif_glue.c"

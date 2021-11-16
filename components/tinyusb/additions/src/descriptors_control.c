@@ -63,7 +63,7 @@ uint8_t const desc_configuration[] = {
     // Interface number, string index, protocol, report descriptor len, EP In address, size & polling interval
     TUD_HID_DESCRIPTOR(ITF_NUM_HID, STRID_HID, HID_PROTOCOL_NONE, sizeof(desc_hid_report), 0x84, 16, 10),
 #   endif
-#   if CFG_TUD_NET
+#   if CFG_TUD_NCM
     // Interface number, description string index, MAC address string index, EP notification address and size, EP data address (out, in), and size, max segment size.
     TUD_CDC_ECM_DESCRIPTOR(ITF_NUM_CDC, STRID_ECM, STRID_MAC, EPNUM_NET_NOTIF, 64, EPNUM_NET_OUT, EPNUM_NET_IN, CFG_TUD_NET_ENDPOINT_SIZE, CFG_TUD_NET_MTU),
 #   endif
