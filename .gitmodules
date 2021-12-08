@@ -106,7 +106,4 @@
 [submodule "components/ieee802154/lib"]
 	path = components/ieee802154/lib
 	url = ../../espressif/esp-ieee802154-lib.git
-[submodule "components/esptool.py/esptool"]
-	path = components/esptool.py/esptool
-	url = https://github.com/ci4rail/esptool.git
-	branch = fix_flash_over_slow_ip
+
