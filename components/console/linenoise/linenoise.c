@@ -10,7 +10,7 @@
  * ------------------------------------------------------------------------
  * Heavy modifications for better user experience by Ci4Rail GmbH, 2023:
  * - avoid complete redraw of the line for simple insertions and edits
- * 
+ *
  * Restrictions:
  * - editing doesn't work if line exceeeds terminal width
  * ------------------------------------------------------------------------
@@ -530,10 +530,10 @@ static void clearHint(struct linenoiseState *l)
 static void handleHints(struct linenoiseState *l)
 {
     int color = -1, bold = 0;
-    
+
     if(!hintsCallback)
         return;
-    
+
     abInit(&l->ab);
     char *hint = hintsCallback(l->buf, &color, &bold);
     if (hint) {
@@ -802,13 +802,13 @@ char *linenoiseEditFeed(struct linenoiseState *l)
     int nread;
     char seq[3];
     char *rv = NULL;
-    
+
     nread = read(l->ifd, &c, 1);
     if (nread <= 0)
         return NULL;
 
     abInit(&l->ab);
-    
+
     /* Only autocomplete when the callback is set. It returns < 0 when
      * there was an error reading from fd. Otherwise it will return the
      * character that should be handled next. */
