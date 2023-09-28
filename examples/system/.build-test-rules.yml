@@ -6,12 +6,6 @@ examples/system/app_trace_basic:
       temporary: true
       reason: target esp32c6, esp32h2 is not supported yet
 
-examples/system/base_mac_address:
-  disable_test:
-    - if: IDF_TARGET in ["esp32h2"]
-      temporary: true
-      reason: cannot pass, IDF-6809
-
 examples/system/console/advanced:
   disable:
     - if: IDF_TARGET in ["esp32c2", "esp32c6", "esp32h2"]
@@ -40,25 +34,15 @@ examples/system/console/basic:
 
 examples/system/deep_sleep:
   disable:
-    - if: IDF_TARGET in ["esp32c2", "esp32c6", "esp32h2"]
+    - if: IDF_TARGET in ["esp32h2"]
       temporary: true
-      reason: target(s) not supported yet
+      reason: target(s) not supported yet # IDF-6268
 
 examples/system/deep_sleep_wake_stub:
   disable:
-    - if: IDF_TARGET in ["esp32c2", "esp32c6", "esp32h2"]
+    - if: IDF_TARGET in ["esp32c2", "esp32h2"]
       temporary: true
       reason: target(s) is not supported yet
-
-examples/system/efuse:
-  disable_test:
-    - if: IDF_TARGET == "esp32s3"
-      temporary: true
-      reason: lack of runners
-  disable:
-    - if: IDF_TARGET == "esp32c6" or IDF_TARGET == "esp32h2"
-      temporary: true
-      reason: target esp32c6 is not supported yet
 
 examples/system/esp_timer:
   disable:
@@ -106,27 +90,29 @@ examples/system/ipc/ipc_isr:
       temporary: true
       reason: the other targets are not tested yet
 
-examples/system/light_sleep:
-  disable:
-    - if: IDF_TARGET in ["esp32h2"]
-      temporary: true
-      reason: target(s) not supported yet
+examples/system/lp_core/lp_i2c:
+  enable:
+    - if: SOC_LP_I2C_SUPPORTED == 1
 
 examples/system/ota/advanced_https_ota:
   disable:
-    - if: IDF_TARGET == "esp32c6" or IDF_TARGET == "esp32h2"
+    - if: IDF_TARGET == "esp32h2"
       temporary: true
-      reason: target esp32c6 is not supported yet
+      reason: target esp32h2 is not supported yet
   disable_test:
-    - if: IDF_TARGET == "esp32c2"
+    - if: IDF_TARGET == "esp32c2" or IDF_TARGET == "esp32c6"
       temporary: true
       reason: lack of runners
 
 examples/system/ota/native_ota_example:
   disable:
-    - if: IDF_TARGET == "esp32c6" or IDF_TARGET == "esp32h2"
+    - if: IDF_TARGET == "esp32h2"
       temporary: true
-      reason: target esp32c6 is not supported yet
+      reason: target esp32h2 is not supported yet
+  disable_test:
+    - if: IDF_TARGET == "esp32c6"
+      temporary: true
+      reason: lack of runners
 
 examples/system/ota/otatool:
   disable:
@@ -136,21 +122,21 @@ examples/system/ota/otatool:
 
 examples/system/ota/pre_encrypted_ota:
   disable:
-    - if: IDF_TARGET == "esp32c6" or IDF_TARGET == "esp32h2"
+    - if: IDF_TARGET == "esp32h2"
       temporary: true
-      reason: target esp32c6 is not supported yet
+      reason: target esp32h2 is not supported yet
   disable_test:
-    - if: IDF_TARGET == "esp32c2"
+    - if: IDF_TARGET == "esp32c2" or IDF_TARGET == "esp32c6"
       temporary: true
       reason: lack of runners
 
 examples/system/ota/simple_ota_example:
   disable:
-    - if: IDF_TARGET == "esp32c6" or IDF_TARGET == "esp32h2"
+    - if: IDF_TARGET == "esp32h2"
       temporary: true
-      reason: target esp32c6 is not supported yet
+      reason: target esp32h2 is not supported yet
   disable_test:
-    - if: IDF_TARGET == "esp32c2"
+    - if: IDF_TARGET == "esp32c2" or IDF_TARGET == "esp32c6"
       temporary: true
       reason: lack of runners
 
@@ -197,7 +183,7 @@ examples/system/task_watchdog:
 
 examples/system/ulp_fsm/ulp:
   disable:
-    - if: SOC_ULP_SUPPORTED != 1
+    - if: SOC_ULP_FSM_SUPPORTED != 1
 
 examples/system/ulp_fsm/ulp_adc:
   enable:
@@ -207,7 +193,7 @@ examples/system/ulp_fsm/ulp_adc:
 
 examples/system/ulp_riscv/adc:
   enable:
-    - if: IDF_TARGET in ["esp32s3"]
+    - if: IDF_TARGET in ["esp32s2", "esp32s3"]
       temporary: true
       reason: the other targets are not tested yet
 

@@ -650,6 +650,7 @@ typedef enum {
 typedef enum{
     ESP_BLE_WHITELIST_REMOVE     = 0X00,    /*!< remove mac from whitelist */
     ESP_BLE_WHITELIST_ADD        = 0X01,    /*!< add address to whitelist */
+    ESP_BLE_WHITELIST_CLEAR      = 0x02,    /*!< clear all device in whitelist */
 } esp_ble_wl_operation_t;
 #if (BLE_42_FEATURE_SUPPORT == TRUE)
 typedef enum {
@@ -1471,7 +1472,7 @@ esp_err_t esp_ble_gap_config_local_privacy (bool privacy_enable);
  *
  *
  * @param[in]       icon   - External appearance value, these values are defined by the Bluetooth SIG, please refer to
- *                  https://specificationrefs.bluetooth.com/assigned-values/Appearance%20Values.pdf
+ *                  https://www.bluetooth.com/specifications/assigned-numbers/
  *
  * @return
  *                  - ESP_OK : success

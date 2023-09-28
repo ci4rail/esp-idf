@@ -398,13 +398,11 @@ components/bt/host/bluedroid/stack/smp/smp_main.c
 components/bt/host/bluedroid/stack/smp/smp_utils.c
 components/console/linenoise/linenoise.c
 components/console/linenoise/linenoise.h
-components/esp_eth/src/dm9051.h
 components/esp_eth/src/ksz8851.h
 components/esp_eth/test_apps/component_ut_test.py
 components/esp_eth/test_apps/main/esp_eth_test.c
 components/esp_event/esp_event_private.c
 components/esp_event/event_loop_legacy.c
-components/esp_event/event_send.c
 components/esp_event/host_test/esp_event_unit_test/main/esp_event_test.cpp
 components/esp_event/host_test/fixtures.hpp
 components/esp_event/include/esp_event_loop.h
@@ -439,9 +437,7 @@ components/esp_netif/test/test_esp_netif.c
 components/esp_netif/test_apps/component_ut_test.py
 components/esp_netif/test_apps/main/esp_netif_test.c
 components/esp_phy/test/test_phy_rtc.c
-components/esp_pm/include/esp_private/pm_impl.h
 components/esp_pm/include/esp_private/pm_trace.h
-components/esp_pm/pm_locks.c
 components/esp_pm/test/test_pm.c
 components/esp_rom/esp32/ld/esp32.rom.api.ld
 components/esp_rom/esp32/ld/esp32.rom.eco3.ld
@@ -489,8 +485,6 @@ components/esp_rom/include/esp32c3/rom/crc.h
 components/esp_rom/include/esp32c3/rom/digital_signature.h
 components/esp_rom/include/esp32c3/rom/esp_flash.h
 components/esp_rom/include/esp32c3/rom/hmac.h
-components/esp_rom/include/esp32c3/rom/libc_stubs.h
-components/esp_rom/include/esp32c3/rom/rom_layout.h
 components/esp_rom/include/esp32c3/rom/rsa_pss.h
 components/esp_rom/include/esp32c3/rom/sha.h
 components/esp_rom/include/esp32c3/rom/tjpgd.h
@@ -503,7 +497,6 @@ components/esp_rom/include/esp32s2/rom/libc_stubs.h
 components/esp_rom/include/esp32s2/rom/opi_flash.h
 components/esp_rom/include/esp32s2/rom/rsa_pss.h
 components/esp_rom/include/esp32s2/rom/sha.h
-components/esp_rom/include/esp32s2/rom/uart.h
 components/esp_rom/include/esp32s2/rom/usb/cdc_acm.h
 components/esp_rom/include/esp32s2/rom/usb/chip_usb_dw_wrapper.h
 components/esp_rom/include/esp32s2/rom/usb/cpio.h
@@ -516,13 +509,10 @@ components/esp_rom/include/esp32s2/rom/usb/usb_dfu.h
 components/esp_rom/include/esp32s2/rom/usb/usb_os_glue.h
 components/esp_rom/include/esp32s2/rom/usb/usb_persist.h
 components/esp_rom/include/esp32s3/rom/bigint.h
-components/esp_rom/include/esp32s3/rom/cache.h
 components/esp_rom/include/esp32s3/rom/crc.h
 components/esp_rom/include/esp32s3/rom/digital_signature.h
 components/esp_rom/include/esp32s3/rom/hmac.h
-components/esp_rom/include/esp32s3/rom/libc_stubs.h
 components/esp_rom/include/esp32s3/rom/opi_flash.h
-components/esp_rom/include/esp32s3/rom/rom_layout.h
 components/esp_rom/include/esp32s3/rom/rsa_pss.h
 components/esp_rom/include/esp32s3/rom/sha.h
 components/esp_rom/include/esp32s3/rom/tjpgd.h
@@ -560,21 +550,15 @@ components/esp_system/include/esp_expression_with_stack.h
 components/esp_system/include/esp_freertos_hooks.h
 components/esp_system/include/esp_int_wdt.h
 components/esp_system/include/esp_private/dbg_stubs.h
-components/esp_system/include/esp_private/panic_internal.h
-components/esp_system/port/arch/riscv/expression_with_stack.c
-components/esp_system/port/arch/xtensa/expression_with_stack.c
 components/esp_system/port/public_compat/brownout.h
 components/esp_system/port/public_compat/cache_err_int.h
 components/esp_system/port/public_compat/trax.h
 components/esp_system/port/soc/esp32/cache_err_int.h
 components/esp_system/port/soc/esp32/intr.c
-components/esp_system/port/soc/esp32/reset_reason.c
 components/esp_system/port/soc/esp32c3/apb_backup_dma.c
 components/esp_system/port/soc/esp32c3/cache_err_int.h
 components/esp_system/port/soc/esp32s2/cache_err_int.h
-components/esp_system/port/soc/esp32s2/reset_reason.c
 components/esp_system/port/soc/esp32s3/cache_err_int.h
-components/esp_system/port/soc/esp32s3/reset_reason.c
 components/esp_system/test/test_delay.c
 components/esp_system/test/test_reset_reason.c
 components/esp_system/test/test_stack_check.c
@@ -671,7 +655,6 @@ components/hal/include/hal/rtc_io_types.h
 components/hal/include/hal/sdio_slave_ll.h
 components/hal/include/hal/sha_hal.h
 components/hal/include/hal/spi_flash_encrypt_hal.h
-components/hal/include/hal/spi_slave_hd_hal.h
 components/hal/include/hal/uhci_types.h
 components/hal/include/hal/usb_hal.h
 components/hal/include/hal/usb_types_private.h
@@ -681,7 +664,6 @@ components/hal/spi_flash_encrypt_hal_iram.c
 components/hal/spi_flash_hal_gpspi.c
 components/hal/spi_slave_hal.c
 components/hal/spi_slave_hal_iram.c
-components/hal/spi_slave_hd_hal.c
 components/hal/test/test_mpu.c
 components/hal/touch_sensor_hal.c
 components/hal/uart_hal_iram.c
@@ -780,7 +762,6 @@ components/nvs_flash/test_nvs_host/test_nvs_initialization.cpp
 components/nvs_flash/test_nvs_host/test_nvs_storage.cpp
 components/protocomm/include/transports/protocomm_console.h
 components/protocomm/include/transports/protocomm_httpd.h
-components/pthread/pthread_cond_var.c
 components/pthread/test/test_cxx_cond_var.cpp
 components/pthread/test/test_cxx_std_future.cpp
 components/pthread/test/test_pthread.c
@@ -930,7 +911,6 @@ components/soc/esp32s2/include/soc/touch_sensor_pins.h
 components/soc/esp32s2/include/soc/uart_pins.h
 components/soc/esp32s2/include/soc/uart_reg.h
 components/soc/esp32s2/include/soc/uhci_reg.h
-components/soc/esp32s2/include/soc/usb_reg.h
 components/soc/esp32s2/include/soc/usb_struct.h
 components/soc/esp32s2/include/soc/usb_types.h
 components/soc/esp32s2/include/soc/usb_wrap_reg.h
@@ -1002,7 +982,6 @@ components/soc/esp32s3/include/soc/uart_reg.h
 components/soc/esp32s3/include/soc/uart_struct.h
 components/soc/esp32s3/include/soc/uhci_reg.h
 components/soc/esp32s3/include/soc/uhci_struct.h
-components/soc/esp32s3/include/soc/usb_reg.h
 components/soc/esp32s3/include/soc/usb_serial_jtag_struct.h
 components/soc/esp32s3/include/soc/usb_struct.h
 components/soc/esp32s3/include/soc/usb_types.h
@@ -1029,7 +1008,6 @@ components/soc/include/soc/uhci_periph.h
 components/soc/lldesc.c
 components/soc/soc_include_legacy_warn.c
 components/spi_flash/cache_utils.h
-components/spi_flash/include/esp_spi_flash_counters.h
 components/spi_flash/include/spi_flash_chip_boya.h
 components/spi_flash/include/spi_flash_chip_driver.h
 components/spi_flash/include/spi_flash_chip_gd.h
@@ -1572,7 +1550,6 @@ examples/system/console/basic/main/cmd_wifi.h
 examples/system/console/basic/main/console_example_main.c
 examples/system/console_usb/main/console_usb_example_main.c
 examples/system/deep_sleep/example_test.py
-examples/system/deep_sleep/main/deep_sleep_example_main.c
 examples/system/efuse/example_test.py
 examples/system/efuse/main/efuse_main.c
 examples/system/esp_event/default_event_loop/example_test.py

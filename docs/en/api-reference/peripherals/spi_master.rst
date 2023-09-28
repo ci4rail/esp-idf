@@ -7,11 +7,10 @@ SPI Master driver is a program that controls {IDF_TARGET_NAME}'s SPI peripherals
 Overview of {IDF_TARGET_NAME}'s SPI peripherals
 -----------------------------------------------
 
-{IDF_TARGET_MAX_PERIPH_NUM:default="4", esp32c3="3", esp32c2="3", esp32c6="3", esp32h2="3"}
 {IDF_TARGET_SPI2_CS_NUM:default="6", esp32="3"}
 {IDF_TARGET_SPI3_CS_NUM:default="3"}
 
-{IDF_TARGET_NAME} integrates {IDF_TARGET_MAX_PERIPH_NUM} SPI peripherals.
+{IDF_TARGET_NAME} integrates {IDF_TARGET_SOC_SPI_PERIPH_NUM} SPI peripherals.
 
 - SPI0 and SPI1 are used internally to access the {IDF_TARGET_NAME}'s attached flash memory. Both controllers share the same SPI bus signals, and there is an arbiter to determine which can access the bus.
 
@@ -493,6 +492,8 @@ Typical transaction duration for one byte of data are given below.
 - Interrupt Transaction via CPU: {IDF_TARGET_TRANS_TIME_INTR_CPU} µs.
 - Polling Transaction via DMA: {IDF_TARGET_TRANS_TIME_POLL_DMA} µs.
 - Polling Transaction via CPU: {IDF_TARGET_TRANS_TIME_POLL_CPU} µs.
+
+Note that these data are tested with :ref:`CONFIG_SPI_MASTER_ISR_IN_IRAM` enabled. SPI transaction related code are placed in the internal memory. If this option is turned off (for example, for internal memory optimization), the transaction duration may be affected.
 
 SPI Clock Frequency
 ^^^^^^^^^^^^^^^^^^^

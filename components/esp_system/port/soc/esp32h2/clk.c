@@ -19,12 +19,14 @@
 #include "soc/rtc.h"
 #include "soc/rtc_periph.h"
 #include "soc/i2s_reg.h"
+#include "soc/pcr_reg.h"
 #include "hal/wdt_hal.h"
 #include "esp_private/periph_ctrl.h"
 #include "esp_private/esp_clk.h"
 #include "esp_private/esp_pmu.h"
 #include "esp_rom_uart.h"
 #include "esp_rom_sys.h"
+#include "esp_sleep.h"
 
 /* Number of cycles to wait from the 32k XTAL oscillator to consider it running.
  * Larger values increase startup delay. Smaller values may cause false positive
@@ -104,6 +106,9 @@ static const char *TAG = "clk";
 
     // Re calculate the ccount to make time calculation correct.
     esp_cpu_set_cycle_count( (uint64_t)esp_cpu_get_cycle_count() * new_freq_mhz / old_freq_mhz );
+
+    // Set crypto clock (`clk_sec`) to use 96M PLL clock
+    REG_SET_FIELD(PCR_SEC_CONF_REG, PCR_SEC_CLK_SEL, 0x3);
 }
 
 static void select_rtc_slow_clk(soc_rtc_slow_clk_src_t rtc_slow_clk_src)
@@ -175,6 +180,13 @@ void rtc_clk_select_rtc_slow_clk(void)
  */
 __attribute__((weak)) void esp_perip_clk_init(void)
 {
+    soc_rtc_slow_clk_src_t rtc_slow_clk_src = rtc_clk_slow_src_get();
+    esp_sleep_pd_domain_t pu_domain = (esp_sleep_pd_domain_t) (\
+          (rtc_slow_clk_src == SOC_RTC_SLOW_CLK_SRC_XTAL32K) ? ESP_PD_DOMAIN_XTAL32K \
+        : (rtc_slow_clk_src == SOC_RTC_SLOW_CLK_SRC_RC32K) ? ESP_PD_DOMAIN_RC32K \
+        : ESP_PD_DOMAIN_MAX);
+    esp_sleep_pd_config(pu_domain, ESP_PD_OPTION_ON);
+
     ESP_EARLY_LOGW(TAG, "esp_perip_clk_init() has not been implemented yet");
 // ESP32H2-TODO: IDF-5658
 #if 0
@@ -273,6 +285,14 @@ __attribute__((weak)) void esp_perip_clk_init(void)
 
     /* Enable RNG clock. */
     periph_module_enable(PERIPH_RNG_MODULE);
-
 #endif
+
+    /* Enable TimerGroup 0 clock to ensure its reference counter will never
+     * be decremented to 0 during normal operation and preventing it from
+     * being disabled.
+     * If the TimerGroup 0 clock is disabled and then reenabled, the watchdog
+     * registers (Flashboot protection included) will be reenabled, and some
+     * seconds later, will trigger an unintended reset.
+     */
+    periph_module_enable(PERIPH_TIMG0_MODULE);
 }

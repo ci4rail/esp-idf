@@ -32,9 +32,11 @@ implement the bare minimum to control the root HCD port.
 #define HUB_ROOT_HCD_PORT_FIFO_BIAS                 HCD_PORT_FIFO_BIAS_BALANCED
 #endif
 
+#define SET_ADDR_RECOVERY_INTERVAL_MS               CONFIG_USB_HOST_SET_ADDR_RECOVERY_MS
+
 #define ENUM_CTRL_TRANSFER_MAX_DATA_LEN             CONFIG_USB_HOST_CONTROL_TRANSFER_MAX_SIZE
 #define ENUM_DEV_ADDR                               1       //Device address used in enumeration
-#define ENUM_CONFIG_INDEX                           0       //Index of the first configuration of the device
+#define ENUM_CONFIG_INDEX                           0       //Index used to get the first configuration descriptor of the device
 #define ENUM_SHORT_DESC_REQ_LEN                     8       //Number of bytes to request when getting a short descriptor (just enough to get bMaxPacketSize0 or wTotalLength)
 #define ENUM_WORST_CASE_MPS_LS                      8       //The worst case MPS of EP0 for a LS device
 #define ENUM_WORST_CASE_MPS_FS                      64      //The worst case MPS of EP0 for a FS device
@@ -79,6 +81,7 @@ typedef enum {
     ENUM_STAGE_SECOND_RESET,                /**< Reset the device again (Workaround for old USB devices that get confused by the previous short dev desc request). */
     ENUM_STAGE_SET_ADDR,                    /**< Send SET_ADDRESS request */
     ENUM_STAGE_CHECK_ADDR,                  /**< Update the enum pipe's target address */
+    ENUM_STAGE_SET_ADDR_RECOVERY,           /**< Wait SET ADDRESS recovery interval at least for 2ms due to usb_20, chapter 9.2.6.3 */
     ENUM_STAGE_GET_FULL_DEV_DESC,           /**< Get the full dev desc */
     ENUM_STAGE_CHECK_FULL_DEV_DESC,         /**< Check the full dev desc, fill it into the device object in USBH. Save the string descriptor indexes*/
     ENUM_STAGE_GET_SHORT_CONFIG_DESC,       /**< Getting a short config desc (wLength is ENUM_SHORT_DESC_REQ_LEN) */
@@ -117,6 +120,7 @@ const char *const enum_stage_strings[] = {
     "SECOND_RESET",
     "SET_ADDR",
     "CHECK_ADDR",
+    "SET_ADDR_RECOVERY",
     "GET_FULL_DEV_DESC",
     "CHECK_FULL_DEV_DESC",
     "GET_SHORT_CONFIG_DESC",
@@ -160,6 +164,7 @@ typedef struct {
     uint8_t iProduct;               /**< Index of the Product string descriptor */
     uint8_t iSerialNumber;          /**< Index of the Serial Number string descriptor */
     uint8_t str_desc_bLength;       /**< Saved bLength from getting a short string descriptor */
+    uint8_t bConfigurationValue;    /**< Device's current configuration number */
 } enum_ctrl_t;
 
 typedef struct {
@@ -361,7 +366,7 @@ static bool enum_stage_transfer(enum_ctrl_t *enum_ctrl)
             break;
         }
         case ENUM_STAGE_SET_CONFIG: {
-            USB_SETUP_PACKET_INIT_SET_CONFIG((usb_setup_packet_t *)transfer->data_buffer, ENUM_CONFIG_INDEX + 1);
+            USB_SETUP_PACKET_INIT_SET_CONFIG((usb_setup_packet_t *)transfer->data_buffer, enum_ctrl->bConfigurationValue);
             transfer->num_bytes = sizeof(usb_setup_packet_t);   //No data stage
             enum_ctrl->expect_num_bytes = 0;    //OUT transfer. No need to check number of bytes returned
             break;
@@ -409,6 +414,22 @@ static bool enum_stage_transfer(enum_ctrl_t *enum_ctrl)
         return false;
     }
     return true;
+}
+
+static bool enum_stage_wait(enum_ctrl_t *enum_ctrl)
+{
+    switch (enum_ctrl->stage) {
+        case ENUM_STAGE_SET_ADDR_RECOVERY: {
+            vTaskDelay(pdMS_TO_TICKS(SET_ADDR_RECOVERY_INTERVAL_MS)); // Need a short delay before device is ready. Todo:   IDF-7007
+            return true;
+        }
+
+        default:    //Should never occur
+            abort();
+            break;
+        }
+
+    return false;
 }
 
 static bool enum_stage_transfer_check(enum_ctrl_t *enum_ctrl)
@@ -496,6 +517,7 @@ static bool enum_stage_transfer_check(enum_ctrl_t *enum_ctrl)
         case ENUM_STAGE_CHECK_FULL_CONFIG_DESC: {
             //Fill configuration descriptor into the device object
             const usb_config_desc_t *config_desc = (usb_config_desc_t *)(transfer->data_buffer + sizeof(usb_setup_packet_t));
+            enum_ctrl->bConfigurationValue = config_desc->bConfigurationValue;
             ESP_ERROR_CHECK(usbh_hub_enum_fill_config_desc(enum_ctrl->dev_hdl, config_desc));
             ret = true;
             break;
@@ -696,6 +718,7 @@ static void enum_set_next_stage(enum_ctrl_t *enum_ctrl, bool last_stage_pass)
         case ENUM_STAGE_GET_SHORT_DEV_DESC:
         case ENUM_STAGE_SECOND_RESET:
         case ENUM_STAGE_SET_ADDR:
+        case ENUM_STAGE_SET_ADDR_RECOVERY:
         case ENUM_STAGE_GET_FULL_DEV_DESC:
         case ENUM_STAGE_GET_SHORT_CONFIG_DESC:
         case ENUM_STAGE_GET_FULL_CONFIG_DESC:
@@ -856,6 +879,10 @@ static void enum_handle_events(void)
         case ENUM_STAGE_GET_SHORT_SER_STR_DESC:
         case ENUM_STAGE_GET_FULL_SER_STR_DESC:
             stage_pass = enum_stage_transfer(enum_ctrl);
+            break;
+        //Recovery interval
+        case ENUM_STAGE_SET_ADDR_RECOVERY:
+            stage_pass = enum_stage_wait(enum_ctrl);
             break;
         //Transfer check stages
         case ENUM_STAGE_CHECK_SHORT_DEV_DESC:

@@ -34,11 +34,11 @@
 #include "bootloader_mem.h"
 #include "bootloader_console.h"
 #include "bootloader_flash_priv.h"
+#include "bootloader_soc.h"
 #include "esp_private/bootloader_flash_internal.h"
 #include "esp_efuse.h"
 #include "hal/mmu_hal.h"
 #include "hal/cache_hal.h"
-#include "hal/mmu_ll.h"
 
 static const char *TAG = "boot.esp32c2";
 
@@ -79,10 +79,19 @@ static void bootloader_super_wdt_auto_feed(void)
     REG_WRITE(RTC_CNTL_SWD_WPROTECT_REG, 0);
 }
 
+static inline void bootloader_ana_reset_config(void)
+{
+    //Enable super WDT reset.
+    bootloader_ana_super_wdt_reset_config(true);
+    //Enable BOD reset
+    bootloader_ana_bod_reset_config(true);
+}
+
 esp_err_t bootloader_init(void)
 {
     esp_err_t ret = ESP_OK;
 
+    bootloader_ana_reset_config();
     bootloader_super_wdt_auto_feed();
 
 // In RAM_APP, memory will be initialized in `call_start_cpu0`
@@ -110,15 +119,14 @@ esp_err_t bootloader_init(void)
     /* print 2nd bootloader banner */
     bootloader_print_banner();
 
-#if !CONFIG_APP_BUILD_TYPE_RAM
+#if !CONFIG_APP_BUILD_TYPE_PURE_RAM_APP
     //init cache hal
     cache_hal_init();
-    //reset mmu
+    //init mmu
     mmu_hal_init();
-    // config mmu page size
-    mmu_ll_set_page_size(0, SPI_FLASH_MMU_PAGE_SIZE);
     // update flash ID
     bootloader_flash_update_id();
+#if !CONFIG_APP_BUILD_TYPE_RAM
     // read bootloader header
     if ((ret = bootloader_read_bootloader_header()) != ESP_OK) {
         return ret;
@@ -127,11 +135,12 @@ esp_err_t bootloader_init(void)
     if ((ret = bootloader_check_bootloader_validity()) != ESP_OK) {
         return ret;
     }
+#endif // !CONFIG_APP_BUILD_TYPE_RAM
     // initialize spi flash
     if ((ret = bootloader_init_spi_flash()) != ESP_OK) {
         return ret;
     }
-#endif // !CONFIG_APP_BUILD_TYPE_RAM
+#endif  //#if !CONFIG_APP_BUILD_TYPE_PURE_RAM_APP
 
     // check whether a WDT reset happend
     bootloader_check_wdt_reset();

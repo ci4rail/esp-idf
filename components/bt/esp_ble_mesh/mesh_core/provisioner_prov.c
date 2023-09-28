@@ -2725,7 +2725,8 @@ static void prov_retransmit(struct k_work *work)
 #endif
     if (k_uptime_get() - link[idx].tx.start > timeout) {
         BT_WARN("Provisioner timeout, giving up transaction");
-        reset_link(idx, CLOSE_REASON_TIMEOUT);
+        /* Provisioner should send Link Close here */
+        close_link(idx, CLOSE_REASON_TIMEOUT);
         return;
     }
 
@@ -2866,6 +2867,12 @@ static void prov_msg_recv(const uint8_t idx)
     return;
 
 fail:
+    /**
+     * For the case MESH/PVNR/PROV/BV-10-C and MESH/PVNR/PROV/BI-14-C,
+     * provisioner should send transaction ack before closing the link.
+     */
+    gen_prov_ack_send(idx, link[idx].rx.trans_id);
+
     close_link(idx, CLOSE_REASON_FAILED);
     return;
 }
@@ -3463,7 +3470,7 @@ void bt_mesh_provisioner_unprov_beacon_recv(struct net_buf_simple *buf, int8_t r
     uint16_t oob_info = 0U;
 
     if (!(prov_ctx.bearers & BLE_MESH_PROV_ADV)) {
-        BT_WARN("Not support PB-ADV bearer");
+        BT_INFO("Not support PB-ADV bearer");
         return;
     }
 
@@ -3499,7 +3506,7 @@ void bt_mesh_provisioner_prov_adv_recv(struct net_buf_simple *buf,
     uint16_t oob_info = 0U;
 
     if (!(prov_ctx.bearers & BLE_MESH_PROV_GATT)) {
-        BT_WARN("Not support PB-GATT bearer");
+        BT_INFO("Not support PB-GATT bearer");
         return;
     }
 

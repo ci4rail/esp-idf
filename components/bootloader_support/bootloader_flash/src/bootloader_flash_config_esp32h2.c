@@ -27,6 +27,7 @@
 #include "hal/mmu_hal.h"
 #include "hal/cache_hal.h"
 #include "hal/mmu_ll.h"
+#include "soc/pcr_reg.h"
 
 void bootloader_flash_update_id()
 {
@@ -81,6 +82,12 @@ void IRAM_ATTR bootloader_configure_spi_pins(int drv)
     esp_rom_gpio_pad_set_drv(wp_gpio_num, drv);
 }
 
+static void IRAM_ATTR bootloader_flash_clock_init(void)
+{
+    // At this moment, BBPLL should be enabled, safe to switch MSPI clock source to PLL_F64M (default clock src) to raise speed
+    REG_SET_FIELD(PCR_MSPI_CONF_REG, PCR_MSPI_CLK_SEL, 2);
+}
+
 static void update_flash_config(const esp_image_header_t *bootloader_hdr)
 {
     uint32_t size;
@@ -120,22 +127,22 @@ static void print_flash_info(const esp_image_header_t *bootloader_hdr)
     const char *str;
     switch (bootloader_hdr->spi_speed) {
     case ESP_IMAGE_SPI_SPEED_DIV_2:
-        str = "40MHz";
+        str = "32MHz";
         break;
     case ESP_IMAGE_SPI_SPEED_DIV_3:
-        str = "26.7MHz";
+        str = "21.3MHz";
         break;
     case ESP_IMAGE_SPI_SPEED_DIV_4:
-        str = "20MHz";
+        str = "16MHz";
         break;
     case ESP_IMAGE_SPI_SPEED_DIV_1:
-        str = "80MHz";
+        str = "64MHz";
         break;
     default:
-        str = "20MHz";
+        str = "16MHz";
         break;
     }
-    ESP_LOGI(TAG, "SPI Speed      : %s", str);
+    ESP_EARLY_LOGI(TAG, "SPI Speed      : %s", str);
 
     /* SPI mode could have been set to QIO during boot already,
        so test the SPI registers not the flash header */
@@ -153,7 +160,7 @@ static void print_flash_info(const esp_image_header_t *bootloader_hdr)
     } else {
         str = "SLOW READ";
     }
-    ESP_LOGI(TAG, "SPI Mode       : %s", str);
+    ESP_EARLY_LOGI(TAG, "SPI Mode       : %s", str);
 
     switch (bootloader_hdr->spi_size) {
     case ESP_IMAGE_FLASH_SIZE_1MB:
@@ -175,11 +182,12 @@ static void print_flash_info(const esp_image_header_t *bootloader_hdr)
         str = "2MB";
         break;
     }
-    ESP_LOGI(TAG, "SPI Flash Size : %s", str);
+    ESP_EARLY_LOGI(TAG, "SPI Flash Size : %s", str);
 }
 
 static void IRAM_ATTR bootloader_init_flash_configure(void)
 {
+    bootloader_flash_clock_init();
     bootloader_configure_spi_pins(1);
     bootloader_flash_cs_timing_config();
 }

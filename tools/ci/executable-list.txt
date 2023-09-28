@@ -4,9 +4,6 @@ components/efuse/test_efuse_host/efuse_tests.py
 components/esp_coex/test_md5/test_md5.sh
 components/esp_wifi/test_md5/test_md5.sh
 components/espcoredump/espcoredump.py
-components/espcoredump/test/test_espcoredump.py
-components/espcoredump/test/test_espcoredump.sh
-components/espcoredump/test_apps/build_espcoredump.sh
 components/fatfs/fatfsgen.py
 components/fatfs/fatfsparse.py
 components/fatfs/test_fatfsgen/test_fatfsgen.py
@@ -31,14 +28,12 @@ docs/check_lang_folder_sync.sh
 examples/build_system/cmake/idf_as_lib/build-esp32.sh
 examples/build_system/cmake/idf_as_lib/build-esp32c2.sh
 examples/build_system/cmake/idf_as_lib/build-esp32c3.sh
-examples/build_system/cmake/idf_as_lib/build-esp32h4.sh
 examples/build_system/cmake/idf_as_lib/build-esp32s2.sh
 examples/build_system/cmake/idf_as_lib/build-esp32s3.sh
 examples/build_system/cmake/idf_as_lib/build.sh
 examples/build_system/cmake/idf_as_lib/run-esp32.sh
 examples/build_system/cmake/idf_as_lib/run-esp32c2.sh
 examples/build_system/cmake/idf_as_lib/run-esp32c3.sh
-examples/build_system/cmake/idf_as_lib/run-esp32h4.sh
 examples/build_system/cmake/idf_as_lib/run-esp32s2.sh
 examples/build_system/cmake/idf_as_lib/run-esp32s3.sh
 examples/build_system/cmake/idf_as_lib/run.sh
@@ -112,7 +107,6 @@ tools/set-submodules-to-github.sh
 tools/test_apps/system/no_embedded_paths/check_for_file_paths.py
 tools/test_idf_py/test_hints.py
 tools/test_idf_py/test_idf_py.py
-tools/test_idf_size/test.sh
 tools/test_idf_tools/test_idf_tools.py
 tools/test_mkdfu/test_mkdfu.py
 tools/test_mkuf2/test_mkuf2.py

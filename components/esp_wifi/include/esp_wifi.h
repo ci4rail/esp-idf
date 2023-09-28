@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -61,29 +61,33 @@
 extern "C" {
 #endif
 
-#define ESP_ERR_WIFI_NOT_INIT    (ESP_ERR_WIFI_BASE + 1)   /*!< WiFi driver was not installed by esp_wifi_init */
-#define ESP_ERR_WIFI_NOT_STARTED (ESP_ERR_WIFI_BASE + 2)   /*!< WiFi driver was not started by esp_wifi_start */
-#define ESP_ERR_WIFI_NOT_STOPPED (ESP_ERR_WIFI_BASE + 3)   /*!< WiFi driver was not stopped by esp_wifi_stop */
-#define ESP_ERR_WIFI_IF          (ESP_ERR_WIFI_BASE + 4)   /*!< WiFi interface error */
-#define ESP_ERR_WIFI_MODE        (ESP_ERR_WIFI_BASE + 5)   /*!< WiFi mode error */
-#define ESP_ERR_WIFI_STATE       (ESP_ERR_WIFI_BASE + 6)   /*!< WiFi internal state error */
-#define ESP_ERR_WIFI_CONN        (ESP_ERR_WIFI_BASE + 7)   /*!< WiFi internal control block of station or soft-AP error */
-#define ESP_ERR_WIFI_NVS         (ESP_ERR_WIFI_BASE + 8)   /*!< WiFi internal NVS module error */
-#define ESP_ERR_WIFI_MAC         (ESP_ERR_WIFI_BASE + 9)   /*!< MAC address is invalid */
-#define ESP_ERR_WIFI_SSID        (ESP_ERR_WIFI_BASE + 10)   /*!< SSID is invalid */
-#define ESP_ERR_WIFI_PASSWORD    (ESP_ERR_WIFI_BASE + 11)  /*!< Password is invalid */
-#define ESP_ERR_WIFI_TIMEOUT     (ESP_ERR_WIFI_BASE + 12)  /*!< Timeout error */
-#define ESP_ERR_WIFI_WAKE_FAIL   (ESP_ERR_WIFI_BASE + 13)  /*!< WiFi is in sleep state(RF closed) and wakeup fail */
-#define ESP_ERR_WIFI_WOULD_BLOCK (ESP_ERR_WIFI_BASE + 14)  /*!< The caller would block */
-#define ESP_ERR_WIFI_NOT_CONNECT (ESP_ERR_WIFI_BASE + 15)  /*!< Station still in disconnect status */
+#define ESP_ERR_WIFI_NOT_INIT          (ESP_ERR_WIFI_BASE + 1)   /*!< WiFi driver was not installed by esp_wifi_init */
+#define ESP_ERR_WIFI_NOT_STARTED       (ESP_ERR_WIFI_BASE + 2)   /*!< WiFi driver was not started by esp_wifi_start */
+#define ESP_ERR_WIFI_NOT_STOPPED       (ESP_ERR_WIFI_BASE + 3)   /*!< WiFi driver was not stopped by esp_wifi_stop */
+#define ESP_ERR_WIFI_IF                (ESP_ERR_WIFI_BASE + 4)   /*!< WiFi interface error */
+#define ESP_ERR_WIFI_MODE              (ESP_ERR_WIFI_BASE + 5)   /*!< WiFi mode error */
+#define ESP_ERR_WIFI_STATE             (ESP_ERR_WIFI_BASE + 6)   /*!< WiFi internal state error */
+#define ESP_ERR_WIFI_CONN              (ESP_ERR_WIFI_BASE + 7)   /*!< WiFi internal control block of station or soft-AP error */
+#define ESP_ERR_WIFI_NVS               (ESP_ERR_WIFI_BASE + 8)   /*!< WiFi internal NVS module error */
+#define ESP_ERR_WIFI_MAC               (ESP_ERR_WIFI_BASE + 9)   /*!< MAC address is invalid */
+#define ESP_ERR_WIFI_SSID              (ESP_ERR_WIFI_BASE + 10)   /*!< SSID is invalid */
+#define ESP_ERR_WIFI_PASSWORD          (ESP_ERR_WIFI_BASE + 11)  /*!< Password is invalid */
+#define ESP_ERR_WIFI_TIMEOUT           (ESP_ERR_WIFI_BASE + 12)  /*!< Timeout error */
+#define ESP_ERR_WIFI_WAKE_FAIL         (ESP_ERR_WIFI_BASE + 13)  /*!< WiFi is in sleep state(RF closed) and wakeup fail */
+#define ESP_ERR_WIFI_WOULD_BLOCK       (ESP_ERR_WIFI_BASE + 14)  /*!< The caller would block */
+#define ESP_ERR_WIFI_NOT_CONNECT       (ESP_ERR_WIFI_BASE + 15)  /*!< Station still in disconnect status */
 
-#define ESP_ERR_WIFI_POST        (ESP_ERR_WIFI_BASE + 18)  /*!< Failed to post the event to WiFi task */
-#define ESP_ERR_WIFI_INIT_STATE  (ESP_ERR_WIFI_BASE + 19)  /*!< Invalid WiFi state when init/deinit is called */
-#define ESP_ERR_WIFI_STOP_STATE  (ESP_ERR_WIFI_BASE + 20)  /*!< Returned when WiFi is stopping */
-#define ESP_ERR_WIFI_NOT_ASSOC   (ESP_ERR_WIFI_BASE + 21)  /*!< The WiFi connection is not associated */
-#define ESP_ERR_WIFI_TX_DISALLOW (ESP_ERR_WIFI_BASE + 22)  /*!< The WiFi TX is disallowed */
+#define ESP_ERR_WIFI_POST              (ESP_ERR_WIFI_BASE + 18)  /*!< Failed to post the event to WiFi task */
+#define ESP_ERR_WIFI_INIT_STATE        (ESP_ERR_WIFI_BASE + 19)  /*!< Invalid WiFi state when init/deinit is called */
+#define ESP_ERR_WIFI_STOP_STATE        (ESP_ERR_WIFI_BASE + 20)  /*!< Returned when WiFi is stopping */
+#define ESP_ERR_WIFI_NOT_ASSOC         (ESP_ERR_WIFI_BASE + 21)  /*!< The WiFi connection is not associated */
+#define ESP_ERR_WIFI_TX_DISALLOW       (ESP_ERR_WIFI_BASE + 22)  /*!< The WiFi TX is disallowed */
 
-#define ESP_ERR_WIFI_TWT_FULL    (ESP_ERR_WIFI_BASE + 23)  /*!< no available flow id */
+#define ESP_ERR_WIFI_TWT_FULL          (ESP_ERR_WIFI_BASE + 23)  /*!< no available flow id */
+#define ESP_ERR_WIFI_TWT_SETUP_TIMEOUT (ESP_ERR_WIFI_BASE + 24)  /*!< Timeout of receiving twt setup response frame, timeout times can be set during twt setup */
+#define ESP_ERR_WIFI_TWT_SETUP_TXFAIL  (ESP_ERR_WIFI_BASE + 25)  /*!< TWT setup frame tx failed */
+#define ESP_ERR_WIFI_TWT_SETUP_REJECT  (ESP_ERR_WIFI_BASE + 26)  /*!< The twt setup request was rejected by the AP */
+#define ESP_ERR_WIFI_DISCARD           (ESP_ERR_WIFI_BASE + 27)  /*!< Discard frame */
 
 /**
  * @brief WiFi stack configuration parameters passed to esp_wifi_init call.
@@ -268,7 +272,7 @@ esp_err_t esp_wifi_deinit(void);
 /**
   * @brief     Set the WiFi operating mode
   *
-  *            Set the WiFi operating mode as station, soft-AP or station+soft-AP,
+  *            Set the WiFi operating mode as station, soft-AP, station+soft-AP or NAN.
   *            The default mode is station mode.
   *
   * @param     mode  WiFi operating mode
@@ -295,9 +299,10 @@ esp_err_t esp_wifi_get_mode(wifi_mode_t *mode);
 
 /**
   * @brief  Start WiFi according to current configuration
-  *         If mode is WIFI_MODE_STA, it create station control block and start station
-  *         If mode is WIFI_MODE_AP, it create soft-AP control block and start soft-AP
-  *         If mode is WIFI_MODE_APSTA, it create soft-AP and station control block and start soft-AP and station
+  *         If mode is WIFI_MODE_STA, it creates station control block and starts station
+  *         If mode is WIFI_MODE_AP, it creates soft-AP control block and starts soft-AP
+  *         If mode is WIFI_MODE_APSTA, it creates soft-AP and station control block and starts soft-AP and station
+  *         If mode is WIFI_MODE_NAN, it creates NAN control block and starts NAN
   *
   * @return
   *    - ESP_OK: succeed
@@ -311,9 +316,10 @@ esp_err_t esp_wifi_start(void);
 
 /**
   * @brief  Stop WiFi
-  *         If mode is WIFI_MODE_STA, it stop station and free station control block
-  *         If mode is WIFI_MODE_AP, it stop soft-AP and free soft-AP control block
-  *         If mode is WIFI_MODE_APSTA, it stop station/soft-AP and free station/soft-AP control block
+  *         If mode is WIFI_MODE_STA, it stops station and frees station control block
+  *         If mode is WIFI_MODE_AP, it stops soft-AP and frees soft-AP control block
+  *         If mode is WIFI_MODE_APSTA, it stops station/soft-AP and frees station/soft-AP control block
+  *         If mode is WIFI_MODE_NAN, it stops NAN and frees NAN control block
   *
   * @return
   *    - ESP_OK: succeed
@@ -581,7 +587,7 @@ esp_err_t esp_wifi_get_bandwidth(wifi_interface_t ifx, wifi_bandwidth_t *bw);
 /**
   * @brief     Set primary/secondary channel of device
   *
-  * @attention 1. This API should be called after esp_wifi_start()
+  * @attention 1. This API should be called after esp_wifi_start() and before esp_wifi_stop()
   * @attention 2. When device is in STA mode, this API should not be called when STA is scanning or connecting to an external AP
   * @attention 3. When device is in softAP mode, this API should not be called when softAP has connected to external STAs
   * @attention 4. When device is in STA+softAP mode, this API should not be called when in the scenarios described above
@@ -596,6 +602,7 @@ esp_err_t esp_wifi_get_bandwidth(wifi_interface_t ifx, wifi_bandwidth_t *bw);
   *    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init
   *    - ESP_ERR_WIFI_IF: invalid interface
   *    - ESP_ERR_INVALID_ARG: invalid argument
+  *    - ESP_ERR_WIFI_NOT_STARTED: WiFi is not started by esp_wifi_start
   */
 esp_err_t esp_wifi_set_channel(uint8_t primary, wifi_second_chan_t second);
 
@@ -621,7 +628,7 @@ esp_err_t esp_wifi_get_channel(uint8_t *primary, wifi_second_chan_t *second);
   *               it's up to the user to fill in all fields according to local regulations.
   *               Please use esp_wifi_set_country_code instead.
   * @attention 2. The default country is "01" (world safe mode) {.cc="01", .schan=1, .nchan=11, .policy=WIFI_COUNTRY_POLICY_AUTO}.
-  * @attention 3. The third octect of country code string is one of the following: ' ', 'O', 'I', 'X', otherwise it is considered as ' '.
+  * @attention 3. The third octet of country code string is one of the following: ' ', 'O', 'I', 'X', otherwise it is considered as ' '.
   * @attention 4. When the country policy is WIFI_COUNTRY_POLICY_AUTO, the country info of the AP to which
   *               the station is connected is used. E.g. if the configured country info is {.cc="US", .schan=1, .nchan=11}
   *               and the country info of the AP to which the station is connected is {.cc="JP", .schan=1, .nchan=14}
@@ -658,10 +665,10 @@ esp_err_t esp_wifi_get_country(wifi_country_t *country);
 
 
 /**
-  * @brief     Set MAC address of WiFi station or the soft-AP interface.
+  * @brief     Set MAC address of WiFi station, soft-AP or NAN interface.
   *
   * @attention 1. This API can only be called when the interface is disabled
-  * @attention 2. Soft-AP and station have different MAC addresses, do not set them to be the same.
+  * @attention 2. Above mentioned interfaces have different MAC addresses, do not set them to be the same.
   * @attention 3. The bit 0 of the first byte of MAC address can not be 1. For example, the MAC address
   *      can set to be "1a:XX:XX:XX:XX:XX", but can not be "15:XX:XX:XX:XX:XX".
   *
@@ -790,16 +797,16 @@ esp_err_t esp_wifi_set_promiscuous_ctrl_filter(const wifi_promiscuous_filter_t *
 esp_err_t esp_wifi_get_promiscuous_ctrl_filter(wifi_promiscuous_filter_t *filter);
 
 /**
-  * @brief     Set the configuration of the STA or AP
+  * @brief     Set the configuration of the STA, AP or NAN
   *
   * @attention 1. This API can be called only when specified interface is enabled, otherwise, API fail
   * @attention 2. For station configuration, bssid_set needs to be 0; and it needs to be 1 only when users need to check the MAC address of the AP.
   * @attention 3. ESP devices are limited to only one channel, so when in the soft-AP+station mode, the soft-AP will adjust its channel automatically to be the same as
   *               the channel of the station.
-  * @attention 4. The configuration will be stored in NVS
+  * @attention 4. The configuration will be stored in NVS for station and soft-AP
   *
   * @param     interface  interface
-  * @param     conf  station or soft-AP configuration
+  * @param     conf  station, soft-AP or NAN configuration
   *
   * @return
   *    - ESP_OK: succeed
@@ -1149,6 +1156,7 @@ esp_err_t esp_wifi_set_inactive_time(wifi_interface_t ifx, uint16_t sec);
   * @return
   *    - ESP_OK: succeed
   *    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init
+  *    - ESP_ERR_WIFI_NOT_STARTED: WiFi is not started by esp_wifi_start
   *    - ESP_ERR_WIFI_ARG: invalid argument
   */
 esp_err_t esp_wifi_get_inactive_time(wifi_interface_t ifx, uint16_t *sec);
@@ -1271,7 +1279,7 @@ esp_err_t esp_wifi_connectionless_module_set_wake_interval(uint16_t wake_interva
   *
   * @attention 7. When country code "01" (world safe mode) is set, SoftAP mode won't contain country IE.
   * @attention 8. The default country is "01" (world safe mode) and ieee80211d_enabled is TRUE.
-  * @attention 9. The third octect of country code string is one of the following: ' ', 'O', 'I', 'X', otherwise it is considered as ' '.
+  * @attention 9. The third octet of country code string is one of the following: ' ', 'O', 'I', 'X', otherwise it is considered as ' '.
   *
   * @param     country   the configured country ISO code
   * @param     ieee80211d_enabled   802.11d is enabled or not
@@ -1345,6 +1353,34 @@ esp_err_t esp_wifi_sta_get_aid(uint16_t *aid);
   *    - ESP_OK: succeed
   */
 esp_err_t esp_wifi_sta_get_negotiated_phymode(wifi_phy_mode_t *phymode);
+
+/**
+  * @brief      Config dynamic carrier sense
+  *
+  * @attention  This API should be called after esp_wifi_start().
+  *
+  * @param      enabled Dynamic carrier sense is enabled or not.
+  *
+  * @return
+  *    - ESP_OK: succeed
+  *    - others: failed
+  */
+esp_err_t esp_wifi_set_dynamic_cs(bool enabled);
+
+/**
+  * @brief      Get the rssi info after station connected to AP
+  *
+  * @attention  This API should be called after station connected to AP.
+  *
+  * @param      rssi store the rssi info received from last beacon.
+  *
+  * @return
+  *    - ESP_OK: succeed
+  *    - ESP_ERR_INVALID_ARG: invalid argument
+  *    - ESP_FAIL: failed
+  */
+esp_err_t esp_wifi_sta_get_rssi(int *rssi);
+
 #ifdef __cplusplus
 }
 #endif

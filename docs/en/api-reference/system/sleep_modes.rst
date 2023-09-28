@@ -33,6 +33,8 @@ Once wakeup sources are configured, the application can enter sleep mode using :
 
     In Deep-sleep and Light-sleep modes, the wireless peripherals are powered down. Before entering Deep-sleep or Light-sleep modes, the application must disable Wi-Fi and Bluetooth using the appropriate calls (i.e., :cpp:func:`esp_bluedroid_disable`, :cpp:func:`esp_bt_controller_disable`, :cpp:func:`esp_wifi_stop`). Wi-Fi and Bluetooth connections will not be maintained in Deep-sleep or Light-sleep mode, even if these functions are not called.
 
+    If Wi-Fi/Bluetooth connections need to be maintained, enable Wi-Fi/Bluetooth Modem-sleep mode and automatic Light-sleep feature (see :doc:`Power Management APIs <power_management>`). This will allow the system to wake up from sleep automatically when required by the Wi-Fi/Bluetooth driver, thereby maintaining the connection.
+
 .. only:: not SOC_BT_SUPPORTED
 
     Wi-Fi and Sleep Modes
@@ -40,7 +42,7 @@ Once wakeup sources are configured, the application can enter sleep mode using :
 
     In Deep-sleep and Light-sleep modes, the wireless peripherals are powered down. Before entering Deep-sleep or Light-sleep modes, applications must disable Wi-Fi using the appropriate calls (:cpp:func:`esp_wifi_stop`). Wi-Fi connections will not be maintained in Deep-sleep or Light-sleep mode, even if these functions are not called.
 
-If Wi-Fi connections need to be maintained, enable Wi-Fi Modem-sleep mode and automatic Light-sleep feature (see :doc:`Power Management APIs <power_management>`). This will allow the system to wake up from sleep automatically when required by the Wi-Fi driver, thereby maintaining a connection to the AP.
+    If Wi-Fi connections need to be maintained, enable Wi-Fi Modem-sleep mode and automatic Light-sleep feature (see :doc:`Power Management APIs <power_management>`). This will allow the system to wake up from sleep automatically when required by the Wi-Fi driver, thereby maintaining a connection to the AP.
 
 Wakeup Sources
 --------------
@@ -71,7 +73,7 @@ RTC peripherals or RTC memories don't need to be powered on during sleep in this
 
     :cpp:func:`esp_sleep_enable_touchpad_wakeup` function can be used to enable this wakeup source.
 
-.. only:: SOC_PM_SUPPORT_EXT_WAKEUP
+.. only:: SOC_PM_SUPPORT_EXT0_WAKEUP or SOC_PM_SUPPORT_EXT1_WAKEUP
 
     External Wakeup (ext0)
     ^^^^^^^^^^^^^^^^^^^^^^
@@ -127,11 +129,11 @@ RTC peripherals or RTC memories don't need to be powered on during sleep in this
     GPIO Wakeup (Light-sleep Only)
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    .. only:: SOC_PM_SUPPORT_EXT_WAKEUP
+    .. only:: (SOC_PM_SUPPORT_EXT0_WAKEUP or SOC_PM_SUPPORT_EXT1_WAKEUP)
 
         In addition to EXT0 and EXT1 wakeup sources described above, one more method of wakeup from external inputs is available in Light-sleep mode. With this wakeup source, each pin can be individually configured to trigger wakeup on high or low level using :cpp:func:`gpio_wakeup_enable` function. Unlike EXT0 and EXT1 wakeup sources, which can only be used with RTC IOs, this wakeup source can be used with any IO (RTC or digital).
 
-    .. only:: not SOC_PM_SUPPORT_EXT_WAKEUP
+    .. only:: not (SOC_PM_SUPPORT_EXT0_WAKEUP or SOC_PM_SUPPORT_EXT1_WAKEUP)
 
         One more method of wakeup from external inputs is available in Light-sleep mode. With this wakeup source, each pin can be individually configured to trigger wakeup on high or low level using :cpp:func:`gpio_wakeup_enable` function. This wakeup source can be used with any IO (RTC or digital).
 
@@ -257,7 +259,7 @@ Checking Sleep Wakeup Cause
 
     For touchpad, it is possible to identify which touch pin has caused wakeup using :cpp:func:`esp_sleep_get_touchpad_wakeup_status` functions.
 
-.. only:: SOC_PM_SUPPORT_EXT_WAKEUP
+.. only:: SOC_PM_SUPPORT_EXT1_WAKEUP
 
     For ext1 wakeup sources, it is possible to identify which touch pin has caused wakeup using :cpp:func:`esp_sleep_get_ext1_wakeup_status` functions.
 
@@ -271,7 +273,11 @@ Application Example
 -------------------
 
 - :example:`protocols/sntp`: the implementation of basic functionality of Deep-sleep, where ESP module is periodically waken up to retrieve time from NTP server.
-- :example:`wifi/power_save`: the implementation of modem sleep example.
+- :example:`wifi/power_save`: the implementation of Wi-Fi Modem-sleep example.
+
+.. only:: SOC_BT_SUPPORTED
+
+    - :example:`bluetooth/nimble/power_save`: the implementation of Bluetooth Modem-sleep example.
 
 .. only:: SOC_ULP_SUPPORTED
 

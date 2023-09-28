@@ -11,6 +11,7 @@
 #include "sdkconfig.h"
 #include "soc/soc_caps.h"
 #include "hal/efuse_ll.h"
+#include "hal/efuse_hal.h"
 
 #if CONFIG_IDF_TARGET_ESP32
 #   include "soc/spi_struct.h"
@@ -30,7 +31,7 @@
 #include "esp_rom_spiflash.h"
 
 #ifdef CONFIG_EFUSE_VIRTUAL_KEEP_IN_FLASH
-#define ENCRYPTION_IS_VIRTUAL 1
+#define ENCRYPTION_IS_VIRTUAL (!efuse_hal_flash_encryption_enabled())
 #else
 #define ENCRYPTION_IS_VIRTUAL 0
 #endif
@@ -119,6 +120,7 @@ esp_err_t bootloader_flash_erase_range(uint32_t start_addr, uint32_t size)
 #include "esp32/rom/cache.h"
 #endif
 #include "esp_rom_spiflash.h"
+#include "esp_rom_sys.h"
 #include "hal/mmu_hal.h"
 #include "hal/mmu_ll.h"
 #include "hal/cache_hal.h"
@@ -241,7 +243,7 @@ void bootloader_munmap(const void *mapping)
         mmu_init(0);
 #else
         cache_hal_disable(CACHE_TYPE_ALL);
-        mmu_hal_init();
+        mmu_hal_unmap_all();
 #endif
         mapped = false;
         current_read_mapping = UINT32_MAX;
@@ -746,7 +748,7 @@ esp_err_t IRAM_ATTR bootloader_flash_reset_chip(void)
     return ESP_OK;
 }
 
-bool bootloader_flash_is_octal_mode_enabled(void)
+bool IRAM_ATTR bootloader_flash_is_octal_mode_enabled(void)
 {
 #if SOC_SPI_MEM_SUPPORT_OPI_MODE
     return efuse_ll_get_flash_type();

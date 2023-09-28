@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * SPDX-FileContributor: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileContributor: 2015-2023 Espressif Systems (Shanghai) CO LTD
  */
 #ifndef LWIP_HDR_ESP_LWIPOPTS_H
 #define LWIP_HDR_ESP_LWIPOPTS_H
@@ -164,7 +164,11 @@ extern "C" {
 /**
  * LWIP_IPV4==1: Enable IPv4
  */
+#ifdef CONFIG_LWIP_IPV4
 #define LWIP_IPV4                       1
+#else
+#define LWIP_IPV4                       0
+#endif
 
 /**
  * IP_REASSEMBLY==1: Reassemble incoming fragmented IP4 packets. Note that
@@ -273,6 +277,7 @@ extern "C" {
    ---------- DHCP options ----------
    ----------------------------------
 */
+#if CONFIG_LWIP_IPV4
 /**
  * LWIP_DHCP==1: Enable DHCP module.
  */
@@ -350,11 +355,9 @@ extern "C" {
 #define DHCP_COARSE_TIMER_SECS          CONFIG_LWIP_DHCP_COARSE_TIMER_SECS
 #define DHCP_NEXT_TIMEOUT_THRESHOLD     (3)
 /* Since for embedded devices it's not that hard to miss a discover packet, so lower
- * the discover retry backoff time from (2,4,8,16,32,60,60)s to (500m,1,2,4,8,15,15)s.
+ * the discover and request retry backoff time from (2,4,8,16,32,60,60)s to (500m,1,2,4,4,4,4)s.
  */
-#define DHCP_REQUEST_TIMEOUT_SEQUENCE(state, tries)   (state == DHCP_STATE_REQUESTING ? \
-                                                       (uint16_t)(1 * 1000) : \
-                                                       (uint16_t)(((tries) < 6 ? 1 << (tries) : 60) * 250))
+#define DHCP_REQUEST_TIMEOUT_SEQUENCE(tries)   ((uint16_t)(((tries) < 5 ? 1 << (tries) : 16) * 250))
 
 static inline uint32_t timeout_from_offered(uint32_t lease, uint32_t min)
 {
@@ -381,6 +384,7 @@ static inline uint32_t timeout_from_offered(uint32_t lease, uint32_t min)
 #define LWIP_HOOK_DHCP_APPEND_OPTIONS(netif, dhcp, state, msg, msg_type, options_len_ptr) \
         dhcp_append_extra_opts(netif, state, msg, options_len_ptr);
 
+#endif /* CONFIG_LWIP_IPV4 */
 /*
    ------------------------------------
    ---------- AUTOIP options ----------
@@ -1204,9 +1208,9 @@ static inline uint32_t timeout_from_offered(uint32_t lease, uint32_t min)
 #define LWIP_HOOK_FILENAME              "lwip_default_hooks.h"
 #define LWIP_HOOK_IP4_ROUTE_SRC         ip4_route_src_hook
 #if LWIP_NETCONN_FULLDUPLEX
-#define LWIP_DONE_SOCK(s)               done_socket(sock)
+#define LWIP_DONE_SOCK(sock)            done_socket(sock)
 #else
-#define LWIP_DONE_SOCK(s)               ((void)1)
+#define LWIP_DONE_SOCK(sock)            ((void)1)
 #endif /* LWIP_NETCONN_FULLDUPLEX */
 
 #define LWIP_HOOK_SOCKETS_GETSOCKOPT(s, sock, level, optname, optval, optlen, err)    \
@@ -1484,6 +1488,15 @@ static inline uint32_t timeout_from_offered(uint32_t lease, uint32_t min)
 #define ESP_GRATUITOUS_ARP              0
 #endif
 
+/**
+ * ESP_MLDV6_REPORT==1: This option allows to send mldv6 report periodically.
+ */
+#ifdef CONFIG_LWIP_ESP_MLDV6_REPORT
+#define ESP_MLDV6_REPORT              1
+#else
+#define ESP_MLDV6_REPORT              0
+#endif
+
 #define ESP_LWIP                        1
 #define ESP_LWIP_ARP                    1
 #define ESP_PER_SOC_TCP_WND             0
@@ -1543,6 +1556,14 @@ static inline uint32_t timeout_from_offered(uint32_t lease, uint32_t min)
 #define mem_clib_malloc malloc
 #define mem_clib_calloc calloc
 #endif /* CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP */
+
+
+/*
+ * Check if the lwIP configuration is sane
+ */
+#if !LWIP_IPV4 && !LWIP_IPV6
+#error "Please enable at least one IP stack (either IPv4 or IPv6 or both)"
+#endif
 
 #ifdef __cplusplus
 }

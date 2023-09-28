@@ -140,6 +140,7 @@
 #define  CPU_CLK_FREQ_MHZ_BTLD                       (96)               // The cpu clock frequency (in MHz) to set at 2nd stage bootloader system clock configuration
 #define  CPU_CLK_FREQ                                APB_CLK_FREQ
 #define  APB_CLK_FREQ                                ( 32*1000000 )
+#define  MODEM_APB_CLK_FREQ                          ( 32*1000000 )
 #define  REF_CLK_FREQ                                ( 1000000 )
 #define  XTAL_CLK_FREQ                               (32*1000000)
 #define  GPIO_MATRIX_DELAY_NS                        0
@@ -175,6 +176,9 @@
 #define SOC_DIRAM_IRAM_HIGH   0x40850000
 #define SOC_DIRAM_DRAM_LOW    0x40800000
 #define SOC_DIRAM_DRAM_HIGH   0x40850000
+
+#define MAP_DRAM_TO_IRAM(addr) (addr)
+#define MAP_IRAM_TO_DRAM(addr) (addr)
 
 // Region of memory accessible via DMA. See esp_ptr_dma_capable().
 #define SOC_DMA_LOW  0x40800000

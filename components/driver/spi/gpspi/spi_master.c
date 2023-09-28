@@ -111,9 +111,10 @@ We have two bits to control the interrupt:
 */
 
 #include <string.h>
+#include <sys/param.h>
 #include "esp_private/spi_common_internal.h"
 #include "driver/spi_master.h"
-#include "clk_tree.h"
+#include "esp_clk_tree.h"
 #include "clk_ctrl_os.h"
 #include "esp_log.h"
 #include "esp_check.h"
@@ -123,8 +124,8 @@ We have two bits to control the interrupt:
 #include "soc/soc_memory_layout.h"
 #include "driver/gpio.h"
 #include "hal/spi_hal.h"
+#include "hal/spi_ll.h"
 #include "esp_heap_caps.h"
-
 
 typedef struct spi_device_t spi_device_t;
 
@@ -363,7 +364,7 @@ esp_err_t spi_bus_add_device(spi_host_device_t host_id, const spi_device_interfa
     if (dev_config->clock_source) {
         clk_src = dev_config->clock_source;
     }
-    clk_tree_src_get_freq_hz(clk_src, CLK_TREE_SRC_FREQ_PRECISION_APPROX, &clock_source_hz);
+    esp_clk_tree_src_get_freq_hz(clk_src, ESP_CLK_TREE_SRC_FREQ_PRECISION_APPROX, &clock_source_hz);
     SPI_CHECK((dev_config->clock_speed_hz > 0) && (dev_config->clock_speed_hz <= clock_source_hz), "invalid sclk speed", ESP_ERR_INVALID_ARG);
 #ifdef CONFIG_IDF_TARGET_ESP32
     //The hardware looks like it would support this, but actually setting cs_ena_pretrans when transferring in full
@@ -724,10 +725,11 @@ static void SPI_MASTER_ISR_ATTR spi_intr(void *arg)
             // We stay in the ISR to deal with those transactions of desired device, otherwise nothing will be done, check whether we need to resume some other tasks, or just quit the ISR
             resume_task = spi_bus_lock_bg_check_dev_acq(lock, &desired_dev);
         }
-        // sanity check
-        assert(desired_dev);
 
         if (!resume_task) {
+            // sanity check
+            assert(desired_dev);
+
             bool dev_has_req = spi_bus_lock_bg_check_dev_req(desired_dev);
             if (dev_has_req) {
                 device_to_send = host->device[spi_bus_lock_get_dev_id(desired_dev)];
@@ -802,6 +804,14 @@ static SPI_MASTER_ISR_ATTR esp_err_t check_trans_valid(spi_device_handle_t handl
     }
     //Dummy phase is not available when both data out and in are enabled, regardless of FD or HD mode.
     SPI_CHECK(!tx_enabled || !rx_enabled || !dummy_enabled || !extra_dummy_enabled, "Dummy phase is not available when both data out and in are enabled", ESP_ERR_INVALID_ARG);
+
+    if (bus_attr->dma_enabled) {
+        SPI_CHECK(trans_desc->length <= SPI_LL_DMA_MAX_BIT_LEN, "txdata transfer > hardware max supported len", ESP_ERR_INVALID_ARG);
+        SPI_CHECK(trans_desc->rxlength <= SPI_LL_DMA_MAX_BIT_LEN, "rxdata transfer > hardware max supported len", ESP_ERR_INVALID_ARG);
+    } else {
+        SPI_CHECK(trans_desc->length <= SPI_LL_CPU_MAX_BIT_LEN, "txdata transfer > hardware max supported len", ESP_ERR_INVALID_ARG);
+        SPI_CHECK(trans_desc->rxlength <= SPI_LL_CPU_MAX_BIT_LEN, "rxdata transfer > hardware max supported len", ESP_ERR_INVALID_ARG);
+    }
 
     return ESP_OK;
 }
@@ -1101,4 +1111,21 @@ esp_err_t SPI_MASTER_ISR_ATTR spi_device_polling_transmit(spi_device_handle_t ha
     if (ret != ESP_OK) return ret;
 
     return spi_device_polling_end(handle, portMAX_DELAY);
+}
+
+esp_err_t spi_bus_get_max_transaction_len(spi_host_device_t host_id, size_t *max_bytes)
+{
+    SPI_CHECK(is_valid_host(host_id), "invalid host", ESP_ERR_INVALID_ARG);
+    if (bus_driver_ctx[host_id] == NULL || max_bytes == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    spi_host_t *host = bus_driver_ctx[host_id];
+    if (host->bus_attr->dma_enabled) {
+        *max_bytes = MIN(host->bus_attr->max_transfer_sz, (SPI_LL_DMA_MAX_BIT_LEN / 8));
+    } else {
+        *max_bytes = MIN(host->bus_attr->max_transfer_sz, (SPI_LL_CPU_MAX_BIT_LEN / 8));
+    }
+
+    return ESP_OK;
 }

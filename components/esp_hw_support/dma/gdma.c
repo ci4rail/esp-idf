@@ -333,7 +333,7 @@ esp_err_t gdma_set_transfer_ability(gdma_channel_handle_t dma_chan, const gdma_t
 
     dma_chan->sram_alignment = sram_alignment;
     dma_chan->psram_alignment = psram_alignment;
-    ESP_LOGD(TAG, "%s channel (%d,%d), (%zu:%zu) bytes aligned, burst %s", dma_chan->direction == GDMA_CHANNEL_DIRECTION_TX ? "tx" : "rx",
+    ESP_LOGD(TAG, "%s channel (%d,%d), (%u:%u) bytes aligned, burst %s", dma_chan->direction == GDMA_CHANNEL_DIRECTION_TX ? "tx" : "rx",
              group->group_id, pair->pair_id, sram_alignment, psram_alignment, en_burst ? "enabled" : "disabled");
 err:
     return ret;
@@ -357,6 +357,24 @@ esp_err_t gdma_apply_strategy(gdma_channel_handle_t dma_chan, const gdma_strateg
 
 err:
     return ret;
+}
+
+esp_err_t gdma_set_priority(gdma_channel_handle_t dma_chan, uint32_t priority)
+{
+    gdma_pair_t *pair = NULL;
+    gdma_group_t *group = NULL;
+    ESP_RETURN_ON_FALSE(dma_chan && priority <= GDMA_LL_CHANNEL_MAX_PRIORITY, ESP_ERR_INVALID_ARG, TAG, "invalid argument");
+    pair = dma_chan->pair;
+    group = pair->group;
+
+    if (dma_chan->direction == GDMA_CHANNEL_DIRECTION_TX) {
+        gdma_ll_tx_set_priority(group->hal.dev, pair->pair_id, priority);
+    } else {
+        gdma_ll_rx_set_priority(group->hal.dev, pair->pair_id, priority);
+    }
+
+    return ESP_OK;
+
 }
 
 esp_err_t gdma_register_tx_event_callbacks(gdma_channel_handle_t dma_chan, gdma_tx_event_callbacks_t *cbs, void *user_data)
@@ -433,10 +451,10 @@ err:
 
 esp_err_t gdma_start(gdma_channel_handle_t dma_chan, intptr_t desc_base_addr)
 {
-    esp_err_t ret = ESP_OK;
     gdma_pair_t *pair = NULL;
     gdma_group_t *group = NULL;
-    ESP_GOTO_ON_FALSE_ISR(dma_chan, ESP_ERR_INVALID_ARG, err, TAG, "invalid argument");
+    ESP_RETURN_ON_FALSE_ISR(dma_chan, ESP_ERR_INVALID_ARG, TAG, "invalid argument");
+    ESP_RETURN_ON_FALSE_ISR(dma_chan->flags.start_stop_by_etm == false, ESP_ERR_INVALID_STATE, TAG, "channel is controlled by ETM");
     pair = dma_chan->pair;
     group = pair->group;
 
@@ -450,16 +468,15 @@ esp_err_t gdma_start(gdma_channel_handle_t dma_chan, intptr_t desc_base_addr)
     }
     portEXIT_CRITICAL_SAFE(&dma_chan->spinlock);
 
-err:
-    return ret;
+    return ESP_OK;
 }
 
 esp_err_t gdma_stop(gdma_channel_handle_t dma_chan)
 {
-    esp_err_t ret = ESP_OK;
     gdma_pair_t *pair = NULL;
     gdma_group_t *group = NULL;
-    ESP_GOTO_ON_FALSE_ISR(dma_chan, ESP_ERR_INVALID_ARG, err, TAG, "invalid argument");
+    ESP_RETURN_ON_FALSE_ISR(dma_chan, ESP_ERR_INVALID_ARG, TAG, "invalid argument");
+    ESP_RETURN_ON_FALSE_ISR(dma_chan->flags.start_stop_by_etm == false, ESP_ERR_INVALID_STATE, TAG, "channel is controlled by ETM");
     pair = dma_chan->pair;
     group = pair->group;
 
@@ -471,8 +488,7 @@ esp_err_t gdma_stop(gdma_channel_handle_t dma_chan)
     }
     portEXIT_CRITICAL_SAFE(&dma_chan->spinlock);
 
-err:
-    return ret;
+    return ESP_OK;
 }
 
 esp_err_t gdma_append(gdma_channel_handle_t dma_chan)
@@ -651,6 +667,8 @@ static esp_err_t gdma_del_tx_channel(gdma_channel_t *dma_channel)
         ESP_LOGD(TAG, "uninstall interrupt service for tx channel (%d,%d)", group_id, pair_id);
     }
 
+    gdma_ll_tx_set_priority(group->hal.dev, pair_id, 0); // reset the priority to 0 (lowest)
+
     free(tx_chan);
     ESP_LOGD(TAG, "del tx channel (%d,%d)", group_id, pair_id);
     // channel has a reference on pair, release it now
@@ -679,6 +697,8 @@ static esp_err_t gdma_del_rx_channel(gdma_channel_t *dma_channel)
         ESP_LOGD(TAG, "uninstall interrupt service for rx channel (%d,%d)", group_id, pair_id);
     }
 
+    gdma_ll_rx_set_priority(group->hal.dev, pair_id, 0); // reset the priority to 0 (lowest)
+
     free(rx_chan);
     ESP_LOGD(TAG, "del rx channel (%d,%d)", group_id, pair_id);
     gdma_release_pair_handle(pair);
@@ -696,7 +716,7 @@ static void IRAM_ATTR gdma_default_rx_isr(void *args)
     gdma_ll_rx_clear_interrupt_status(group->hal.dev, pair->pair_id, intr_status);
 
     if (intr_status & GDMA_LL_EVENT_RX_SUC_EOF) {
-        if (rx_chan && rx_chan->on_recv_eof) {
+        if (rx_chan->on_recv_eof) {
             uint32_t eof_addr = gdma_ll_rx_get_success_eof_desc_addr(group->hal.dev, pair->pair_id);
             gdma_event_data_t edata = {
                 .rx_eof_desc_addr = eof_addr

@@ -1,6 +1,7 @@
 
 menu "Wi-Fi"
-    visible if !IDF_TARGET_ESP32H4
+    # TODO: Disable WIFI support on ESP32-H2 (WIFI-5796)
+    # visible if SOC_WIFI_SUPPORTED
 
     config ESP_WIFI_ENABLED
         bool
@@ -338,6 +339,13 @@ menu "Wi-Fi"
         help
             WiFi module can be compiled without SoftAP to save code size.
 
+    config ESP_WIFI_ENHANCED_LIGHT_SLEEP
+        bool "WiFi modem automatically receives the beacon"
+        default n
+        depends on ESP_PHY_MAC_BB_PD && SOC_PM_SUPPORT_BEACON_WAKEUP
+        help
+            The wifi modem automatically receives the beacon frame during light sleep.
+
     config ESP_WIFI_SLP_BEACON_LOST_OPT
         bool "Wifi sleep optimize when beacon lost"
         help
@@ -365,7 +373,7 @@ menu "Wi-Fi"
         int "Delta early time for RF PHY on"
         range 0 100
         default 2
-        depends on ESP_WIFI_SLP_BEACON_LOST_OPT
+        depends on ESP_WIFI_SLP_BEACON_LOST_OPT && SOC_WIFI_SUPPORT_VARIABLE_BEACON_WINDOW
         help
             Delta early time for rf phy on, When the beacon is lost, the next rf phy on will
             be earlier the time specified by the configuration item, Unit: 32 microsecond.
@@ -374,7 +382,7 @@ menu "Wi-Fi"
         int "Delta timeout time for RF PHY off"
         range 0 8
         default 2
-        depends on ESP_WIFI_SLP_BEACON_LOST_OPT
+        depends on ESP_WIFI_SLP_BEACON_LOST_OPT && SOC_WIFI_SUPPORT_VARIABLE_BEACON_WINDOW
         help
             Delta timeout time for rf phy off, When the beacon is lost, the next rf phy off will
             be delayed for the time specified by the configuration item. Unit: 1024 microsecond.
@@ -390,8 +398,14 @@ menu "Wi-Fi"
             The number of hardware keys for encryption is fixed. And the espnow and SoftAP share the same
             hardware keys. So this configuration will affect the maximum connection number of SoftAP.
             Maximum espnow encrypted peers number + maximum number of connections of SoftAP = Max hardware keys number.
-
             When using ESP mesh, this value should be set to a maximum of 6.
+
+    config ESP_WIFI_NAN_ENABLE
+        bool "WiFi Aware"
+        default n
+        depends on SOC_WIFI_NAN_SUPPORT
+        help
+            Enable WiFi Aware (NAN) feature.
 
     config ESP_WIFI_ENABLE_WIFI_TX_STATS
         bool "Enable Wi-Fi transmission statistics"
@@ -441,14 +455,6 @@ menu "Wi-Fi"
         help
             Select this option to enable 192 bit NSA suite-B.
             This is necessary to support WPA3 192 bit security.
-
-    config ESP_WIFI_WPS_STRICT
-        bool "Strictly validate all WPS attributes"
-        default n
-        help
-            Select this option to enable validate each WPS attribute
-            rigorously. Disabling this add the workaorunds with various APs.
-            Enabling this may cause inter operability issues with some APs.
 
     config ESP_WIFI_11KV_SUPPORT
         bool "Enable 802.11k, 802.11v APIs Support"
@@ -516,6 +522,29 @@ menu "Wi-Fi"
         default "y"
         help
             Enable Wi-Fi DL MU-MIMO and DL OFDMA reception statistics. Will use 10932 bytes memory.
+
+    menu "WPS Configuration Options"
+        config ESP_WIFI_WPS_STRICT
+            bool "Strictly validate all WPS attributes"
+            default n
+            help
+                Select this option to enable validate each WPS attribute
+                rigorously. Disabling this add the workaorunds with various APs.
+                Enabling this may cause inter operability issues with some APs.
+
+        config ESP_WIFI_WPS_PASSPHRASE
+            bool "Get WPA2 passphrase in WPS config"
+            default n
+            help
+                Select this option to get passphrase during WPS configuration.
+                This option fakes the virtual display capabilites to get the
+                configuration in passphrase mode.
+                Not recommanded to be used since WPS credentials should not
+                be shared to other devices, making it in readable format increases
+                that risk, also passphrase requires pbkdf2 to convert in psk.
+
+    endmenu # "WPS Configuration Options"
+
 
     config ESP_WIFI_DEBUG_PRINT
         bool "Print debug messages from WPA Supplicant"

@@ -243,7 +243,10 @@ void vPortSetupTimer(void)
         systimer_ll_apply_counter_value(systimer_hal.dev, SYSTIMER_COUNTER_OS_TICK);
 
         for (cpuid = 0; cpuid < SOC_CPU_CORES_NUM; cpuid++) {
+            // Set stall option and alarm mode to default state. Below they will be set to a required state.
             systimer_hal_counter_can_stall_by_cpu(&systimer_hal, SYSTIMER_COUNTER_OS_TICK, cpuid, false);
+            uint32_t alarm_id = SYSTIMER_ALARM_OS_TICK_CORE0 + cpuid;
+            systimer_hal_select_alarm_mode(&systimer_hal, alarm_id, SYSTIMER_ALARM_MODE_ONESHOT);
         }
 
         for (cpuid = 0; cpuid < portNUM_PROCESSORS; ++cpuid) {
@@ -385,42 +388,6 @@ void vPortEndScheduler( void )
 {
     ;
 }
-
-// ----------------------- Memory --------------------------
-
-#define FREERTOS_SMP_MALLOC_CAPS    (MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT)
-
-void *pvPortMalloc( size_t xSize )
-{
-    return heap_caps_malloc(xSize, FREERTOS_SMP_MALLOC_CAPS);
-}
-
-void vPortFree( void *pv )
-{
-    heap_caps_free(pv);
-}
-
-void vPortInitialiseBlocks( void )
-{
-    ;   //Does nothing, heap is initialized separately in ESP-IDF
-}
-
-size_t xPortGetFreeHeapSize( void )
-{
-    return esp_get_free_heap_size();
-}
-
-#if( configSTACK_ALLOCATION_FROM_SEPARATE_HEAP == 1 )
-void *pvPortMallocStack( size_t xSize )
-{
-    return NULL;
-}
-
-void vPortFreeStack( void *pv )
-{
-
-}
-#endif
 
 // ------------------------ Stack --------------------------
 

@@ -27,6 +27,7 @@
 #include "esp_rom_sys.h"
 #include <sys/param.h>
 #include "soc/clk_tree_defs.h"
+
 #if SOC_I2C_SUPPORT_APB || SOC_I2C_SUPPORT_XTAL
 #include "esp_private/esp_clk.h"
 #endif
@@ -109,7 +110,11 @@ static const char *I2C_TAG = "i2c";
 #if SOC_I2C_NUM >= 2
 _Static_assert(I2C_NUM_1 == 1, "I2C_NUM_1 must be equal to 1");
 #endif // SOC_I2C_NUM >= 2
+#if SOC_LP_I2C_SUPPORTED
+_Static_assert(I2C_NUM_MAX == (SOC_I2C_NUM + SOC_LP_I2C_NUM), "I2C_NUM_MAX must be equal to SOC_I2C_NUM + SOC_LP_I2C_NUM");
+#else
 _Static_assert(I2C_NUM_MAX == SOC_I2C_NUM, "I2C_NUM_MAX must be equal to SOC_I2C_NUM");
+#endif /* SOC_LP_I2C_SUPPORTED */
 
 typedef struct {
     i2c_ll_hw_cmd_t hw_cmd;
@@ -258,6 +263,10 @@ esp_err_t i2c_driver_install(i2c_port_t i2c_num, i2c_mode_t mode, size_t slv_rx_
                              int intr_alloc_flags)
 {
     ESP_RETURN_ON_FALSE(i2c_num < I2C_NUM_MAX, ESP_ERR_INVALID_ARG, I2C_TAG, I2C_NUM_ERROR_STR);
+#if SOC_LP_I2C_SUPPORTED
+    // TODO: IDF-5817
+    ESP_RETURN_ON_FALSE(i2c_num != LP_I2C_NUM_0, ESP_ERR_INVALID_ARG, I2C_TAG, "LP_I2C is not supported via i2c_driver_intall()");
+#endif // SOC_LP_I2C_SUPPORTED
 #if SOC_I2C_SUPPORT_SLAVE
     ESP_RETURN_ON_FALSE(mode == I2C_MODE_MASTER || ( slv_rx_buf_len > 100 || slv_tx_buf_len > 100 ),
               ESP_ERR_INVALID_ARG, I2C_TAG, I2C_SLAVE_BUFFER_LEN_ERR_STR);
@@ -1343,6 +1352,7 @@ esp_err_t i2c_master_read(i2c_cmd_handle_t cmd_handle, uint8_t *data, size_t dat
     return ret;
 }
 
+__attribute__((always_inline))
 static inline bool i2c_cmd_is_single_byte(const i2c_cmd_t *cmd) {
     return cmd->total_bytes == 1;
 }
@@ -1443,7 +1453,7 @@ static void IRAM_ATTR i2c_master_cmd_begin_static(i2c_port_t i2c_num, portBASE_T
         }
         p_i2c->cmd_idx++;
         p_i2c->cmd_link.head = p_i2c->cmd_link.head->next;
-        if (p_i2c->cmd_link.head == NULL || p_i2c->cmd_idx >= 15) {
+        if (p_i2c->cmd_link.head == NULL || p_i2c->cmd_idx >= (SOC_I2C_CMD_REG_NUM-1)) {
             p_i2c->cmd_idx = 0;
             break;
         }

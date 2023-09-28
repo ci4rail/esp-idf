@@ -21,22 +21,29 @@ extern "C" {
 #include "hal/pmu_hal.h"
 #include "pmu_param.h"
 
-#define RTC_SLEEP_PD_DIG                PMU_SLEEP_PD_TOP        //!< Deep sleep (power down digital domain)
+#define RTC_SLEEP_PD_DIG                PMU_SLEEP_PD_TOP        //!< Deep sleep (power down digital domain, includes all power domains
+                                                                //   except CPU, Modem, LP peripheral, AON，VDDSDIO, MEM and clock power domains)
 #define RTC_SLEEP_PD_RTC_PERIPH         PMU_SLEEP_PD_LP_PERIPH  //!< Power down RTC peripherals
-// #define RTC_SLEEP_PD_RTC_SLOW_MEM       BIT(2)               //!< Power down RTC SLOW memory
-// #define RTC_SLEEP_PD_RTC_FAST_MEM       BIT(3)               //!< Power down RTC FAST memory
-// #define RTC_SLEEP_PD_RTC_MEM_FOLLOW_CPU BIT(4)               //!< RTC FAST and SLOW memories are automatically powered up and down along with the CPU
 #define RTC_SLEEP_PD_VDDSDIO            PMU_SLEEP_PD_VDDSDIO    //!< Power down VDDSDIO regulator
 #define RTC_SLEEP_PD_CPU                PMU_SLEEP_PD_CPU        //!< Power down CPU when in lightsleep, but not restart
 #define RTC_SLEEP_PD_DIG_PERIPH         PMU_SLEEP_PD_HP_PERIPH  //!< Power down DIG peripherals
 #define RTC_SLEEP_PD_INT_8M             PMU_SLEEP_PD_RC_FAST    //!< Power down Internal 20M oscillator
 #define RTC_SLEEP_PD_XTAL               PMU_SLEEP_PD_XTAL       //!< Power down main XTAL
+#define RTC_SLEEP_PD_MODEM              PMU_SLEEP_PD_MODEM      //!< Power down modem(include wifi, ble and 15.4)
 
 //These flags are not power domains, but will affect some sleep parameters
 #define RTC_SLEEP_DIG_USE_8M            BIT(16)
 #define RTC_SLEEP_USE_ADC_TESEN_MONITOR BIT(17)
 #define RTC_SLEEP_NO_ULTRA_LOW          BIT(18) //!< Avoid using ultra low power in deep sleep, in which RTCIO cannot be used as input, and RTCMEM can't work under high temperature
 
+#if SOC_PM_SUPPORT_EXT0_WAKEUP
+#define RTC_EXT0_TRIG_EN            PMU_EXT0_WAKEUP_EN                       //!< EXT0 wakeup
+#else
+#define RTC_EXT0_TRIG_EN            0
+#endif
+#if SOC_PM_SUPPORT_EXT1_WAKEUP
+#define RTC_EXT1_TRIG_EN            PMU_EXT1_WAKEUP_EN      //!< EXT1 wakeup
+#endif
 #define RTC_GPIO_TRIG_EN            PMU_GPIO_WAKEUP_EN      //!< GPIO wakeup
 #define RTC_TIMER_TRIG_EN           PMU_LP_TIMER_WAKEUP_EN  //!< Timer wakeup
 #define RTC_WIFI_TRIG_EN            PMU_WIFI_SOC_WAKEUP_EN  //!< WIFI wakeup (light sleep only)
@@ -44,6 +51,9 @@ extern "C" {
 #define RTC_UART1_TRIG_EN           PMU_UART1_WAKEUP_EN     //!< UART1 wakeup (light sleep only)
 #define RTC_BT_TRIG_EN              PMU_BLE_SOC_WAKEUP_EN   //!< BT wakeup (light sleep only)
 #define RTC_USB_TRIG_EN             PMU_USB_WAKEUP_EN
+#if SOC_LP_CORE_SUPPORTED
+#define RTC_LP_CORE_TRIG_EN         PMU_LP_CORE_WAKEUP_EN   //!< LP core wakeup
+#endif //SOC_LP_CORE_SUPPORTED
 #define RTC_XTAL32K_DEAD_TRIG_EN    0 // TODO
 #define RTC_BROWNOUT_DET_TRIG_EN    0 // TODO
 
@@ -60,6 +70,12 @@ extern "C" {
                                RTC_USB_TRIG_EN          | \
                                RTC_BROWNOUT_DET_TRIG_EN)
 
+#if SOC_PM_SUPPORT_EXT0_WAKEUP
+#define PMU_EXT0_WAKEUP_EN          BIT(0)
+#endif
+#if SOC_PM_SUPPORT_EXT1_WAKEUP
+#define PMU_EXT1_WAKEUP_EN          BIT(1)
+#endif
 
 #define PMU_GPIO_WAKEUP_EN          BIT(2)
 #define PMU_WIFI_BEACON_WAKEUP_EN   BIT(3)
@@ -69,6 +85,9 @@ extern "C" {
 #define PMU_UART1_WAKEUP_EN         BIT(7)
 #define PMU_SDIO_WAKEUP_EN          BIT(8)
 #define PMU_BLE_SOC_WAKEUP_EN       BIT(10)
+#if SOC_LP_CORE_SUPPORTED
+#define PMU_LP_CORE_WAKEUP_EN       BIT(11)
+#endif //SOC_LP_CORE_SUPPORTED
 #define PMU_USB_WAKEUP_EN           BIT(14)
 
 
@@ -77,11 +96,16 @@ extern "C" {
 #define PMU_SLEEP_PD_MODEM          BIT(2)
 #define PMU_SLEEP_PD_HP_PERIPH      BIT(3)
 #define PMU_SLEEP_PD_CPU            BIT(4)
-#define PMU_SLEEP_PD_AON            BIT(5)
+
+#if SOC_PM_SUPPORT_HP_AON_PD
+#define PMU_SLEEP_PD_HP_AON         BIT(5)
+#endif
+
 #define PMU_SLEEP_PD_MEM_G0         BIT(6)
 #define PMU_SLEEP_PD_MEM_G1         BIT(7)
 #define PMU_SLEEP_PD_MEM_G2         BIT(8)
 #define PMU_SLEEP_PD_MEM_G3         BIT(9)
+#define PMU_SLEEP_PD_MEM            (PMU_SLEEP_PD_MEM_G0|PMU_SLEEP_PD_MEM_G1|PMU_SLEEP_PD_MEM_G2|PMU_SLEEP_PD_MEM_G3)
 #define PMU_SLEEP_PD_XTAL           BIT(10)
 #define PMU_SLEEP_PD_RC_FAST        BIT(11)
 #define PMU_SLEEP_PD_XTAL32K        BIT(12)
@@ -135,6 +159,13 @@ void pmu_sleep_enable_regdma_backup(void);
   * @brief  Disable_regdma_backup.
   */
 void pmu_sleep_disable_regdma_backup(void);
+
+/**
+ * @brief Get sleep PLL enable status
+ *
+ * @return true if PLL is enabled by PMU in modem state
+ */
+bool pmu_sleep_pll_already_enabled(void);
 
 /**
  * @brief Calculate the hardware time overhead during sleep to compensate for sleep time
@@ -208,9 +239,24 @@ void pmu_sleep_init(const pmu_sleep_config_t *config, bool dslp);
 uint32_t pmu_sleep_start(uint32_t wakeup_opt, uint32_t reject_opt, uint32_t lslp_mem_inf_fpu, bool dslp);
 
 /**
+ * @brief   Finish sleep process settings and get sleep reject status
+ * @return  return sleep reject status
+ */
+bool pmu_sleep_finish(void);
+
+/**
  * @brief Initialize PMU related power/clock/digital parameters and functions
  */
 void pmu_init(void);
+
+/**
+ * @brief Enable or disable system clock in PMU HP sleep state
+ *
+ * This API only used for fix BLE 40 MHz low power clock source issue
+ *
+ * @param enable  true to enable, false to disable
+ */
+void pmu_sleep_enable_hp_sleep_sysclk(bool enable);
 
 
 #endif //#if SOC_PMU_SUPPORTED

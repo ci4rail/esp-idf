@@ -33,6 +33,8 @@ Light-sleep 和 Deep-sleep 模式有多种唤醒源。这些唤醒源也可以�
 
     在 Light-sleep 和 Deep-sleep 模式下，无线外设会被断电。因此，在进入这两种睡眠模式前，应用程序必须调用恰当的函数（:cpp:func:`esp_bluedroid_disable`、:cpp:func:`esp_bt_controller_disable` 或 :cpp:func:`esp_wifi_stop`）来禁用 Wi-Fi 和 Bluetooth。在 Light-sleep 或 Deep-sleep 模式下，即使不调用这些函数也无法连接 Wi-Fi 和 Bluetooth。
 
+    如需保持 Wi-Fi 和 Bluetooth 连接，请启用 Wi-Fi 和 Bluetooth Modem-sleep 模式和自动 Light-sleep 模式（请参阅 :doc:`电源管理 API <power_management>`）。在这两种模式下，Wi-Fi 和 Bluetooth 驱动程序发出请求时，系统将自动从睡眠中被唤醒，从而保持连接。
+
 .. only:: not SOC_BT_SUPPORTED
 
     睡眠模式下的 Wi-Fi 功能
@@ -40,7 +42,7 @@ Light-sleep 和 Deep-sleep 模式有多种唤醒源。这些唤醒源也可以�
 
     在 Light-sleep 和 Deep-sleep 模式下，无线外设会被断电。因此，在进入这两种睡眠模式前，应用程序必须调用恰当的函数 (:cpp:func:`esp_wifi_stop`) 来禁用 Wi-Fi。在 Light-sleep 或 Deep-sleep 模式下，即使不调用此函数也无法连接 Wi-Fi。
 
-如需保持 Wi-Fi 连接，请启用 Wi-Fi Modem-sleep 模式和自动 Light-sleep 模式（请参阅 :doc:`电源管理 API <power_management>`）。在这两种模式下，Wi-Fi 驱动程序发出请求时，系统将自动从睡眠中被唤醒，从而保持与 AP 的连接。
+    如需保持 Wi-Fi 连接，请启用 Wi-Fi Modem-sleep 模式和自动 Light-sleep 模式（请参阅 :doc:`电源管理 API <power_management>`）。在这两种模式下，Wi-Fi 驱动程序发出请求时，系统将自动从睡眠中被唤醒，从而保持与 AP 的连接。
 
 唤醒源
 ---------
@@ -71,7 +73,7 @@ RTC 控制器中内嵌定时器，可用于在预定义的时间到达后唤醒�
 
     可调用 :cpp:func:`esp_sleep_enable_touchpad_wakeup` 函数来启用该唤醒源。
 
-.. only:: SOC_PM_SUPPORT_EXT_WAKEUP
+.. only:: SOC_PM_SUPPORT_EXT0_WAKEUP or SOC_PM_SUPPORT_EXT1_WAKEUP
 
     外部唤醒 (ext0)
     ^^^^^^^^^^^^^^^^^^^^^^
@@ -127,11 +129,11 @@ RTC 控制器中内嵌定时器，可用于在预定义的时间到达后唤醒�
     GPIO 唤醒（仅适用于 Light-sleep 模式）
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    .. only:: SOC_PM_SUPPORT_EXT_WAKEUP
+    .. only:: SOC_PM_SUPPORT_EXT0_WAKEUP or SOC_PM_SUPPORT_EXT1_WAKEUP
 
         除了上述 EXT0 和 EXT1 唤醒源之外，还有一种从外部唤醒 Light-sleep 模式的方法——使用函数 :cpp:func:`gpio_wakeup_enable`。启用该唤醒源后，可将每个管脚单独配置为在高电平或低电平时唤醒。EXT0 和 EXT1 唤醒源只能用于 RTC IO，但此唤醒源既可以用于 RTC IO，可也用于数字 IO。
 
-    .. only:: not SOC_PM_SUPPORT_EXT_WAKEUP
+    .. only:: not (SOC_PM_SUPPORT_EXT0_WAKEUP or SOC_PM_SUPPORT_EXT1_WAKEUP)
 
        此外，还有一种从外部唤醒 Light-sleep 模式的方法。启用该唤醒源后，可将每个管脚单独配置为在高电平或低电平时调用 :cpp:func:`gpio_wakeup_enable` 函数触发唤醒。此唤醒源既可以用于 RTC IO，可也用于数字 IO。
 
@@ -257,7 +259,7 @@ UART 输出处理
 
     对于触摸传感器唤醒源，可以调用函数 :cpp:func:`esp_sleep_get_touchpad_wakeup_status` 来确认触发唤醒的触摸管脚。
 
-.. only:: SOC_PM_SUPPORT_EXT_WAKEUP
+.. only:: SOC_PM_SUPPORT_EXT1_WAKEUP
 
     对于 ext1 唤醒源，可以调用函数 :cpp:func:`esp_sleep_get_ext1_wakeup_status` 来确认触发唤醒的触摸管脚。
 
@@ -271,7 +273,11 @@ UART 输出处理
 -------------------
 
 - :example:`protocols/sntp`：如何实现 Deep-sleep 模式的基本功能，周期性唤醒 ESP 模块，以从 NTP 服务器获取时间。
-- :example:`wifi/power_save`：如何实现 Modem-sleep 模式。
+- :example:`wifi/power_save`：如何实现 Wi-Fi Modem-sleep 模式。
+
+.. only:: SOC_BT_SUPPORTED
+
+    - :example:`bluetooth/nimble/power_save`：如何实现 Bluetooth Modem-sleep 模式。
 
 .. only:: SOC_ULP_SUPPORTED
 

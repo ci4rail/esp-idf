@@ -26,6 +26,7 @@
 
 /*-------------------------- COMMON CAPS ---------------------------------------*/
 #define SOC_ADC_SUPPORTED               1
+#define SOC_ANA_CMPR_SUPPORTED          1
 #define SOC_DEDICATED_GPIO_SUPPORTED    1
 #define SOC_UART_SUPPORTED              1
 #define SOC_GDMA_SUPPORTED              1
@@ -33,14 +34,13 @@
 #define SOC_PCNT_SUPPORTED              1
 #define SOC_MCPWM_SUPPORTED             1
 #define SOC_TWAI_SUPPORTED              1
-// #define SOC_BT_SUPPORTED                1 // TODO: IDF-6416
-// #define SOC_IEEE802154_SUPPORTED        1 // TODO: IDF-6577
-#define SOC_GPTIMER_SUPPORTED              1
-#define SOC_IEEE802154_BLE_ONLY            1
+#define SOC_BT_SUPPORTED                1
+#define SOC_GPTIMER_SUPPORTED           1
+#define SOC_IEEE802154_SUPPORTED        1
+#define SOC_IEEE802154_BLE_ONLY         1
 #define SOC_USB_SERIAL_JTAG_SUPPORTED   1
 #define SOC_TEMP_SENSOR_SUPPORTED       1
-// #define SOC_SUPPORTS_SECURE_DL_MODE     1 // TODO: IDF-6281
-//#define SOC_RISCV_COPROC_SUPPORTED       1 // TODO: IDF-6272
+#define SOC_SUPPORTS_SECURE_DL_MODE     1
 #define SOC_EFUSE_KEY_PURPOSE_FIELD     1
 #define SOC_RTC_FAST_MEM_SUPPORTED      1
 #define SOC_RTC_MEM_SUPPORTED           1
@@ -48,21 +48,28 @@
 #define SOC_SDM_SUPPORTED               1
 #define SOC_ETM_SUPPORTED               1
 #define SOC_RMT_SUPPORTED               1
+#define SOC_PARLIO_SUPPORTED            1
 #define SOC_GPSPI_SUPPORTED             1
 #define SOC_LEDC_SUPPORTED              1
 #define SOC_I2C_SUPPORTED               1
 #define SOC_SYSTIMER_SUPPORTED          1
 // #define SOC_SUPPORT_COEXISTENCE         1 // TODO: IDF-6416
 #define SOC_AES_SUPPORTED               1
-// #define SOC_MPI_SUPPORTED               1 // TODO: IDF-6415
+#define SOC_MPI_SUPPORTED               1
 #define SOC_SHA_SUPPORTED               1
 #define SOC_HMAC_SUPPORTED              1
 #define SOC_DIG_SIGN_SUPPORTED          1
+#define SOC_ECC_SUPPORTED               1
+#define SOC_ECC_EXTENDED_MODES_SUPPORTED   1
+#define SOC_ECDSA_SUPPORTED             1
 #define SOC_FLASH_ENC_SUPPORTED         1
-// #define SOC_SECURE_BOOT_SUPPORTED       1 // TODO: IDF-6281
+#define SOC_SECURE_BOOT_SUPPORTED       1
 #define SOC_BOD_SUPPORTED               1
 #define SOC_APM_SUPPORTED               1
 #define SOC_PMU_SUPPORTED               1
+#define SOC_LP_TIMER_SUPPORTED          1
+#define SOC_PAU_SUPPORTED               1
+#define SOC_CLK_TREE_SUPPORTED          1
 
 /*-------------------------- XTAL CAPS ---------------------------------------*/
 #define SOC_XTAL_SUPPORT_32M            1
@@ -108,6 +115,9 @@
 /*!< Calibration */
 #define SOC_ADC_CALIBRATION_V1_SUPPORTED        (0) /*!< support HW offset calibration version 1*/
 
+/*!< Interrupt */
+#define SOC_ADC_TEMPERATURE_SHARE_INTR          (1)
+
 // ESP32H2-TODO: Copy from esp32c6, need check
 /*-------------------------- APB BACKUP DMA CAPS -------------------------------*/
 #define SOC_APB_BACKUP_DMA              (0)
@@ -128,6 +138,9 @@
 #define SOC_CPU_BREAKPOINTS_NUM         4
 #define SOC_CPU_WATCHPOINTS_NUM         4
 #define SOC_CPU_WATCHPOINT_SIZE         0x80000000 // bytes
+
+#define SOC_CPU_HAS_PMA                 1
+#define SOC_CPU_IDRAM_SPLIT_USING_PMP   1
 
 /*-------------------------- MMU CAPS ----------------------------------------*/
 #define SOC_MMU_PAGE_SIZE_CONFIGURABLE        (1)
@@ -180,16 +193,25 @@
 // digital I/O pad powered by VDD3P3_CPU or VDD_SPI(GPIO_NUM_0~6. GPIO_NUM_15~27)
 #define SOC_GPIO_VALID_DIGITAL_IO_PAD_MASK 0x000000000FFF807FULL
 
+// Support to force hold all IOs
+#define SOC_GPIO_SUPPORT_FORCE_HOLD              (1)
+// Support to hold a single digital I/O when the digital domain is powered off
+#define SOC_GPIO_SUPPORT_HOLD_SINGLE_IO_IN_DSLP  (1)
+
 /*-------------------------- Dedicated GPIO CAPS -----------------------------*/
 #define SOC_DEDIC_GPIO_OUT_CHANNELS_NUM (8) /*!< 8 outward channels on each CPU core */
 #define SOC_DEDIC_GPIO_IN_CHANNELS_NUM  (8) /*!< 8 inward channels on each CPU core */
 #define SOC_DEDIC_PERIPH_ALWAYS_ENABLE  (1) /*!< The dedicated GPIO (a.k.a. fast GPIO) is featured by some customized CPU instructions, which is always enabled */
+
+/*------------------------- Analog Comparator CAPS ---------------------------*/
+#define SOC_ANA_CMPR_NUM             (1U)
 
 /*-------------------------- I2C CAPS ----------------------------------------*/
 // ESP32-H2 has 2 I2C
 #define SOC_I2C_NUM                 (2U)
 
 #define SOC_I2C_FIFO_LEN            (32) /*!< I2C hardware FIFO depth */
+#define SOC_I2C_CMD_REG_NUM         (8)  /*!< Number of I2C command registers */
 #define SOC_I2C_SUPPORT_SLAVE       (1)
 
 // FSM_RST only resets the FSM, not using it. So SOC_I2C_SUPPORT_HW_FSM_RST not defined.
@@ -217,9 +239,10 @@
 #define SOC_LEDC_CHANNEL_NUM                (6)
 #define SOC_LEDC_TIMER_BIT_WIDTH            (20)
 #define SOC_LEDC_SUPPORT_FADE_STOP          (1)
-#define SOC_LEDC_GAMMA_FADE_RANGE_MAX       (16)
+#define SOC_LEDC_GAMMA_CURVE_FADE_SUPPORTED (1)
+#define SOC_LEDC_GAMMA_CURVE_FADE_RANGE_MAX (16)
+#define SOC_LEDC_FADE_PARAMS_BIT_WIDTH      (10)
 
-// TODO: IDF-6332 (Copy from esp32c6, need check)
 /*-------------------------- MPU CAPS ----------------------------------------*/
 #define SOC_MPU_CONFIGURABLE_REGIONS_SUPPORTED    0
 #define SOC_MPU_MIN_REGION_SIZE                   0x20000000U
@@ -268,21 +291,20 @@
 /*------------------------ USB SERIAL JTAG CAPS ------------------------------*/
 // #define SOC_USB_SERIAL_JTAG_SUPPORT_LIGHT_SLEEP     (1)     /*!< Support to maintain minimum usb communication during light sleep */ // TODO: IDF-6395
 
-// TODO: IDF-6267 (Copy from esp32c6, need check)
-/*-------------------------- RTC CAPS --------------------------------------*/
-#define SOC_RTC_CNTL_CPU_PD_DMA_BUS_WIDTH       (128)
-#define SOC_RTC_CNTL_CPU_PD_REG_FILE_NUM        (108)
-#define SOC_RTC_CNTL_CPU_PD_DMA_ADDR_ALIGN      (SOC_RTC_CNTL_CPU_PD_DMA_BUS_WIDTH >> 3)
-#define SOC_RTC_CNTL_CPU_PD_DMA_BLOCK_SIZE      (SOC_RTC_CNTL_CPU_PD_DMA_BUS_WIDTH >> 3)
-
-#define SOC_RTC_CNTL_CPU_PD_RETENTION_MEM_SIZE  (SOC_RTC_CNTL_CPU_PD_REG_FILE_NUM * (SOC_RTC_CNTL_CPU_PD_DMA_BUS_WIDTH >> 3))
+/*-------------------------- PARLIO CAPS --------------------------------------*/
+#define SOC_PARLIO_GROUPS                    1U /*!< Number of parallel IO peripherals */
+#define SOC_PARLIO_TX_UNITS_PER_GROUP        1U /*!< number of TX units in each group */
+#define SOC_PARLIO_RX_UNITS_PER_GROUP        1U /*!< number of RX units in each group */
+#define SOC_PARLIO_TX_UNIT_MAX_DATA_WIDTH    8  /*!< Number of data lines of the TX unit */
+#define SOC_PARLIO_RX_UNIT_MAX_DATA_WIDTH    8  /*!< Number of data lines of the RX unit */
+#define SOC_PARLIO_TX_CLK_SUPPORT_GATING     1  /*!< Support gating TX clock */
+#define SOC_PARLIO_TRANS_BIT_ALIGN           1  /*!< Support bit alignment in transaction */
 
 /*-------------------------- RTCIO CAPS --------------------------------------*/
 /* No dedicated LP_IO subsystem on ESP32-H2. LP functions are still supported
  * for hold, wake & 32kHz crystal functions - via LP_AON registers */
 #define SOC_RTCIO_PIN_COUNT    (0U)
 
-// TODO: IDF-6284 (Copy from esp32c6, need check)
 /*--------------------------- RSA CAPS ---------------------------------------*/
 #define SOC_RSA_MAX_BIT_LEN    (3072)
 
@@ -345,7 +367,10 @@
 #define SOC_SPI_MEM_SUPPORT_CHECK_SUS                     (1)
 #define SOC_SPI_MEM_SUPPORT_WRAP                          (1)
 
-#define SOC_MEMSPI_SRC_FREQ_48M_SUPPORTED         1
+#define SOC_MEMSPI_SRC_FREQ_64M_SUPPORTED         1
+#define SOC_MEMSPI_SRC_FREQ_32M_SUPPORTED         1
+#define SOC_MEMSPI_SRC_FREQ_16M_SUPPORTED         1
+#define SOC_MEMSPI_CLOCK_IS_INDEPENDENT           1
 
 /*-------------------------- SYSTIMER CAPS ----------------------------------*/
 #define SOC_SYSTIMER_COUNTER_NUM            2  // Number of counter units
@@ -357,6 +382,10 @@
 #define SOC_SYSTIMER_INT_LEVEL              1  // Systimer peripheral uses level interrupt
 #define SOC_SYSTIMER_ALARM_MISS_COMPENSATE  1  // Systimer peripheral can generate interrupt immediately if t(target) > t(current)
 #define SOC_SYSTIMER_SUPPORT_ETM            1  // Systimer comparator can generate ETM event
+
+/*-------------------------- LP_TIMER CAPS ----------------------------------*/
+#define SOC_LP_TIMER_BIT_WIDTH_LO           32 // Bit width of lp_timer low part
+#define SOC_LP_TIMER_BIT_WIDTH_HI           16 // Bit width of lp_timer high part
 
 /*--------------------------- TIMER GROUP CAPS ---------------------------------------*/
 #define SOC_TIMER_GROUPS                  (2)
@@ -379,8 +408,9 @@
 #define SOC_EFUSE_DIS_USB_JTAG 1
 #define SOC_EFUSE_DIS_DIRECT_BOOT 1
 #define SOC_EFUSE_SOFT_DIS_JTAG 1
+#define SOC_EFUSE_DIS_ICACHE 1
+#define SOC_EFUSE_BLOCK9_KEY_PURPOSE_QUIRK 1  // AES-XTS and ECDSA key purposes not supported for this block
 
-// TODO: IDF-6281 (Copy from esp32c6, need check)
 /*-------------------------- Secure Boot CAPS----------------------------*/
 #define SOC_SECURE_BOOT_V2_RSA              1
 #define SOC_SECURE_BOOT_V2_ECC              1
@@ -393,10 +423,8 @@
 #define SOC_FLASH_ENCRYPTION_XTS_AES        1
 #define SOC_FLASH_ENCRYPTION_XTS_AES_128    1
 
-// TODO:    IDF-6332 (Copy from esp32c6, need check)
-/*-------------------------- MEMPROT CAPS ------------------------------------*/
-#define SOC_MEMPROT_CPU_PREFETCH_PAD_SIZE   16
-#define SOC_MEMPROT_MEM_ALIGN_SIZE          512
+/*------------------------ Anti DPA (Security) CAPS --------------------------*/
+#define SOC_CRYPTO_DPA_PROTECTION_SUPPORTED     1
 
 /*-------------------------- UART CAPS ---------------------------------------*/
 // ESP32-H2 has 2 UARTs
@@ -406,7 +434,7 @@
 
 #define SOC_UART_SUPPORT_RTC_CLK            (1)     /*!< Support RTC clock as the clock source */
 #define SOC_UART_SUPPORT_XTAL_CLK           (1)     /*!< Support XTAL clock as the clock source */
-// #define SOC_UART_SUPPORT_WAKEUP_INT         (1)         /*!< Support UART wakeup interrupt */ // TODO: IDF-6267
+#define SOC_UART_SUPPORT_WAKEUP_INT         (1)     /*!< Support UART wakeup interrupt */
 
 // UART has an extra TX_WAIT_SEND state when the FIFO is not empty and XOFF is enabled
 #define SOC_UART_SUPPORT_FSM_TX_WAIT_SEND   (1)
@@ -415,25 +443,29 @@
 /*-------------------------- COEXISTENCE HARDWARE PTI CAPS -------------------------------*/
 #define SOC_COEX_HW_PTI                 (1)
 
+/*-------------------------- EXTERNAL COEXISTENCE CAPS -------------------------------------*/
+#define SOC_EXTERNAL_COEX_ADVANCE              (1) /*!< HARDWARE ADVANCED EXTERNAL COEXISTENCE CAPS */
+#define SOC_EXTERNAL_COEX_LEADER_TX_LINE       (0) /*!< EXTERNAL COEXISTENCE TX LINE CAPS */
+
 // TODO: IDF-6337
 /*--------------- PHY REGISTER AND MEMORY SIZE CAPS --------------------------*/
 #define SOC_PHY_DIG_REGS_MEM_SIZE       (21*4)
 
-// TODO: IDF-5679 (Copy from esp32c6, need check)
-/*--------------- WIFI LIGHT SLEEP CLOCK WIDTH CAPS --------------------------*/
-#define SOC_WIFI_LIGHT_SLEEP_CLK_WIDTH  (12)
-
-// TODO: IDF-6270 (Copy from esp32c6, need check)
 /*-------------------------- Power Management CAPS ----------------------------*/
-#define SOC_PM_SUPPORT_WIFI_WAKEUP      (1)
 #define SOC_PM_SUPPORT_BT_WAKEUP        (1)
 #define SOC_PM_SUPPORT_CPU_PD           (1)
-#define SOC_PM_SUPPORT_WIFI_PD          (1)
-#define SOC_PM_SUPPORT_BT_PD            (1)
+#define SOC_PM_SUPPORT_MODEM_PD         (1) /*!<modem includes BLE and 15.4 */
+#define SOC_PM_SUPPORT_XTAL32K_PD       (1)
+#define SOC_PM_SUPPORT_RC32K_PD         (1)
 #define SOC_PM_SUPPORT_RC_FAST_PD       (1)
 #define SOC_PM_SUPPORT_VDDSDIO_PD       (1)
-#define SOC_PM_CPU_RETENTION_BY_RTCCNTL  (1)
+#define SOC_PM_SUPPORT_TOP_PD           (1)
+#define SOC_PM_PAU_LINK_NUM             (4)
+#define SOC_PM_CPU_RETENTION_BY_SW      (1)
+#define SOC_PM_MODEM_RETENTION_BY_REGDMA           (1)
 #define SOC_PM_SUPPORT_DEEPSLEEP_CHECK_STUB_ONLY   (1) /*!<Supports CRC only the stub code in RTC memory */
+#define SOC_PM_RETENTION_HAS_REGDMA_POWER_BUG      (1)
+#define SOC_PM_RETENTION_HAS_CLOCK_BUG      (1)
 
 /*-------------------------- CLOCK SUBSYSTEM CAPS ----------------------------------------*/
 #define SOC_CLK_RC_FAST_SUPPORT_CALIBRATION       (1)
@@ -442,12 +474,19 @@
 #define SOC_CLK_OSC_SLOW_SUPPORTED                (1)     /*!< Support to connect an external oscillator, not a crystal */
 #define SOC_CLK_RC32K_SUPPORTED                   (1)     /*!< Support an internal 32kHz RC oscillator */
 
-#define SOC_CLK_LP_FAST_SUPPORT_LP_PLL           (1)      /*!< Support LP_PLL clock as the LP_FAST clock source */
+#define SOC_CLK_LP_FAST_SUPPORT_LP_PLL            (1)      /*!< Support LP_PLL clock as the LP_FAST clock source */
+#define SOC_MODEM_CLOCK_IS_INDEPENDENT            (1)
 
-// TODO: IDF-6229 (Copy from esp32c6, need check)
 /*-------------------------- Temperature Sensor CAPS -------------------------------------*/
 #define SOC_TEMPERATURE_SENSOR_SUPPORT_FAST_RC                (1)
-#define SOC_TEMPERATURE_SENSOR_SUPPORT_XTAL                (1)
+#define SOC_TEMPERATURE_SENSOR_SUPPORT_XTAL                   (1)
+#define SOC_TEMPERATURE_SENSOR_INTR_SUPPORT                   (1)
 
 /*---------------------------------- Bluetooth CAPS ----------------------------------*/
 #define SOC_BLE_SUPPORTED               (1)    /*!< Support Bluetooth Low Energy hardware */
+#define SOC_BLE_MESH_SUPPORTED          (1)    /*!< Support BLE MESH */
+#define SOC_ESP_NIMBLE_CONTROLLER       (1)    /*!< Support BLE EMBEDDED controller V1 */
+#define SOC_BLE_50_SUPPORTED            (1)    /*!< Support Bluetooth 5.0 */
+#define SOC_BLE_DEVICE_PRIVACY_SUPPORTED (1)   /*!< Support BLE device privacy mode */
+#define SOC_BLE_POWER_CONTROL_SUPPORTED (1)    /*!< Support Bluetooth Power Control */
+#define SOC_BLE_MULTI_CONN_OPTIMIZATION (1)    /*!< Support multiple connections optimization */

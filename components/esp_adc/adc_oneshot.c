@@ -15,10 +15,11 @@
 #include "driver/gpio.h"
 #include "driver/rtc_io.h"
 #include "esp_adc/adc_oneshot.h"
-#include "clk_tree.h"
+#include "esp_clk_tree.h"
 #include "esp_private/adc_private.h"
 #include "esp_private/adc_share_hw_ctrl.h"
 #include "esp_private/sar_periph_ctrl.h"
+#include "esp_private/esp_sleep_internal.h"
 #include "hal/adc_types.h"
 #include "hal/adc_oneshot_hal.h"
 #include "hal/adc_ll.h"
@@ -102,7 +103,7 @@ esp_err_t adc_oneshot_new_unit(const adc_oneshot_unit_init_cfg_t *init_config, a
         clk_src = init_config->clk_src;
     }
     uint32_t clk_src_freq_hz = 0;
-    ESP_GOTO_ON_ERROR(clk_tree_src_get_freq_hz(clk_src, CLK_TREE_SRC_FREQ_PRECISION_CACHED, &clk_src_freq_hz), err, TAG, "clock source not supported");
+    ESP_GOTO_ON_ERROR(esp_clk_tree_src_get_freq_hz(clk_src, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &clk_src_freq_hz), err, TAG, "clock source not supported");
 
     adc_oneshot_hal_cfg_t config = {
         .unit = init_config->unit_id,
@@ -122,7 +123,11 @@ esp_err_t adc_oneshot_new_unit(const adc_oneshot_unit_init_cfg_t *init_config, a
     _lock_release(&s_ctx.mutex);
 #endif
 
-    sar_periph_ctrl_adc_oneshot_power_acquire();
+    if (init_config->ulp_mode == ADC_ULP_MODE_DISABLE) {
+        sar_periph_ctrl_adc_oneshot_power_acquire();
+    } else {
+        esp_sleep_enable_adc_tsens_monitor(true);
+    }
 
     ESP_LOGD(TAG, "new adc unit%"PRId32" is created", unit->unit_id);
     *ret_unit = unit;
@@ -174,7 +179,7 @@ esp_err_t adc_oneshot_read(adc_oneshot_unit_handle_t handle, adc_channel_t chan,
     adc_atten_t atten = adc_ll_get_atten(handle->unit_id, chan);
     adc_hal_calibration_init(handle->unit_id);
     adc_set_hw_calibration_code(handle->unit_id, atten);
-#endif
+#endif  // SOC_ADC_CALIBRATION_V1_SUPPORTED
     bool valid = false;
     valid = adc_oneshot_hal_convert(&(handle->hal), out_raw);
 
@@ -198,7 +203,6 @@ esp_err_t adc_oneshot_read_isr(adc_oneshot_unit_handle_t handle, adc_channel_t c
     adc_hal_calibration_init(handle->unit_id);
     adc_set_hw_calibration_code(handle->unit_id, atten);
 #endif
-
     adc_oneshot_hal_convert(&(handle->hal), out_raw);
 
     portEXIT_CRITICAL_SAFE(&rtc_spinlock);
@@ -209,6 +213,7 @@ esp_err_t adc_oneshot_read_isr(adc_oneshot_unit_handle_t handle, adc_channel_t c
 esp_err_t adc_oneshot_del_unit(adc_oneshot_unit_handle_t handle)
 {
     ESP_RETURN_ON_FALSE(handle, ESP_ERR_INVALID_ARG, TAG, "invalid argument: null pointer");
+    adc_ulp_mode_t ulp_mode = handle->ulp_mode;
     bool success_free = s_adc_unit_free(handle->unit_id);
     ESP_RETURN_ON_FALSE(success_free, ESP_ERR_NOT_FOUND, TAG, "adc%"PRId32" isn't in use", handle->unit_id + 1);
 
@@ -219,7 +224,11 @@ esp_err_t adc_oneshot_del_unit(adc_oneshot_unit_handle_t handle)
     ESP_LOGD(TAG, "adc unit%"PRId32" is deleted", handle->unit_id);
     free(handle);
 
-    sar_periph_ctrl_adc_oneshot_power_release();
+    if (ulp_mode == ADC_ULP_MODE_DISABLE) {
+        sar_periph_ctrl_adc_oneshot_power_release();
+    } else {
+        esp_sleep_enable_adc_tsens_monitor(false);
+    }
 
 #if SOC_ADC_DIG_CTRL_SUPPORTED && !SOC_ADC_RTC_CTRL_SUPPORTED
     //To free the APB_SARADC periph if needed

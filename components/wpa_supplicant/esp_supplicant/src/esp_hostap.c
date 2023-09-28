@@ -18,6 +18,9 @@
 #include "esp_wifi_driver.h"
 #include "esp_wifi_types.h"
 #include "esp_wpa3_i.h"
+#include "esp_wps.h"
+
+#define WIFI_PASSWORD_LEN_MAX 65
 
 struct hostapd_data *global_hapd;
 
@@ -37,7 +40,7 @@ void *hostap_init(void)
     struct wpa_auth_config *auth_conf;
     u16 spp_attrubute = 0;
     u8 pairwise_cipher;
-    wifi_pmf_config_t pmf_cfg;
+    wifi_pmf_config_t pmf_cfg = {0};
     uint8_t authmode;
 
     hapd = (struct hostapd_data *)os_zalloc(sizeof(struct hostapd_data));
@@ -82,11 +85,12 @@ void *hostap_init(void)
     pairwise_cipher = esp_wifi_ap_get_prof_pairwise_cipher_internal();
 
 #ifdef CONFIG_IEEE80211W
-
-    esp_wifi_get_pmf_config_internal(&pmf_cfg, WIFI_IF_AP);
-
-    if (pmf_cfg.required) {
-        pairwise_cipher = WIFI_CIPHER_TYPE_CCMP;
+    if((auth_conf->wpa & WPA_PROTO_RSN) == WPA_PROTO_RSN)
+    {
+        esp_wifi_get_pmf_config_internal(&pmf_cfg, WIFI_IF_AP);
+        if (pmf_cfg.required) {
+            pairwise_cipher = WIFI_CIPHER_TYPE_CCMP;
+        }
     }
 #endif /* CONFIG_IEEE80211W */
 
@@ -139,7 +143,7 @@ void *hostap_init(void)
     memcpy(hapd->conf->ssid.ssid, ssid->ssid, ssid->len);
     hapd->conf->ssid.ssid_len = ssid->len;
     hapd->conf->wpa_key_mgmt = auth_conf->wpa_key_mgmt;
-    hapd->conf->ssid.wpa_passphrase = (char *)os_zalloc(64);
+    hapd->conf->ssid.wpa_passphrase = (char *)os_zalloc(WIFI_PASSWORD_LEN_MAX);
     if (hapd->conf->ssid.wpa_passphrase == NULL) {
         os_free(auth_conf);
         os_free(hapd->conf);
@@ -163,7 +167,7 @@ void *hostap_init(void)
 #endif /* CONFIG_SAE */
 
     os_memcpy(hapd->conf->ssid.wpa_passphrase, esp_wifi_ap_get_prof_password_internal(), strlen((char *)esp_wifi_ap_get_prof_password_internal()));
-
+    hapd->conf->ssid.wpa_passphrase[WIFI_PASSWORD_LEN_MAX - 1] = '\0';
     hapd->conf->max_num_sta = esp_wifi_ap_get_max_sta_conn();
 
     hapd->conf->ap_max_inactivity = 5 * 60;
@@ -190,6 +194,8 @@ void hostapd_cleanup(struct hostapd_data *hapd)
     }
 
     if (hapd->conf) {
+        forced_memzero(hapd->conf->ssid.wpa_passphrase, WIFI_PASSWORD_LEN_MAX);
+        os_free(hapd->conf->ssid.wpa_passphrase);
         hostapd_config_free_bss(hapd->conf);
         hapd->conf = NULL;
     }
@@ -207,7 +213,12 @@ void hostapd_cleanup(struct hostapd_data *hapd)
     }
 
 #endif /* CONFIG_SAE */
-
+#ifdef CONFIG_WPS_REGISTRAR
+    if (esp_wifi_get_wps_type_internal () != WPS_TYPE_DISABLE ||
+        esp_wifi_get_wps_status_internal() != WPS_STATUS_DISABLE) {
+        esp_wifi_ap_wps_disable();
+    }
+#endif /* CONFIG_WPS_REGISTRAR */
     os_free(hapd);
     global_hapd = NULL;
 
@@ -222,19 +233,14 @@ bool hostap_deinit(void *data)
         return true;
     }
     esp_wifi_unset_appie_internal(WIFI_APPIE_WPA);
+    esp_wifi_unset_appie_internal(WIFI_APPIE_ASSOC_RESP);
 
 #ifdef CONFIG_SAE
-    uint8_t authmode;
-    authmode = esp_wifi_ap_get_prof_authmode_internal();
-    if (authmode == WIFI_AUTH_WPA3_PSK ||
-        authmode == WIFI_AUTH_WPA2_WPA3_PSK) {
-        wpa3_hostap_auth_deinit();
-        /* Wait till lock is released by wpa3 task */
-        if (WPA3_HOSTAP_AUTH_API_LOCK() == pdTRUE) {
-            WPA3_HOSTAP_AUTH_API_UNLOCK();
-            os_mutex_delete(g_wpa3_hostap_auth_api_lock);
-            g_wpa3_hostap_auth_api_lock = NULL;
-        }
+    wpa3_hostap_auth_deinit();
+    /* Wait till lock is released by wpa3 task */
+    if (g_wpa3_hostap_auth_api_lock &&
+        WPA3_HOSTAP_AUTH_API_LOCK() == pdTRUE) {
+        WPA3_HOSTAP_AUTH_API_UNLOCK();
     }
 #endif /* CONFIG_SAE */
 
@@ -259,7 +265,7 @@ int esp_wifi_build_rsnxe(struct hostapd_data *hapd, u8 *eid, size_t len)
         capab |= BIT(WLAN_RSNX_CAPAB_SAE_H2E);
     }
 
-    flen = (capab & 0xff00) ? 2 : 1;
+    flen = 1;
     if (len < 2 + flen || !capab) {
         return 0; /* no supported extended RSN capabilities */
     }
@@ -268,10 +274,6 @@ int esp_wifi_build_rsnxe(struct hostapd_data *hapd, u8 *eid, size_t len)
     *pos++ = WLAN_EID_RSNX;
     *pos++ = flen;
     *pos++ = capab & 0x00ff;
-    capab >>= 8;
-    if (capab) {
-        *pos++ = capab;
-    }
 
     return pos - eid;
 }

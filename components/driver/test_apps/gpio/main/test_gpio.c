@@ -791,7 +791,6 @@ TEST_CASE("GPIO_drive_capability_test", "[gpio][ignore]")
     prompt_to_continue("If this test finishes");
 }
 
-#if !CONFIG_IDF_TARGET_ESP32H2 // IDF-6845
 #if SOC_USB_SERIAL_JTAG_SUPPORTED
 TEST_CASE("GPIO_input_and_output_of_USB_pins_test", "[gpio]")
 {
@@ -844,9 +843,7 @@ TEST_CASE("GPIO_USB_DP_pin_pullup_disable_test", "[gpio]")
     TEST_ASSERT_EQUAL_INT(0, gpio_get_level(USB_DP_GPIO_NUM));
 }
 #endif //SOC_USB_SERIAL_JTAG_SUPPORTED
-#endif
 
-#if !TEMPORARY_DISABLED_FOR_TARGETS(ESP32H2) // TODO: IDF-6267 Remove when light sleep is supported
 // Ignored in CI because it needs manually connect TEST_GPIO_INPUT_LEVEL_LOW_PIN to 3.3v to wake up from light sleep
 TEST_CASE("GPIO_light_sleep_wake_up_test", "[gpio][ignore]")
 {
@@ -863,4 +860,3 @@ TEST_CASE("GPIO_light_sleep_wake_up_test", "[gpio][ignore]")
     printf("Waked up from light sleep\n");
     TEST_ASSERT(esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO);
 }
-#endif //!TEMPORARY_DISABLED_FOR_TARGETS(...)

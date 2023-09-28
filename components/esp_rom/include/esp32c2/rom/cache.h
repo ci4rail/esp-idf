@@ -270,6 +270,15 @@ void Cache_Occupy_ICache_MEMORY(cache_array_t icache_low);
 void Cache_Get_Mode(struct cache_mode * mode);
 
 /**
+  * @brief Init Cache for ROM boot, including resetting the Icache, initializing Owner, MMU, setting ICache mode, Enabling ICache, unmasking bus.
+  *
+  * @param None
+  *
+  * @return None
+  */
+void ROM_Boot_Cache_Init(void);
+
+/**
   * @brief Init mmu owner register to make i/d cache use half mmu entries.
   *
   * @param None
@@ -502,6 +511,14 @@ uint32_t Cache_Get_IROM_MMU_End(void);
   * @return uint32_t : the word value of the address.
   */
 uint32_t Cache_Get_DROM_MMU_End(void);
+
+/**
+ * @brief Configure cache MMU page size according to instruction and rodata size
+ *
+ * @param irom_size The instruction cache MMU page size
+ * @param drom_size The rodata data cache MMU page size
+ */
+void Cache_Set_IDROM_MMU_Size(uint32_t irom_size, uint32_t drom_size);
 
 #ifdef __cplusplus
 }

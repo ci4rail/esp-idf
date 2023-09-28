@@ -40,6 +40,13 @@ extern "C" {
     .dbuf = 1, \
 }
 
+/*
+Set the frequency division factor of ref_tick
+The FOSC of rtc calibration uses the 32 frequency division clock for ECO1,
+So the frequency division factor of ref_tick must be greater than or equal to 32
+*/
+#define REG_FOSC_TICK_NUM  255
+
 /**
  * @brief XTAL32K_CLK enable modes
  */
@@ -76,6 +83,14 @@ static inline __attribute__((always_inline)) void clk_ll_bbpll_disable(void)
 {
     SET_PERI_REG_MASK(PMU_IMM_HP_CK_POWER_REG, PMU_TIE_LOW_GLOBAL_BBPLL_ICG) ;
     SET_PERI_REG_MASK(PMU_IMM_HP_CK_POWER_REG, PMU_TIE_LOW_XPD_BBPLL | PMU_TIE_LOW_XPD_BBPLL_I2C);
+}
+
+/**
+ * @brief Release the root clock source locked by PMU
+ */
+static inline __attribute__((always_inline)) void clk_ll_cpu_clk_src_lock_release(void)
+{
+    SET_PERI_REG_MASK(PMU_IMM_SLEEP_SYSCLK_REG, PMU_UPDATE_DIG_SYS_CLK_SEL);
 }
 
 /**
@@ -788,6 +803,14 @@ static inline __attribute__((always_inline)) void clk_ll_rtc_slow_store_cal(uint
 static inline __attribute__((always_inline)) uint32_t clk_ll_rtc_slow_load_cal(void)
 {
     return REG_READ(RTC_SLOW_CLK_CAL_REG);
+}
+
+/*
+Set the frequency division factor of ref_tick
+*/
+static inline void clk_ll_rc_fast_tick_conf(void)
+{
+    PCR.ctrl_tick_conf.fosc_tick_num = REG_FOSC_TICK_NUM;
 }
 
 #ifdef __cplusplus

@@ -71,6 +71,15 @@ typedef struct tls_keep_alive_cfg {
     int keep_alive_count;                 /*!< Keep-alive packet retry send count */
 } tls_keep_alive_cfg_t;
 
+/*
+* @brief ESP-TLS Address families
+*/
+typedef enum esp_tls_addr_family {
+    ESP_TLS_AF_UNSPEC = 0,                /**< Unspecified address family. */
+    ESP_TLS_AF_INET,                      /**< IPv4 address family. */
+    ESP_TLS_AF_INET6,                     /**< IPv6 address family. */
+} esp_tls_addr_family_t;
+
 /**
  * @brief      ESP-TLS configuration parameters
  *
@@ -182,6 +191,8 @@ typedef struct esp_tls_cfg {
 #ifdef CONFIG_ESP_TLS_CLIENT_SESSION_TICKETS
     esp_tls_client_session_t *client_session; /*! Pointer for the client session ticket context. */
 #endif /* CONFIG_ESP_TLS_CLIENT_SESSION_TICKETS */
+
+    esp_tls_addr_family_t addr_family;      /*!< The address family to use when connecting to a host. */
 } esp_tls_cfg_t;
 
 #ifdef CONFIG_ESP_TLS_SERVER
@@ -490,6 +501,42 @@ ssize_t esp_tls_get_bytes_avail(esp_tls_t *tls);
  *             - ESP_ERR_INVALID_ARG if (tls == NULL || sockfd == NULL)
  */
 esp_err_t esp_tls_get_conn_sockfd(esp_tls_t *tls, int *sockfd);
+
+/**
+ * @brief       Sets the connection socket file descriptor for the esp_tls session
+ *
+ * @param[in]   tls          handle to esp_tls context
+ *
+ * @param[in]   sockfd       sockfd value to set.
+ *
+ * @return     - ESP_OK on success and value of sockfd for the tls connection shall updated withthe provided value
+ *             - ESP_ERR_INVALID_ARG if (tls == NULL || sockfd < 0)
+ */
+esp_err_t esp_tls_set_conn_sockfd(esp_tls_t *tls, int sockfd);
+
+/**
+ * @brief       Gets the connection state for the esp_tls session
+ *
+ * @param[in]   tls          handle to esp_tls context
+ *
+ * @param[out]   conn_state   pointer to the connection state value.
+ *
+ * @return     - ESP_OK on success and value of sockfd for the tls connection shall updated withthe provided value
+ *             - ESP_ERR_INVALID_ARG (Invalid arguments)
+ */
+esp_err_t esp_tls_get_conn_state(esp_tls_t *tls, esp_tls_conn_state_t *conn_state);
+
+/**
+ * @brief       Sets the connection state for the esp_tls session
+ *
+ * @param[in]   tls          handle to esp_tls context
+ *
+ * @param[in]   conn_state   connection state value to set.
+ *
+ * @return     - ESP_OK on success and value of sockfd for the tls connection shall updated withthe provided value
+ *             - ESP_ERR_INVALID_ARG (Invalid arguments)
+ */
+esp_err_t esp_tls_set_conn_state(esp_tls_t *tls, esp_tls_conn_state_t conn_state);
 
 /**
  * @brief       Returns the ssl context

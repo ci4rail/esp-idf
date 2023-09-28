@@ -35,6 +35,7 @@
 #include "esp_common_i.h"
 #include "esp_owe_i.h"
 #include "common/sae.h"
+#include "esp_wpa2_i.h"
 
 /**
  * eapol_sm_notify_eap_success - Notification of external EAP success trigger
@@ -53,7 +54,7 @@
 struct wpa_sm gWpaSm;
 /* fix buf for tx for now */
 #define WPA_TX_MSG_BUFF_MAXLEN 200
-#define MIN_DH_LEN 4
+#define MIN_DH_LEN(len) (len < 4)
 
 #define ASSOC_IE_LEN 24 + 2 + PMKID_LEN + RSN_SELECTOR_LEN
 #define MAX_EAPOL_RETRIES 3
@@ -109,6 +110,12 @@ wifi_cipher_type_t cipher_type_map_supp_to_public(unsigned wpa_cipher)
 
     case WPA_CIPHER_SMS4:
         return WIFI_CIPHER_TYPE_SMS4;
+
+    case WPA_CIPHER_GCMP:
+        return WIFI_CIPHER_TYPE_GCMP;
+
+    case WPA_CIPHER_GCMP_256:
+        return WIFI_CIPHER_TYPE_GCMP256;
 
     default:
         return WIFI_CIPHER_TYPE_UNKNOWN;
@@ -382,7 +389,6 @@ static void wpa_sm_pmksa_free_cb(struct rsn_pmksa_cache_entry *entry,
 
 
 
-
 static int wpa_supplicant_get_pmk(struct wpa_sm *sm,
         const unsigned char *src_addr,
         const u8 *pmkid)
@@ -498,7 +504,7 @@ static int wpa_supplicant_get_pmk(struct wpa_sm *sm,
         if (buf) {
             wpa_sm_ether_send(sm, sm->bssid, ETH_P_EAPOL,
                       buf, buflen);
-            os_free(buf);
+            wpa_sm_free_eapol(buf);
             return -2;
         }
 
@@ -647,6 +653,14 @@ void wpa_supplicant_process_1_of_4(struct wpa_sm *sm,
     u8 *kde, *kde_buf = NULL;
     size_t kde_len;
 
+    if (is_wpa2_enterprise_connection()) {
+        wpa2_ent_eap_state_t state = wpa2_get_eap_state();
+        if (state == WPA2_ENT_EAP_STATE_IN_PROGRESS) {
+            wpa_printf(MSG_INFO, "EAP Success has not been processed yet."
+               " Drop EAPOL message.");
+            return;
+        }
+    }
     wpa_sm_set_state(WPA_FIRST_HALF_4WAY_HANDSHAKE);
 
     wpa_printf(MSG_DEBUG, "WPA 1/4-Way Handshake");
@@ -2372,6 +2386,18 @@ int wpa_set_bss(char *macddr, char * bssid, u8 pairwise_cipher, u8 group_cipher,
                 wpa_printf(MSG_ERROR, "suite-b 192bit certification, only GMAC256 is supported");
                 return -1;
             }
+            if (sm->group_cipher != WPA_CIPHER_GCMP_256) {
+                wpa_printf(MSG_ERROR, "suite-b 192bit certification, only group GCMP256 is supported for group data cipher.");
+                return -1;
+            }
+            if (sm->pairwise_cipher != WPA_CIPHER_GCMP_256) {
+               wpa_printf(MSG_ERROR,"suite-b 192bit certification, only group GCMP256 is supported for pairwise cipher");
+               return -1;
+            }
+            if (sm->key_mgmt != WPA_KEY_MGMT_IEEE8021X_SUITE_B_192) {
+                wpa_printf(MSG_ERROR, "suite-b 192bit certification, 192bit akm supported");
+                return -1;
+            }
         }
 #endif
     } else {
@@ -2596,24 +2622,40 @@ int wpa_michael_mic_failure(u16 isunicast)
    eapol tx callback function to make sure new key
     install after 4-way handoff
 */
-void eapol_txcb(void *eb)
+void eapol_txcb(uint8_t *eapol_payload, size_t len, bool tx_failure)
 {
+    struct ieee802_1x_hdr *hdr;
+    struct wpa_eapol_key *key;
     struct wpa_sm *sm = &gWpaSm;
     u8 isdeauth = 0;  //no_zero value is the reason for deauth
 
-    if (false == esp_wifi_sta_is_running_internal()){
+    if (len < (sizeof(struct ieee802_1x_hdr) + sizeof(struct wpa_eapol_key))) {
+        wpa_printf(MSG_ERROR, "EAPOL TxDone with invalid payload len! (len - %d)", len);
         return;
     }
+    hdr = (struct ieee802_1x_hdr *) eapol_payload;
+    key = (struct wpa_eapol_key *) (hdr + 1);
 
     switch(WPA_SM_STATE(sm)) {
         case WPA_FIRST_HALF_4WAY_HANDSHAKE:
-            break;
         case WPA_LAST_HALF_4WAY_HANDSHAKE:
-            if (sm->txcb_flags & WPA_4_4_HANDSHAKE_BIT) {
-                sm->txcb_flags &= ~WPA_4_4_HANDSHAKE_BIT;
-                isdeauth = wpa_supplicant_send_4_of_4_txcallback(sm);
+            if (WPA_GET_BE16(key->key_data_length) == 0 ||
+                    (WPA_GET_BE16(key->key_info) & WPA_KEY_INFO_SECURE)) {
+                /* msg 4/4 Tx Done */
+                if (tx_failure) {
+                    wpa_printf(MSG_ERROR, "Eapol message 4/4 tx failure, not installing keys");
+                    return;
+                }
+
+                if (sm->txcb_flags & WPA_4_4_HANDSHAKE_BIT) {
+                    sm->txcb_flags &= ~WPA_4_4_HANDSHAKE_BIT;
+                    isdeauth = wpa_supplicant_send_4_of_4_txcallback(sm);
+                } else {
+                    wpa_printf(MSG_DEBUG, "4/4 txcb, flags=%d", sm->txcb_flags);
+                }
             } else {
-                wpa_printf(MSG_DEBUG, "4/4 txcb, flags=%d", sm->txcb_flags);
+                /* msg 2/4 Tx Done */
+                wpa_printf(MSG_DEBUG, "2/4 txcb, flags=%d, txfail %d", sm->txcb_flags, tx_failure);
             }
             break;
         case WPA_GROUP_HANDSHAKE:
@@ -2821,12 +2863,20 @@ int owe_process_assoc_resp(const u8 *rsn_ie, size_t rsn_len, const uint8_t *dh_i
     if (rsn_ie && rsn_len && wpa_parse_wpa_ie_rsn(rsn_ie, rsn_len + 2, parsed_rsn_data) != 0) {
         goto fail;
     }
-    if (!dh_ie || dh_len < MIN_DH_LEN || parsed_rsn_data->num_pmkid == 0) {
-        wpa_printf(MSG_ERROR, "OWE: Invalid parameter");
+
+    if (dh_ie && MIN_DH_LEN(dh_len)) {
+        wpa_printf(MSG_ERROR, "OWE: Invalid Diffie Hellman IE");
+        goto fail;
+    }
+    if (!dh_ie && parsed_rsn_data->num_pmkid == 0) {
+        wpa_printf(MSG_ERROR, "OWE: Assoc response should either have pmkid or DH IE");
         goto fail;
     }
 
     if (!sm->cur_pmksa) { /* No PMK caching */
+        if (dh_ie == NULL) {
+            goto fail;
+        }
         dh_len += 2;
 
         dh_ie += 3;

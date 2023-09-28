@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -7,6 +7,7 @@
 #include <esp_types.h>
 #include "esp_err.h"
 #include "freertos/FreeRTOS.h"
+#include "esp_heap_caps.h"
 #include "driver/gpio.h"
 #include "driver/rtc_io.h"
 #include "soc/soc.h"
@@ -21,6 +22,10 @@
 #include "esp_check.h"
 #include "hal/gpio_hal.h"
 #include "esp_rom_gpio.h"
+
+#if (SOC_RTCIO_PIN_COUNT > 0)
+#include "hal/rtc_io_hal.h"
+#endif
 
 static const char *GPIO_TAG = "gpio";
 #define GPIO_CHECK(a, str, ret_val) ESP_RETURN_ON_FALSE(a, ret_val, GPIO_TAG, "%s", str)
@@ -493,7 +498,8 @@ esp_err_t gpio_install_isr_service(int intr_alloc_flags)
 {
     GPIO_CHECK(gpio_context.gpio_isr_func == NULL, "GPIO isr service already installed", ESP_ERR_INVALID_STATE);
     esp_err_t ret = ESP_ERR_NO_MEM;
-    gpio_isr_func_t *isr_func = (gpio_isr_func_t *) calloc(GPIO_NUM_MAX, sizeof(gpio_isr_func_t));
+    const uint32_t alloc_caps = (intr_alloc_flags & ESP_INTR_FLAG_IRAM) ? MALLOC_CAP_INTERNAL : MALLOC_CAP_DEFAULT;
+    gpio_isr_func_t *isr_func = (gpio_isr_func_t *) heap_caps_calloc(GPIO_NUM_MAX, sizeof(gpio_isr_func_t), alloc_caps);
     if (isr_func) {
         portENTER_CRITICAL(&gpio_context.gpio_spinlock);
         if (gpio_context.gpio_isr_func == NULL) {
@@ -578,6 +584,9 @@ esp_err_t gpio_isr_register(void (*fn)(void *), void *arg, int intr_alloc_flags,
     gpio_isr_alloc_t p;
     p.source = ETS_GPIO_INTR_SOURCE;
     p.intr_alloc_flags = intr_alloc_flags;
+#if SOC_ANA_CMPR_SUPPORTED
+    p.intr_alloc_flags |= ESP_INTR_FLAG_SHARED;
+#endif
     p.fn = fn;
     p.arg = arg;
     p.handle = handle;
@@ -730,6 +739,7 @@ esp_err_t gpio_hold_dis(gpio_num_t gpio_num)
     return ret;
 }
 
+#if !SOC_GPIO_SUPPORT_HOLD_SINGLE_IO_IN_DSLP
 void gpio_deep_sleep_hold_en(void)
 {
     portENTER_CRITICAL(&gpio_context.gpio_spinlock);
@@ -743,9 +753,9 @@ void gpio_deep_sleep_hold_dis(void)
     gpio_hal_deep_sleep_hold_dis(gpio_context.gpio_hal);
     portEXIT_CRITICAL(&gpio_context.gpio_spinlock);
 }
+#endif //!SOC_GPIO_SUPPORT_HOLD_SINGLE_IO_IN_DSLP
 
 #if SOC_GPIO_SUPPORT_FORCE_HOLD
-
 esp_err_t IRAM_ATTR gpio_force_hold_all()
 {
 #if SOC_RTCIO_HOLD_SUPPORTED
@@ -767,7 +777,7 @@ esp_err_t IRAM_ATTR gpio_force_unhold_all()
 #endif
     return ESP_OK;
 }
-#endif
+#endif //SOC_GPIO_SUPPORT_FORCE_HOLD
 
 void gpio_iomux_in(uint32_t gpio, uint32_t signal_idx)
 {

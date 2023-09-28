@@ -85,9 +85,15 @@ menu "Driver Configurations"
         config SPI_MASTER_ISR_IN_IRAM
             bool "Place SPI master ISR function into IRAM"
             default y
+            depends on !HEAP_PLACE_FUNCTION_INTO_FLASH
             select PERIPH_CTRL_FUNC_IN_IRAM
+            select HAL_SPI_MASTER_FUNC_IN_IRAM
             help
                 Place the SPI master ISR in to IRAM to avoid possible cache miss.
+
+                Enabling this configuration is possible only when HEAP_PLACE_FUNCTION_INTO_FLASH
+                is disabled since the spi master uses can allocate transactions buffers into DMA
+                memory section using the heap component API that ipso facto has to be placed in IRAM.
 
                 Also you can forbid the ISR being disabled during flash writing
                 access, by add ESP_INTR_FLAG_IRAM when initializing the driver.
@@ -109,6 +115,7 @@ menu "Driver Configurations"
             bool "Place SPI slave ISR function into IRAM"
             default y
             select PERIPH_CTRL_FUNC_IN_IRAM
+            select HAL_SPI_SLAVE_FUNC_IN_IRAM
             help
                 Place the SPI slave ISR in to IRAM to avoid possible cache miss.
 
@@ -208,6 +215,14 @@ menu "Driver Configurations"
                 Wether to enable the debug log message for temperature sensor driver.
                 Note that, this option only controls the temperature sensor driver log, won't affect other drivers.
 
+        config TEMP_SENSOR_ISR_IRAM_SAFE
+            depends on SOC_TEMPERATURE_SENSOR_INTR_SUPPORT
+            bool "Temperature sensor ISR IRAM-Safe"
+            default n
+            help
+                Ensure the Temperature Sensor interrupt is IRAM-Safe by allowing the interrupt handler to be
+                executable when the cache is disabled (e.g. SPI Flash write).
+
     endmenu # TEMP_SENSOR Configuration
 
     menu "UART Configuration"
@@ -265,6 +280,31 @@ menu "Driver Configurations"
                 Wether to enable the debug log message for SDM driver.
                 Note that, this option only controls the SDM driver log, won't affect other drivers.
     endmenu # Sigma Delta Modulator Configuration
+
+    menu "Analog Comparator Configuration"
+        depends on SOC_ANA_CMPR_SUPPORTED
+        config ANA_CMPR_ISR_IRAM_SAFE
+            bool "Analog comparator ISR IRAM-Safe"
+            default n
+            help
+                Ensure the Analog Comparator interrupt is IRAM-Safe by allowing the interrupt handler to be
+                executable when the cache is disabled (e.g. SPI Flash write).
+
+        config ANA_CMPR_CTRL_FUNC_IN_IRAM
+            bool "Place Analog Comparator control functions into IRAM"
+            default n
+            help
+                Place Analog Comparator control functions (like ana_cmpr_set_internal_reference) into IRAM,
+                so that these functions can be IRAM-safe and able to be called in an IRAM interrupt context.
+                Enabling this option can improve driver performance as well.
+
+        config ANA_CMPR_ENABLE_DEBUG_LOG
+            bool "Enable debug log"
+            default n
+            help
+                Wether to enable the debug log message for Analog Comparator driver.
+                Note that, this option only controls the Analog Comparator driver log, won't affect other drivers.
+    endmenu # Analog Comparator Configuration
 
     menu "GPTimer Configuration"
         config GPTIMER_CTRL_FUNC_IN_IRAM
@@ -477,5 +517,25 @@ menu "Driver Configurations"
                 called manually from the program, enabling this option will not prevent light sleep entry even if the
                 USB Serial/JTAG is in use.
     endmenu # USB Serial/JTAG Configuration
+
+    menu "Parallel IO Configuration"
+        depends on SOC_PARLIO_SUPPORTED
+
+        config PARLIO_ENABLE_DEBUG_LOG
+            bool "Enable debug log"
+            default n
+            help
+                Wether to enable the debug log message for parallel IO driver.
+                Note that, this option only controls the parallel IO driver log, won't affect other drivers.
+
+        config PARLIO_ISR_IRAM_SAFE
+            bool "Parallel IO ISR IRAM-Safe"
+            default n
+            select GDMA_CTRL_FUNC_IN_IRAM # the driver needs to start the GDMA in the interrupt
+            help
+                Ensure the Parallel IO interrupt is IRAM-Safe by allowing the interrupt handler to be
+                executable when the cache is disabled (e.g. SPI Flash write).
+
+    endmenu # Parallel IO Configuration
 
 endmenu  # Driver configurations

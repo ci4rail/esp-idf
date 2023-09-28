@@ -50,7 +50,7 @@ except ImportError:
     import common_test_methods  # noqa: F401
 
 SUPPORTED_TARGETS = ['esp32', 'esp32s2', 'esp32c3', 'esp32s3', 'esp32c2', 'esp32c6', 'esp32h2']
-PREVIEW_TARGETS = ['esp32h4']  # this PREVIEW_TARGETS excludes 'linux' target
+PREVIEW_TARGETS: List[str] = []  # this PREVIEW_TARGETS excludes 'linux' target
 DEFAULT_SDKCONFIG = 'default'
 
 TARGET_MARKERS = {
@@ -60,14 +60,13 @@ TARGET_MARKERS = {
     'esp32c3': 'support esp32c3 target',
     'esp32c2': 'support esp32c2 target',
     'esp32c6': 'support esp32c6 target',
-    'esp32h4': 'support esp32h4 target',
     'esp32h2': 'support esp32h2 target',
     'linux': 'support linux target',
 }
 
 SPECIAL_MARKERS = {
     'supported_targets': "support all officially announced supported targets ('esp32', 'esp32s2', 'esp32c3', 'esp32s3', 'esp32c2', 'esp32c6')",
-    'preview_targets': "support all preview targets ('esp32h4')",
+    'preview_targets': "support all preview targets ('none')",
     'all_targets': 'support all targets, including supported ones and preview ones',
     'temp_skip_ci': 'temp skip tests for specified targets only in ci',
     'temp_skip': 'temp skip tests for specified targets both in ci and locally',
@@ -110,6 +109,7 @@ ENV_MARKERS = {
     'external_flash': 'external flash memory connected via VSPI (FSPI)',
     'sdcard_sdmode': 'sdcard running in SD mode',
     'sdcard_spimode': 'sdcard running in SPI mode',
+    'emmc': 'eMMC card',
     'MSPI_F8R8': 'runner with Octal Flash and Octal PSRAM',
     'MSPI_F4R8': 'runner with Quad Flash and Octal PSRAM',
     'MSPI_F4R4': 'runner with Quad Flash and Quad PSRAM',
@@ -121,6 +121,9 @@ ENV_MARKERS = {
     'multi_dut_modbus_rs485': 'a pair of runners connected by RS485 bus',
     'psramv0': 'Runner with PSRAM version 0',
     'esp32eco3': 'Runner with esp32 eco3 connected',
+    'ecdsa_efuse': 'Runner with test ECDSA private keys programmed in efuse',
+    'ccs811': 'Runner with CCS811 connected',
+    'httpbin': 'runner for tests that need to access the httpbin service',
     # multi-dut markers
     'ieee802154': 'ieee802154 related tests should run on ieee802154 runners.',
     'openthread_br': 'tests should be used for openthread border router.',
@@ -265,20 +268,14 @@ def build_dir(app_path: str, target: Optional[str], config: Optional[str]) -> st
     Returns:
         valid build directory
     """
-    if target == 'linux':
-        # IDF-6644
-        # hard-coded in components/esp_partition/partition_linux.c
-        # const char *partition_table_file_name = "build/partition_table/partition-table.bin";
-        check_dirs = ['build']
-    else:
-        check_dirs = []
-        if target is not None and config is not None:
-            check_dirs.append(f'build_{target}_{config}')
-        if target is not None:
-            check_dirs.append(f'build_{target}')
-        if config is not None:
-            check_dirs.append(f'build_{config}')
-        check_dirs.append('build')
+    check_dirs = []
+    if target is not None and config is not None:
+        check_dirs.append(f'build_{target}_{config}')
+    if target is not None:
+        check_dirs.append(f'build_{target}')
+    if config is not None:
+        check_dirs.append(f'build_{config}')
+    check_dirs.append('build')
 
     for check_dir in check_dirs:
         binary_path = os.path.join(app_path, check_dir)
@@ -292,15 +289,6 @@ def build_dir(app_path: str, target: Optional[str], config: Optional[str]) -> st
     raise ValueError(
         f'no build dir valid. Please build the binary via "idf.py -B {recommend_place} build" and run pytest again'
     )
-
-
-@pytest.fixture(autouse=True)
-def linux_cd_into_app_folder(app_path: str, target: Optional[str]) -> None:
-    # IDF-6644
-    # hard-coded in components/esp_partition/partition_linux.c
-    # const char *partition_table_file_name = "build/partition_table/partition-table.bin";
-    if target == 'linux':
-        os.chdir(app_path)
 
 
 @pytest.fixture(autouse=True)
@@ -421,7 +409,9 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     base_group.addoption('--known-failure-cases-file', help='known failure cases file path')
 
 
-_idf_pytest_embedded_key = pytest.StashKey['IdfPytestEmbedded']
+_idf_pytest_embedded_key = pytest.StashKey['IdfPytestEmbedded']()
+_item_failed_cases_key = pytest.StashKey[list]()
+_item_failed_key = pytest.StashKey[bool]()
 
 
 def pytest_configure(config: Config) -> None:
@@ -567,11 +557,31 @@ class IdfPytestEmbedded:
 
     def pytest_runtest_makereport(self, item: Function, call: CallInfo[None]) -> Optional[TestReport]:
         report = TestReport.from_item_and_call(item, call)
+        if item.stash.get(_item_failed_key, None) is None:
+            item.stash[_item_failed_key] = False
+
         if report.outcome == 'failed':
-            test_case_name = item.funcargs.get('test_case_name', '')
-            is_known_failure = self._is_known_failure(test_case_name)
-            is_xfail = report.keywords.get('xfail', False)
-            self._failed_cases.append((test_case_name, is_known_failure, is_xfail))
+            # Mark the failed test cases
+            #
+            # This hook function would be called in 3 phases, setup, call, teardown.
+            # the report.outcome is the outcome of the single call of current phase, which is independent
+            # the call phase outcome is the test result
+            item.stash[_item_failed_key] = True
+
+        if call.when == 'teardown':
+            item_failed = item.stash[_item_failed_key]
+            if item_failed:
+                # unity real test cases
+                failed_sub_cases = item.stash.get(_item_failed_cases_key, [])
+                if failed_sub_cases:
+                    for test_case_name in failed_sub_cases:
+                        self._failed_cases.append((test_case_name, self._is_known_failure(test_case_name), False))
+                else:  # the case iteself is failing
+                    test_case_name = item.funcargs.get('test_case_name', '')
+                    if test_case_name:
+                        self._failed_cases.append(
+                            (test_case_name, self._is_known_failure(test_case_name), report.keywords.get('xfail', False))
+                        )
 
         return report
 
@@ -596,16 +606,26 @@ class IdfPytestEmbedded:
         if not junits:
             return
 
+        failed_sub_cases = []
         target = item.funcargs['target']
         config = item.funcargs['config']
         for junit in junits:
             xml = ET.parse(junit)
             testcases = xml.findall('.//testcase')
             for case in testcases:
-                case.attrib['name'] = format_case_id(target, config, case.attrib['name'])
+                # modify the junit files
+                new_case_name = format_case_id(target, config, case.attrib['name'])
+                case.attrib['name'] = new_case_name
                 if 'file' in case.attrib:
                     case.attrib['file'] = case.attrib['file'].replace('/IDF/', '')  # our unity test framework
+
+                # collect real failure cases
+                if case.find('failure') is not None:
+                    failed_sub_cases.append(new_case_name)
+
             xml.write(junit)
+
+        item.stash[_item_failed_cases_key] = failed_sub_cases
 
     def pytest_sessionfinish(self, session: Session, exitstatus: int) -> None:
         if exitstatus != 0:

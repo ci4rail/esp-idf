@@ -13,6 +13,8 @@ if BLE_MESH
         select BTDM_BLE_MESH_SCAN_DUPL_EN if IDF_TARGET_ESP32
         select BT_CTRL_BLE_SCAN_DUPL if IDF_TARGET_ESP32C3
         select BT_CTRL_BLE_MESH_SCAN_DUPL_EN if IDF_TARGET_ESP32C3
+        select BT_LE_SCAN_DUPL if IDF_TARGET_ESP32C6
+        select BT_LE_SCAN_DUPL if IDF_TARGET_ESP32H2
         default y
         help
             Enable this option to allow using specific duplicate scan filter
@@ -1131,6 +1133,19 @@ if BLE_MESH
             help
                 This option adds extra self-tests which are run every time BLE Mesh
                 networking is initialized.
+
+        config BLE_MESH_BQB_TEST
+            bool "Enable BLE Mesh specific internal test"
+            default n
+            help
+                This option is used to enable some internal functions for auto-pts test.
+
+        config BLE_MESH_BQB_TEST_LOG
+            bool
+            depends on BLE_MESH_BQB_TEST
+            default y
+            help
+                This option is used to enable the log of auto-pts test.
 
         if BLE_MESH_SELF_TEST
 

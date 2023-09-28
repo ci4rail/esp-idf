@@ -8,10 +8,8 @@ if(CONFIG_ESP_COEX_SW_COEXIST_ENABLE OR CONFIG_ESP_COEX_EXTERNAL_COEXIST_ENABLE)
         set(link_binary_libs 1)
         set(ldfragments "linker.lf")
     endif()
-
-    set(srcs
-        "src/coexist.c"
-        "${idf_target}/esp_coex_adapter.c")
+    set(srcs "src/coexist.c"
+             "${idf_target}/esp_coex_adapter.c")
 endif()
 
 if(CONFIG_ESP_WIFI_ENABLED)
@@ -31,9 +29,8 @@ if(CONFIG_ESP_COEX_SW_COEXIST_ENABLE OR CONFIG_ESP_COEX_EXTERNAL_COEXIST_ENABLE)
 
     if(link_binary_libs)
         set(blob coexist)
-
         add_prebuilt_library(${blob} "${CMAKE_CURRENT_SOURCE_DIR}/lib/${target_name}/lib${blob}.a"
-                            REQUIRES ${COMPONENT_NAME})
+                                REQUIRES ${COMPONENT_NAME})
         target_link_libraries(${COMPONENT_LIB} PUBLIC ${blob})
     endif()
 

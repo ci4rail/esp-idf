@@ -36,12 +36,16 @@ esp_flash_t *esp_flash_default_chip = NULL;
 #define DEFAULT_FLASH_SPEED 120
 #elif defined CONFIG_ESPTOOLPY_FLASHFREQ_80M
 #define DEFAULT_FLASH_SPEED 80
+#elif defined CONFIG_ESPTOOLPY_FLASHFREQ_64M
+#define DEFAULT_FLASH_SPEED 64
 #elif defined CONFIG_ESPTOOLPY_FLASHFREQ_60M
 #define DEFAULT_FLASH_SPEED 60
 #elif defined CONFIG_ESPTOOLPY_FLASHFREQ_48M
 #define DEFAULT_FLASH_SPEED 48
 #elif defined CONFIG_ESPTOOLPY_FLASHFREQ_40M
 #define DEFAULT_FLASH_SPEED 40
+#elif defined CONFIG_ESPTOOLPY_FLASHFREQ_32M
+#define DEFAULT_FLASH_SPEED 32
 #elif defined CONFIG_ESPTOOLPY_FLASHFREQ_30M
 #define DEFAULT_FLASH_SPEED 30
 #elif defined CONFIG_ESPTOOLPY_FLASHFREQ_26M
@@ -131,26 +135,6 @@ esp_flash_t *esp_flash_default_chip = NULL;
     .input_delay_ns = 0,\
     .auto_sus_en = true,\
     .cs_setup = 1,\
-}
-#endif //!CONFIG_SPI_FLASH_AUTO_SUSPEND
-#elif CONFIG_IDF_TARGET_ESP32H4
-#include "esp32h4/rom/efuse.h"
-#if !CONFIG_SPI_FLASH_AUTO_SUSPEND
-#define ESP_FLASH_HOST_CONFIG_DEFAULT()  (memspi_host_config_t){ \
-    .host_id = SPI1_HOST,\
-    .freq_mhz = DEFAULT_FLASH_SPEED, \
-    .cs_num = 0, \
-    .iomux = true, \
-    .input_delay_ns = 0,\
-}
-#else
-#define ESP_FLASH_HOST_CONFIG_DEFAULT()  (memspi_host_config_t){ \
-    .host_id = SPI1_HOST,\
-    .freq_mhz = DEFAULT_FLASH_SPEED, \
-    .cs_num = 0, \
-    .iomux = true, \
-    .input_delay_ns = 0,\
-    .auto_sus_en = true,\
 }
 #endif //!CONFIG_SPI_FLASH_AUTO_SUSPEND
 #endif
@@ -435,7 +419,7 @@ esp_err_t esp_flash_app_init(void)
     spi_flash_init_lock();
     spi_flash_guard_set(&g_flash_guard_default_ops);
 #if CONFIG_SPI_FLASH_ENABLE_COUNTERS
-    spi_flash_reset_counters();
+    esp_flash_reset_counters();
 #endif
 #if CONFIG_SPI_FLASH_SHARE_SPI1_BUS
     err = esp_flash_init_main_bus_lock();

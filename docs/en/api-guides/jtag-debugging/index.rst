@@ -78,7 +78,7 @@ Likewise, the "Application Loading and Monitoring" label indicates the key softw
 
     .. note::
 
-        Debugging through the USB interface implemented in {IDF_TARGET_NAME} requires to have a chip with revision 3 or newer. Please use other debugging options (e.g. with ESP-Prog) for chip revision 1 and 2. The easiest way to determine the chip revision is to look for the ``Chip is ESP32-C3 (revision 3)`` message near the end of a successful chip flashing done by ``idf.py flash``.
+        Debugging through the USB interface implemented in {IDF_TARGET_NAME} requires to have a chip with revision 0.3 or newer. Please use other debugging options (e.g. with ESP-Prog) for chip revisions 0.1 and 0.2. The easiest way to determine the chip revision is to look for the ``boot: chip revision: v0.3`` message at the beginning of the boot log. See `SoC errata <https://www.espressif.com/sites/default/files/documentation/esp32-c3_errata_en.pdf>`_ for more details.
 
 .. _jtag-debugging-selecting-jtag-adapter:
 
@@ -228,10 +228,11 @@ Launching Debugger
 
 The toolchain for {IDF_TARGET_NAME} features GNU Debugger, in short GDB. It is available with other toolchain programs under filename: {IDF_TARGET_TOOLCHAIN_PREFIX}-gdb. GDB can be called and operated directly from command line in a terminal. Another option is to call it from within IDE (like Eclipse, Visual Studio Code, etc.) and operate indirectly with help of GUI instead of typing commands in a terminal.
 
-Both options of using debugger are discussed under links below.
+The options of using debugger are discussed under links below.
 
 * :ref:`jtag-debugging-using-debugger-eclipse`
 * :ref:`jtag-debugging-using-debugger-command-line`
+* `Configuration for Visual Studio Code Debug <https://github.com/espressif/vscode-esp-idf-extension/blob/master/docs/DEBUGGING.md>`__
 
 It is recommended to first check if debugger works from :ref:`jtag-debugging-using-debugger-command-line` and then move to using :ref:`jtag-debugging-using-debugger-eclipse`.
 

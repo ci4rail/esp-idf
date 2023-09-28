@@ -49,6 +49,9 @@ extern "C" {
 #define CSR_PMACFG0  0xBC0
 #define CSR_PMAADDR0 0xBD0
 
+#define CSR_PMACFG(i)  (CSR_PMACFG0 + (i))
+#define CSR_PMAADDR(i)  (CSR_PMAADDR0 + (i))
+
 #define PMA_EN    BIT(0)
 #define PMA_R     BIT(4)
 #define PMA_W     BIT(3)
@@ -126,6 +129,11 @@ extern "C" {
 /*Only set PMPCFG entries*/
 #define PMP_ENTRY_CFG_SET(ENTRY, CFG) do {\
     RV_SET_CSR((CSR_PMPCFG0) + (ENTRY)/4, ((CFG)&0xFF) << (ENTRY%4)*8); \
+    } while(0)
+
+/*Reset all permissions of a particular PMPCFG entry*/
+#define PMP_ENTRY_CFG_RESET(ENTRY) do {\
+    RV_CLEAR_CSR((CSR_PMPCFG0) + (ENTRY)/4, (0xFF) << (ENTRY%4)*8); \
     } while(0)
 
 /********************************************************

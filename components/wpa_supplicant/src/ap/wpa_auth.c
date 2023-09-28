@@ -166,7 +166,7 @@ static inline int wpa_auth_set_key(struct wpa_authenticator *wpa_auth,
     if (alg == WIFI_WPA_ALG_IGTK) {
 	if (key) {
 	    wpa_printf (MSG_DEBUG, "%s : igtk idx %d", __func__, idx);
-	    wifi_wpa_igtk_t *igtk = malloc(sizeof(wifi_wpa_igtk_t));
+	    wifi_wpa_igtk_t *igtk = os_malloc(sizeof(wifi_wpa_igtk_t));
 
 	    if (igtk != NULL) {
 		memcpy(&igtk->igtk[0], key, WPA_IGTK_LEN);
@@ -488,6 +488,7 @@ static void wpa_free_sta_sm(struct wpa_state_machine *sm)
     wpa_printf( MSG_DEBUG, "wpa_free_sta_sm: free eapol=%p\n", sm->last_rx_eapol_key);
     os_free(sm->last_rx_eapol_key);
     os_free(sm->wpa_ie);
+    os_free(sm->rsnxe);
     os_free(sm);
 }
 
@@ -495,7 +496,7 @@ static void wpa_free_sta_sm(struct wpa_state_machine *sm)
 void wpa_auth_sta_deinit(struct wpa_state_machine *sm)
 {
 #ifdef ESP_SUPPLICANT
-    if (esp_wifi_ap_is_sta_sae_reauth_node(sm->addr)) {
+    if (sm && esp_wifi_ap_is_sta_sae_reauth_node(sm->addr)) {
         wpa_printf( MSG_DEBUG, "deinit old sm=%p\n", sm);
     }
 #else /* ESP_SUPPLICANT */
@@ -956,6 +957,12 @@ int wpa_auth_pmksa_add_sae(struct wpa_authenticator *wpa_auth, const u8 *addr,
         return 0;
 
     return -1;
+}
+
+void wpa_auth_add_sae_pmkid(struct wpa_state_machine *sm, const u8 *pmkid)
+{
+    os_memcpy(sm->pmkid, pmkid, PMKID_LEN);
+    sm->pmkid_set = 1;
 }
 
 static int wpa_gmk_to_gtk(const u8 *gmk, const char *label, const u8 *addr,
@@ -1541,15 +1548,38 @@ SM_STATE(WPA_PTK, PTKSTART)
         pmkid[0] = WLAN_EID_VENDOR_SPECIFIC;
         pmkid[1] = RSN_SELECTOR_LEN + PMKID_LEN;
         RSN_SELECTOR_PUT(&pmkid[2], RSN_KEY_DATA_PMKID);
-
-        {
+        if (sm->pmksa) {
+            wpa_hexdump(MSG_DEBUG,
+                    "RSN: Message 1/4 PMKID from PMKSA entry",
+                    sm->pmksa->pmkid, PMKID_LEN);
+            os_memcpy(&pmkid[2 + RSN_SELECTOR_LEN],
+                    sm->pmksa->pmkid, PMKID_LEN);
+#ifdef CONFIG_SAE
+        } else if (wpa_key_mgmt_sae(sm->wpa_key_mgmt)) {
+            if (sm->pmkid_set) {
+                wpa_hexdump(MSG_DEBUG,
+                        "RSN: Message 1/4 PMKID from SAE",
+                        sm->pmkid, PMKID_LEN);
+                os_memcpy(&pmkid[2 + RSN_SELECTOR_LEN],
+                        sm->pmkid, PMKID_LEN);
+        } else {
+            /* No PMKID available */
+            wpa_printf(MSG_DEBUG,
+                    "RSN: No SAE PMKID available for message 1/4");
+            pmkid = NULL;
+        }
+#endif /* CONFIG_SAE */
+        } else {
             /*
              * Calculate PMKID since no PMKSA cache entry was
              * available with pre-calculated PMKID.
              */
-            rsn_pmkid(sm->PMK, PMK_LEN, sm->wpa_auth->addr,
-                  sm->addr, &pmkid[2 + RSN_SELECTOR_LEN],
-                  wpa_key_mgmt_sha256(sm->wpa_key_mgmt));
+            rsn_pmkid(sm->PMK, sm->pmk_len, sm->wpa_auth->addr,
+                    sm->addr, &pmkid[2 + RSN_SELECTOR_LEN],
+                    sm->wpa_key_mgmt);
+            wpa_hexdump(MSG_DEBUG,
+                    "RSN: Message 1/4 PMKID derived from PMK",
+                    &pmkid[2 + RSN_SELECTOR_LEN], PMKID_LEN);
         }
     }
     wpa_send_eapol(sm->wpa_auth, sm,
@@ -1622,7 +1652,8 @@ SM_STATE(WPA_PTK, PTKCALCNEGOTIATING)
             wpa_printf( MSG_DEBUG, "mic verify fail, pmk=%p", pmk);
         }
 
-        if (!wpa_key_mgmt_wpa_psk(sm->wpa_key_mgmt)){
+        if (!wpa_key_mgmt_wpa_psk(sm->wpa_key_mgmt) ||
+            wpa_key_mgmt_sae(sm->wpa_key_mgmt)) {
             wpa_printf( MSG_DEBUG, "wpa_key_mgmt=%x", sm->wpa_key_mgmt);
             break;
         }
@@ -2509,6 +2540,7 @@ void wpa_deinit(struct wpa_authenticator *wpa_auth)
 
 }
 
+#ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
 bool wpa_ap_join(struct sta_info *sta, uint8_t *bssid, uint8_t *wpa_ie,
                 uint8_t wpa_ie_len, uint8_t *rsnxe, uint8_t rsnxe_len,
                 bool *pmf_enable, int subtype)
@@ -2537,6 +2569,14 @@ bool wpa_ap_join(struct sta_info *sta, uint8_t *bssid, uint8_t *wpa_ie,
             }
 
             status_code = wpa_validate_wpa_ie(hapd->wpa_auth, sta->wpa_sm, wpa_ie, wpa_ie_len, rsnxe, rsnxe_len);
+
+#ifdef CONFIG_SAE
+            if (wpa_auth_uses_sae(sta->wpa_sm) && sta->sae &&
+                sta->sae->state == SAE_ACCEPTED) {
+                wpa_auth_add_sae_pmkid(sta->wpa_sm, sta->sae->pmkid);
+            }
+#endif /* CONFIG_SAE */
+
             resp = wpa_res_to_status_code(status_code);
 
 send_resp:
@@ -2577,24 +2617,26 @@ static void ap_free_sta_timeout(void *ctx, void *data)
 }
 #endif
 
-bool wpa_ap_remove(void* sta_info)
+bool wpa_ap_remove(u8* bssid)
 {
     struct hostapd_data *hapd = hostapd_get_hapd_data();
 
-    if (!sta_info || !hapd) {
+    if (!hapd) {
         return false;
     }
-    struct sta_info *sta = NULL;
-    sta = (struct sta_info*)sta_info;
+    struct sta_info *sta = ap_get_sta(hapd, bssid);
+    if (!sta) {
+        return false;
+    }
 
 #ifdef CONFIG_SAE
     if (sta->lock) {
-        if (os_mutex_lock(sta->lock)) {
+        if (os_semphr_take(sta->lock, 0)) {
             ap_free_sta(hapd, sta);
         } else {
             sta->remove_pending = true;
         }
-	return true;
+        return true;
     }
 #endif /* CONFIG_SAE */
 
@@ -2603,10 +2645,10 @@ bool wpa_ap_remove(void* sta_info)
     if (wps_get_status() == WPS_STATUS_PENDING) {
         u8 *addr = os_malloc(ETH_ALEN);
 
-	if (!addr) {
+        if (!addr) {
             return false;
-	}
-	os_memcpy(addr, sta->addr, ETH_ALEN);
+        }
+        os_memcpy(addr, sta->addr, ETH_ALEN);
         eloop_register_timeout(0, 10000, ap_free_sta_timeout, hapd, addr);
     } else
 #endif
@@ -2614,6 +2656,7 @@ bool wpa_ap_remove(void* sta_info)
 
     return true;
 }
+#endif /* CONFIG_ESP_WIFI_SOFTAP_SUPPORT */
 
 void wpa_auth_pmksa_remove(struct wpa_authenticator *wpa_auth,
                const u8 *sta_addr)

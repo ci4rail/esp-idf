@@ -86,40 +86,16 @@ static void bootloader_super_wdt_auto_feed(void)
 
 static inline void bootloader_hardware_init(void)
 {
-    // TODO: IDF-6267
     /* Enable analog i2c master clock */
     SET_PERI_REG_MASK(MODEM_LPCON_CLK_CONF_REG, MODEM_LPCON_CLK_I2C_MST_EN);
 }
 
 static inline void bootloader_ana_reset_config(void)
 {
-    // TODO: IDF-5990 copied from C6, need update
-    // Have removed bootloader_ana_super_wdt_reset_config for now; can be evaluated later to see whether needs to add it back
-    /*
-      For origin chip & ECO1: only support swt reset;
-      For ECO2: fix brownout reset bug, support swt & brownout reset;
-      For ECO3: fix clock glitch reset bug, support all reset, include: swt & brownout & clock glitch reset.
-    */
-    uint8_t chip_version = efuse_hal_get_minor_chip_version();
-    switch (chip_version) {
-        case 0:
-        case 1:
-            //Disable BOR and GLITCH reset
-            bootloader_ana_bod_reset_config(false);
-            bootloader_ana_clock_glitch_reset_config(false);
-            break;
-        case 2:
-            //Enable BOR reset. Disable GLITCH reset
-            bootloader_ana_bod_reset_config(true);
-            bootloader_ana_clock_glitch_reset_config(false);
-            break;
-        case 3:
-        default:
-            //Enable BOR, and GLITCH reset
-            bootloader_ana_bod_reset_config(true);
-            bootloader_ana_clock_glitch_reset_config(true);
-            break;
-    }
+    //Enable super WDT reset.
+    bootloader_ana_super_wdt_reset_config(true);
+    //Enable BOD reset
+    bootloader_ana_bod_reset_config(true);
 }
 
 esp_err_t bootloader_init(void)
@@ -155,12 +131,11 @@ esp_err_t bootloader_init(void)
     /* print 2nd bootloader banner */
     bootloader_print_banner();
 
-#if !CONFIG_APP_BUILD_TYPE_RAM
+#if !CONFIG_APP_BUILD_TYPE_PURE_RAM_APP
     //init cache hal
     cache_hal_init();
-    //reset mmu
+    //init mmu
     mmu_hal_init();
-
     // update flash ID
     bootloader_flash_update_id();
     // Check and run XMC startup flow
@@ -168,6 +143,7 @@ esp_err_t bootloader_init(void)
         ESP_LOGE(TAG, "failed when running XMC startup flow, reboot!");
         return ret;
     }
+#if !CONFIG_APP_BUILD_TYPE_RAM
     // read bootloader header
     if ((ret = bootloader_read_bootloader_header()) != ESP_OK) {
         return ret;
@@ -176,11 +152,12 @@ esp_err_t bootloader_init(void)
     if ((ret = bootloader_check_bootloader_validity()) != ESP_OK) {
         return ret;
     }
+#endif // !CONFIG_APP_BUILD_TYPE_RAM
     // initialize spi flash
     if ((ret = bootloader_init_spi_flash()) != ESP_OK) {
         return ret;
     }
-#endif // !CONFIG_APP_BUILD_TYPE_RAM
+#endif  //#if !CONFIG_APP_BUILD_TYPE_PURE_RAM_APP
 
     // check whether a WDT reset happend
     bootloader_check_wdt_reset();

@@ -78,7 +78,7 @@ JTAG 调试
 
     .. note::
 
-        {IDF_TARGET_NAME} 中的 USB 接口只能用于调试版本 3 或更新版本的芯片，对于版本 1 或 2 的芯片，请使用其他调试板（例如 ESP-Prog）。确定芯片版本最简单的方法是通过 `idf.py flash` 完成芯片烧写，并在底部寻找类似 `芯片为 ESP32-C3 (版本 3)` 信息。
+        {IDF_TARGET_NAME} 的 USB 接口仅适用于调试版本为 0.3 或更高版本的芯片，对于版本为 0.1 或 0.2 的芯片，请使用其他调试方法（例如 ESP-Prog）。要确定芯片版本，可以在 boot log 开头查看类似 ``boot: chip revision: v0.3`` 的信息。更多详情，请参考 ESP32-C3 系列芯片勘误表 <https://www.espressif.com/sites/default/files/documentation/esp32-c3_errata_cn.pdf>`_。
 
 .. _jtag-debugging-selecting-jtag-adapter:
 
@@ -226,12 +226,13 @@ OpenOCD 安装完成后就可以配置 {IDF_TARGET_NAME} 目标（即带 JTAG �
 启动调试器
 ----------
 
-{IDF_TARGET_NAME} 的工具链中带有 GNU 调试器（简称 GDB），它和其它工具链软件共同存放于 {IDF_TARGET_TOOLCHAIN_PREFIX}-gdb 中。除了直接在命令行终端中调用并操作 GDB 外，也可以在 IDE (例如 Eclipse、Visual Studio Code 等）中进行调用，使用图形用户界面间接操作 GDB，这一方法无需在终端中输入任何命令。
+{IDF_TARGET_NAME} 的工具链中带有 GNU 调试器（简称 GDB），它和其它工具链软件共同存放于 {IDF_TARGET_TOOLCHAIN_PREFIX}-gdb 中。除了直接在命令行终端中调用并操作 GDB 外，也可以在 IDE（例如 Eclipse、Visual Studio Code 等）中进行调用，使用图形用户界面间接操作 GDB，这一方法无需在终端中输入任何命令。
 
-关于以上两种调试器的使用方法，详见以下链接。
+关于调试器的使用方法，详见以下链接。
 
 * :ref:`jtag-debugging-using-debugger-eclipse`
 * :ref:`jtag-debugging-using-debugger-command-line`
+* `使用 VS Code 调试 <https://github.com/espressif/vscode-esp-idf-extension/blob/master/docs/DEBUGGING.md>`__
 
 建议首先检查调试器能否在 :ref:`命令行终端 <jtag-debugging-using-debugger-command-line>` 下正常工作，然后再使用 Eclipse :ref:`集成开发环境 <jtag-debugging-using-debugger-eclipse>` 进行调试工作。
 

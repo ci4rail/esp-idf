@@ -10,6 +10,7 @@ set(srcs
 # Always included headers
 set(includes "include"
              "deprecated"
+             "analog_comparator/include"
              "dac/include"
              "gpio/include"
              "gptimer/include"
@@ -17,6 +18,7 @@ set(includes "include"
              "i2s/include"
              "ledc/include"
              "mcpwm/include"
+             "parlio/include"
              "pcnt/include"
              "rmt/include"
              "sdio_slave/include"
@@ -38,6 +40,11 @@ if(CONFIG_SOC_ADC_DMA_SUPPORTED)
     list(APPEND srcs "deprecated/adc_dma_legacy.c")
 endif()
 
+# Analog comparator related source files
+if(CONFIG_SOC_ANA_CMPR_SUPPORTED)
+    list(APPEND srcs "analog_comparator/ana_cmpr.c")
+endif()
+
 # DAC related source files
 if(CONFIG_SOC_DAC_SUPPORTED)
     list(APPEND srcs "dac/dac_oneshot.c"
@@ -47,6 +54,11 @@ if(CONFIG_SOC_DAC_SUPPORTED)
                      "dac/${target}/dac_dma.c"
                      "deprecated/dac_common_legacy.c"
                      "deprecated/${target}/dac_legacy.c")
+endif()
+
+# Parallel IO related source files
+if(CONFIG_SOC_PARLIO_SUPPORTED)
+    list(APPEND srcs "parlio/parlio_common.c" "parlio/parlio_tx.c")
 endif()
 
 # GPIO related source files
@@ -69,6 +81,7 @@ endif()
 # GPTimer related source files
 if(CONFIG_SOC_GPTIMER_SUPPORTED)
     list(APPEND srcs "gptimer/gptimer.c"
+                     "gptimer/gptimer_priv.c"
                      "deprecated/timer_legacy.c")
 endif()
 

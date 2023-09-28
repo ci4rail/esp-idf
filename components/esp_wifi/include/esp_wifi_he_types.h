@@ -92,6 +92,26 @@ typedef enum {
 } wifi_twt_setup_cmds_t;
 
 /**
+  * @brief TWT setup config
+  */
+typedef struct
+{
+    wifi_twt_setup_cmds_t setup_cmd;    /**< Indicates the type of TWT command */
+    uint16_t trigger :1;                /**< 1: a trigger-enabled TWT, 0: a non-trigger-enabled TWT */
+    uint16_t flow_type :1;              /**< 0: an announced TWT, 1: an unannounced TWT */
+    uint16_t flow_id :3;                /**< When set up an individual TWT agreement, the flow id will be assigned by AP after a successful agreement setup.
+                                             flow_id could be specified to a value in the range of [0, 7], but it might be changed by AP in the response.
+                                             When change TWT parameters of the existing TWT agreement, flow_id should be an existing one. The value range is [0, 7]. */
+    uint16_t wake_invl_expn :5;         /**< TWT Wake Interval Exponent. The value range is [0, 31]. */
+    uint16_t wake_duration_unit :1;     /**< TWT Wake duration unit, 0: 256us 1: TU (TU = 1024us)*/
+    uint16_t reserved :5;               /**< bit: 11.15 reserved */
+    uint8_t min_wake_dura;              /**< Nominal Minimum Wake Duration, indicates the minimum amount of time, in unit of 256 us, that the TWT requesting STA expects that it needs to be awake. The value range is [1, 255]. */
+    uint16_t wake_invl_mant;            /**< TWT Wake Interval Mantissa. The value range is [1, 65535]. */
+    uint16_t twt_id;                    /**< TWT connection id, the value range is [0, 32767]. */
+    uint16_t timeout_time_ms;           /**< Timeout times of receiving setup action frame response, default 5s*/
+} wifi_twt_setup_config_t;
+
+/**
   * @brief HE SU GI and LTF types
   */
 typedef enum {
@@ -185,14 +205,10 @@ typedef struct {
 
 /** Argument structure for WIFI_EVENT_TWT_SET_UP event */
 typedef struct {
-    wifi_twt_setup_cmds_t setup_cmd;     /**< TWT setup command */
-    uint8_t flow_id;                     /**< flow id */
-    uint8_t min_wake_dura;               /**< the min. wake duration, unit: 256 us by default */
-    uint8_t wake_invl_expn;              /**< the exponent of the TWT wake interval in microseconds, base 2 */
-    uint16_t wake_invl_mant;             /**< the value of the mantissa of the TWT wake interval value in microseconds, base 2 */
-    bool trigger;                        /**< true: indicates a trigger-enabled TWT, false: indicates a non-trigger-enabled TWT */
-    uint8_t flow_type;                   /**< 0: indicate an announced TWT, 1: indicates an unannounced TWT */
-    esp_err_t status;                    /**< 1: indicate tx success, others : indicate tx fail */
+    wifi_twt_setup_config_t config;       /**< itwt setup config, this value is determined by the AP */
+    esp_err_t status;                     /**< itwt setup status, 1: indicate setup success, others : indicate setup fail */
+    uint8_t reason;                       /**< itwt setup frame tx fail reason */
+    uint64_t target_wake_time;            /**< TWT SP start time */
 } wifi_event_sta_itwt_setup_t;
 
 /** Argument structure for WIFI_EVENT_TWT_TEARDOWN event */

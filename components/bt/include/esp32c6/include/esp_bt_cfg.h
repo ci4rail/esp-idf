@@ -32,7 +32,7 @@ extern "C" {
     #define DEFAULT_BT_LE_MAX_PERIODIC_SYNCS MYNEWT_VAL(BLE_MAX_PERIODIC_SYNCS)
     #define DEFAULT_BT_LE_MAX_CONNECTIONS MYNEWT_VAL(BLE_MAX_CONNECTIONS)
     #define DEFAULT_BT_LE_ACL_BUF_SIZE MYNEWT_VAL(BLE_TRANSPORT_ACL_SIZE)
-    #define DEFAULT_BT_LE_ACL_BUF_COUNT MYNEWT_VAL(BLE_TRANSPORT_ACL_FROM_HS_COUNT)
+    #define DEFAULT_BT_LE_ACL_BUF_COUNT MYNEWT_VAL(BLE_TRANSPORT_ACL_FROM_LL_COUNT)
     #define DEFAULT_BT_LE_HCI_EVT_BUF_SIZE MYNEWT_VAL(BLE_TRANSPORT_EVT_SIZE)
     #define DEFAULT_BT_LE_EXT_ADV_MAX_SIZE MYNEWT_VAL(BLE_EXT_ADV_MAX_SIZE)
     #define DEFAULT_BT_LE_MAX_EXT_ADV_INSTANCES MYNEWT_VAL(BLE_MULTI_ADV_INSTANCES)
@@ -196,7 +196,17 @@ extern "C" {
 
 #define BLE_LL_CONN_DEF_AUTH_PYLD_TMO_N     (3000)
 
-#define RTC_FREQ_N                          (160000) /* in Hz */
+#if CONFIG_BT_LE_LP_CLK_SRC_MAIN_XTAL
+#define RTC_FREQ_N                          (100000) /* in Hz */
+#else
+#if CONFIG_RTC_CLK_SRC_INT_RC
+#define RTC_FREQ_N                          (30000) /* in Hz */
+#elif CONFIG_RTC_CLK_SRC_EXT_CRYS
+#define RTC_FREQ_N                          (32768) /* in Hz */
+#else
+#define RTC_FREQ_N                          (32000) /* in Hz */
+#endif
+#endif /* CONFIG_BT_LE_LP_CLK_SRC_MAIN_XTAL */
 
 #define BLE_LL_TX_PWR_DBM_N                 (9)
 

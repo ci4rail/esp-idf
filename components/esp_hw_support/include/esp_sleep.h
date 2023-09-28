@@ -18,6 +18,11 @@
 extern "C" {
 #endif
 
+/*
+ Definitions for the deepsleep prepare callbacks
+*/
+typedef void (*esp_deep_sleep_cb_t)(void);
+
 /**
  * @brief Logic function used for EXT1 wakeup mode.
  */
@@ -61,6 +66,9 @@ typedef enum {
 #endif
 #if SOC_PM_SUPPORT_VDDSDIO_PD
     ESP_PD_DOMAIN_VDDSDIO,         //!< VDD_SDIO
+#endif
+#if SOC_PM_SUPPORT_MODEM_PD
+    ESP_PD_DOMAIN_MODEM,           //!< MODEM, includes WiFi, Bluetooth and IEEE802.15.4
 #endif
 #if SOC_PM_SUPPORT_TOP_PD
     ESP_PD_DOMAIN_TOP,             //!< SoC TOP
@@ -193,8 +201,7 @@ touch_pad_t esp_sleep_get_touchpad_wakeup_status(void);
  */
 bool esp_sleep_is_valid_wakeup_gpio(gpio_num_t gpio_num);
 
-#if SOC_PM_SUPPORT_EXT_WAKEUP
-
+#if SOC_PM_SUPPORT_EXT0_WAKEUP
 /**
  * @brief Enable wakeup using a pin
  *
@@ -223,7 +230,9 @@ bool esp_sleep_is_valid_wakeup_gpio(gpio_num_t gpio_num);
  *      - ESP_ERR_INVALID_STATE if wakeup triggers conflict
  */
 esp_err_t esp_sleep_enable_ext0_wakeup(gpio_num_t gpio_num, int level);
+#endif // SOC_PM_SUPPORT_EXT0_WAKEUP
 
+#if SOC_PM_SUPPORT_EXT1_WAKEUP
 /**
  * @brief Enable wakeup using multiple pins
  *
@@ -249,6 +258,7 @@ esp_err_t esp_sleep_enable_ext0_wakeup(gpio_num_t gpio_num, int level);
  *                - ESP32: 0, 2, 4, 12-15, 25-27, 32-39;
  *                - ESP32-S2: 0-21;
  *                - ESP32-S3: 0-21.
+ *                - ESP32-C6: 0-7.
  * @param mode select logic function used to determine wakeup condition:
  *            - ESP_EXT1_WAKEUP_ALL_LOW: wake up when all selected GPIOs are low
  *            - ESP_EXT1_WAKEUP_ANY_HIGH: wake up when any of the selected GPIOs is high
@@ -259,7 +269,7 @@ esp_err_t esp_sleep_enable_ext0_wakeup(gpio_num_t gpio_num, int level);
  */
 esp_err_t esp_sleep_enable_ext1_wakeup(uint64_t mask, esp_sleep_ext1_wakeup_mode_t mode);
 
-#endif // SOC_PM_SUPPORT_EXT_WAKEUP
+#endif // SOC_PM_SUPPORT_EXT1_WAKEUP
 
 #if SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
 /**
@@ -355,6 +365,20 @@ esp_err_t esp_sleep_enable_wifi_wakeup(void);
 esp_err_t esp_sleep_disable_wifi_wakeup(void);
 
 /**
+ * @brief Enable beacon wakeup by WiFi MAC, it will wake up the system into modem state
+ * @return
+ *      - ESP_OK on success
+ */
+esp_err_t esp_sleep_enable_wifi_beacon_wakeup(void);
+
+/**
+ * @brief Disable beacon wakeup by WiFi MAC
+ * @return
+ *      - ESP_OK on success
+ */
+esp_err_t esp_sleep_disable_wifi_beacon_wakeup(void);
+
+/**
  * @brief Get the bit mask of GPIOs which caused wakeup (ext1)
  *
  * If wakeup was caused by another source, this function will return 0.
@@ -393,7 +417,7 @@ esp_err_t esp_sleep_pd_config(esp_sleep_pd_domain_t domain,
  *
  * This function does not return.
  */
-void esp_deep_sleep_start(void) __attribute__((noreturn));
+void esp_deep_sleep_start(void) __attribute__((__noreturn__));
 
 /**
  * @brief Enter light sleep with the configured wakeup options
@@ -417,22 +441,31 @@ esp_err_t esp_light_sleep_start(void);
  * Call to this function is equivalent to a call to esp_deep_sleep_enable_timer_wakeup
  * followed by a call to esp_deep_sleep_start.
  *
- * esp_deep_sleep does not shut down WiFi, BT, and higher level protocol
- * connections gracefully.
- * Make sure relevant WiFi and BT stack functions are called to close any
- * connections and deinitialize the peripherals. These include:
- *     - esp_bluedroid_disable
- *     - esp_bt_controller_disable
- *     - esp_wifi_stop
- *
- * This function does not return.
- *
- * @note The device will wake up immediately if the deep-sleep time is set to 0
- *
  * @param time_in_us  deep-sleep time, unit: microsecond
  */
-void esp_deep_sleep(uint64_t time_in_us) __attribute__((noreturn));
+void esp_deep_sleep(uint64_t time_in_us) __attribute__((__noreturn__));
 
+
+/**
+  * @brief Register a callback to be called from the deep sleep prepare
+  *
+  * @warning deepsleep callbacks should without parameters, and MUST NOT,
+  *          UNDER ANY CIRCUMSTANCES, CALL A FUNCTION THAT MIGHT BLOCK.
+  *
+  * @param new_dslp_cb     Callback to be called
+  *
+  * @return
+  *     - ESP_OK:         Callback registered to the deepsleep misc_modules_sleep_prepare
+  *     - ESP_ERR_NO_MEM: No more hook space for register the callback
+  */
+esp_err_t esp_deep_sleep_register_hook(esp_deep_sleep_cb_t new_dslp_cb);
+
+/**
+  * @brief Unregister an deepsleep callback
+  *
+  * @param old_dslp_cb     Callback to be unregistered
+  */
+void esp_deep_sleep_deregister_hook(esp_deep_sleep_cb_t old_dslp_cb);
 
 /**
  * @brief Get the wakeup source which caused wakeup from sleep
@@ -474,6 +507,11 @@ typedef void (*esp_deep_sleep_wake_stub_fn_t)(void);
  * for esp_wake_deep_sleep().
  */
 void esp_set_deep_sleep_wake_stub(esp_deep_sleep_wake_stub_fn_t new_stub);
+
+/**
+ * @brief Set wake stub entry to default `esp_wake_stub_entry`
+ */
+void esp_set_deep_sleep_wake_stub_default_entry(void);
 
 /**
  * @brief Get current wake from deep sleep stub

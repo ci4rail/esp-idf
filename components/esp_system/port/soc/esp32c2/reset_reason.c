@@ -34,7 +34,7 @@ static esp_reset_reason_t get_reset_reason(soc_reset_reason_t rtc_reset_reason, 
         return ESP_RST_DEEPSLEEP;
 
     case RESET_REASON_CORE_MWDT0:
-        return ESP_RST_TASK_WDT;
+        return ESP_RST_INT_WDT;
 
     case RESET_REASON_CORE_RTC_WDT:
     case RESET_REASON_SYS_RTC_WDT:
@@ -84,7 +84,7 @@ void IRAM_ATTR esp_reset_reason_set_hint(esp_reset_reason_t hint)
 }
 
 /* in IRAM, can be called from panic handler */
-esp_reset_reason_t IRAM_ATTR esp_reset_reason_get_hint(void)
+esp_reset_reason_t esp_reset_reason_get_hint(void)
 {
     uint32_t reset_reason_hint = REG_READ(RTC_RESET_CAUSE_REG);
     uint32_t high = (reset_reason_hint >> RST_REASON_SHIFT) & RST_REASON_MASK;

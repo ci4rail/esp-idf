@@ -53,17 +53,6 @@
  * Set 4092 here to align with 4-byte, so that the position of the slot data in the buffer will be relatively fixed */
 #define I2S_DMA_BUFFER_MAX_SIZE     (4092)
 
-// If ISR handler is allowed to run whilst cache is disabled,
-// Make sure all the code and related variables used by the handler are in the SRAM
-#if CONFIG_I2S_ISR_IRAM_SAFE
-#define I2S_INTR_ALLOC_FLAGS    (ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_INTRDISABLED | ESP_INTR_FLAG_SHARED | ESP_INTR_FLAG_LOWMED)
-#define I2S_MEM_ALLOC_CAPS      (MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)
-#else
-#define I2S_INTR_ALLOC_FLAGS    (ESP_INTR_FLAG_INTRDISABLED | ESP_INTR_FLAG_SHARED | ESP_INTR_FLAG_LOWMED)
-#define I2S_MEM_ALLOC_CAPS      MALLOC_CAP_DEFAULT
-#endif //CONFIG_I2S_ISR_IRAM_SAFE
-#define I2S_DMA_ALLOC_CAPS      (MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)
-
 /**
  * @brief Global i2s platform object
  * @note  For saving all the I2S related information
@@ -1041,11 +1030,13 @@ esp_err_t i2s_channel_disable(i2s_chan_handle_t handle)
     ESP_GOTO_ON_FALSE(handle->state > I2S_CHAN_STATE_READY, ESP_ERR_INVALID_STATE, err, TAG, "the channel has not been enabled yet");
     /* Update the state to force quit the current reading/writing operation */
     handle->state = I2S_CHAN_STATE_READY;
+    /* Waiting for reading/wrinting operation quit
+     * It should be acquired before assigning the pointer to NULL,
+     * otherwise may cause NULL pointer panic while reading/writing threads haven't release the lock */
+    xSemaphoreTake(handle->binary, portMAX_DELAY);
     /* Reset the descriptor pointer */
     handle->dma.curr_ptr = NULL;
     handle->dma.rw_pos = 0;
-    /* Waiting for reading/wrinting operation quit */
-    xSemaphoreTake(handle->binary, portMAX_DELAY);
     handle->stop(handle);
 #if CONFIG_PM_ENABLE
     esp_pm_lock_release(handle->pm_lock);
@@ -1086,11 +1077,8 @@ esp_err_t i2s_channel_preload_data(i2s_chan_handle_t tx_handle, const void *src,
         if (bytes_can_load == 0) {
             break;
         }
-        /* Add spinlock in case memcpy be interrupted */
-        portENTER_CRITICAL_SAFE(&g_i2s.spinlock);
         /* Load the data from the last loaded position */
         memcpy((uint8_t *)(desc_ptr->buf + tx_handle->dma.rw_pos), data_ptr, bytes_can_load);
-        portEXIT_CRITICAL_SAFE(&g_i2s.spinlock);
         data_ptr += bytes_can_load;             // Move forward the data pointer
         total_loaded_bytes += bytes_can_load;   // Add to the total loaded bytes
         remain_bytes -= bytes_can_load;         // Update the remaining bytes to be loaded
@@ -1146,10 +1134,7 @@ esp_err_t i2s_channel_write(i2s_chan_handle_t handle, const void *src, size_t si
         if (bytes_can_write > size) {
             bytes_can_write = size;
         }
-        /* Add spinlock in case memcpy be interrupted */
-        portENTER_CRITICAL_SAFE(&g_i2s.spinlock);
         memcpy(data_ptr, src_byte, bytes_can_write);
-        portEXIT_CRITICAL_SAFE(&g_i2s.spinlock);
         size -= bytes_can_write;
         src_byte += bytes_can_write;
         handle->dma.rw_pos += bytes_can_write;
@@ -1191,10 +1176,7 @@ esp_err_t i2s_channel_read(i2s_chan_handle_t handle, void *dest, size_t size, si
         if (bytes_can_read > (int)size) {
             bytes_can_read = size;
         }
-        /* Add spinlock in case memcpy be interrupted */
-        portENTER_CRITICAL_SAFE(&g_i2s.spinlock);
         memcpy(dest_byte, data_ptr, bytes_can_read);
-        portEXIT_CRITICAL_SAFE(&g_i2s.spinlock);
         size -= bytes_can_read;
         dest_byte += bytes_can_read;
         handle->dma.rw_pos += bytes_can_read;

@@ -24,7 +24,7 @@
 #include "driver/gpio.h"
 #include "driver/uart_select.h"
 #include "esp_private/periph_ctrl.h"
-#include "clk_tree.h"
+#include "esp_clk_tree.h"
 #include "sdkconfig.h"
 #include "esp_rom_gpio.h"
 #include "clk_ctrl_os.h"
@@ -202,7 +202,7 @@ static void uart_module_disable(uart_port_t uart_num)
 
 esp_err_t uart_get_sclk_freq(uart_sclk_t sclk, uint32_t *out_freq_hz)
 {
-    return clk_tree_src_get_freq_hz((soc_module_clk_t)sclk, CLK_TREE_SRC_FREQ_PRECISION_CACHED, out_freq_hz);
+    return esp_clk_tree_src_get_freq_hz((soc_module_clk_t)sclk, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, out_freq_hz);
 }
 
 esp_err_t uart_set_word_length(uart_port_t uart_num, uart_word_length_t data_bit)
@@ -512,28 +512,6 @@ esp_err_t uart_pattern_queue_reset(uart_port_t uart_num, int queue_length)
     return ESP_OK;
 }
 
-#if CONFIG_IDF_TARGET_ESP32
-esp_err_t uart_enable_pattern_det_intr(uart_port_t uart_num, char pattern_chr, uint8_t chr_num, int chr_tout, int post_idle, int pre_idle)
-{
-    ESP_RETURN_ON_FALSE((uart_num < UART_NUM_MAX), ESP_FAIL, UART_TAG, "uart_num error");
-    ESP_RETURN_ON_FALSE(chr_tout >= 0 && chr_tout <= UART_RX_GAP_TOUT_V, ESP_FAIL, UART_TAG, "uart pattern set error\n");
-    ESP_RETURN_ON_FALSE(post_idle >= 0 && post_idle <= UART_POST_IDLE_NUM_V, ESP_FAIL, UART_TAG, "uart pattern set error\n");
-    ESP_RETURN_ON_FALSE(pre_idle >= 0 && pre_idle <= UART_PRE_IDLE_NUM_V, ESP_FAIL, UART_TAG, "uart pattern set error\n");
-    uart_at_cmd_t at_cmd = {0};
-    at_cmd.cmd_char = pattern_chr;
-    at_cmd.char_num = chr_num;
-    at_cmd.gap_tout = chr_tout;
-    at_cmd.pre_idle = pre_idle;
-    at_cmd.post_idle = post_idle;
-    uart_hal_clr_intsts_mask(&(uart_context[uart_num].hal), UART_INTR_CMD_CHAR_DET);
-    UART_ENTER_CRITICAL(&(uart_context[uart_num].spinlock));
-    uart_hal_set_at_cmd_char(&(uart_context[uart_num].hal), &at_cmd);
-    uart_hal_ena_intr_mask(&(uart_context[uart_num].hal), UART_INTR_CMD_CHAR_DET);
-    UART_EXIT_CRITICAL(&(uart_context[uart_num].spinlock));
-    return ESP_OK;
-}
-#endif
-
 esp_err_t uart_enable_pattern_det_baud_intr(uart_port_t uart_num, char pattern_chr, uint8_t chr_num, int chr_tout, int post_idle, int pre_idle)
 {
     ESP_RETURN_ON_FALSE(uart_num < UART_NUM_MAX, ESP_FAIL, UART_TAG, "uart_num error");
@@ -549,7 +527,7 @@ esp_err_t uart_enable_pattern_det_baud_intr(uart_port_t uart_num, char pattern_c
     uint32_t uart_baud = 0;
     uint32_t uart_div = 0;
     uart_get_baudrate(uart_num, &uart_baud);
-    clk_tree_src_get_freq_hz((soc_module_clk_t)UART_SCLK_APB, CLK_TREE_SRC_FREQ_PRECISION_EXACT, &apb_clk_freq);
+    esp_clk_tree_src_get_freq_hz((soc_module_clk_t)UART_SCLK_APB, ESP_CLK_TREE_SRC_FREQ_PRECISION_EXACT, &apb_clk_freq);
     uart_div = apb_clk_freq / uart_baud;
 
     at_cmd.gap_tout = chr_tout * uart_div;
@@ -703,17 +681,18 @@ esp_err_t uart_param_config(uart_port_t uart_num, const uart_config_t *uart_conf
     ESP_RETURN_ON_FALSE((uart_config->flow_ctrl < UART_HW_FLOWCTRL_MAX), ESP_FAIL, UART_TAG, "hw_flowctrl mode error");
     ESP_RETURN_ON_FALSE((uart_config->data_bits < UART_DATA_BITS_MAX), ESP_FAIL, UART_TAG, "data bit error");
     uart_module_enable(uart_num);
+    uart_sclk_t clk_src = (uart_config->source_clk) ? uart_config->source_clk : UART_SCLK_DEFAULT; // if no specifying the clock source (soc_module_clk_t starts from 1), then just use the default clock
 #if SOC_UART_SUPPORT_RTC_CLK
-    if (uart_config->source_clk == UART_SCLK_RTC) {
+    if (clk_src == UART_SCLK_RTC) {
         periph_rtc_dig_clk8m_enable();
     }
 #endif
     uint32_t sclk_freq;
-    ESP_RETURN_ON_ERROR(uart_get_sclk_freq(uart_config->source_clk, &sclk_freq), UART_TAG, "Invalid src_clk");
+    ESP_RETURN_ON_ERROR(uart_get_sclk_freq(clk_src, &sclk_freq), UART_TAG, "Invalid src_clk");
 
     UART_ENTER_CRITICAL(&(uart_context[uart_num].spinlock));
     uart_hal_init(&(uart_context[uart_num].hal), uart_num);
-    uart_hal_set_sclk(&(uart_context[uart_num].hal), uart_config->source_clk);
+    uart_hal_set_sclk(&(uart_context[uart_num].hal), clk_src);
     uart_hal_set_baudrate(&(uart_context[uart_num].hal), uart_config->baud_rate, sclk_freq);
     uart_hal_set_parity(&(uart_context[uart_num].hal), uart_config->parity);
     uart_hal_set_data_bit_num(&(uart_context[uart_num].hal), uart_config->data_bits);

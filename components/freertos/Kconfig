@@ -40,7 +40,7 @@ menu "FreeRTOS"
         config FREERTOS_OPTIMIZED_SCHEDULER
             # Todo: Not available in SMP FREERTOS (IDF-3733)
             bool "configUSE_PORT_OPTIMISED_TASK_SELECTION"
-            depends on FREERTOS_UNICORE
+            depends on FREERTOS_UNICORE && !FREERTOS_SMP
             default y
             help
                 Enables port specific task selection method. This option can speed up the search of ready tasks
@@ -262,6 +262,9 @@ menu "FreeRTOS"
             # Minimal value is 2 because of a check in FreeRTOS.h (search configEXPECTED_IDLE_TIME_BEFORE_SLEEP)
             help
                 FreeRTOS will enter light sleep mode if no tasks need to run for this number of ticks.
+                You can enable PM_PROFILING feature in esp_pm components and dump the sleep status with
+                esp_pm_dump_locks, if the proportion of rejected sleeps is too high, please increase
+                this value to improve scheduling efficiency
 
     endmenu # Kernel
 
@@ -366,7 +369,7 @@ menu "FreeRTOS"
         config FREERTOS_TICK_SUPPORT_SYSTIMER
             bool
             default y if !FREERTOS_TICK_SUPPORT_CORETIMER
-            # ESP32-S3, ESP32-C3 and ESP32-H4 can use Systimer for FreeRTOS SysTick
+            # All targets except ESP32 and ESP32S2 can use Systimer for FreeRTOS SysTick
             # ESP32S2 also has SYSTIMER but it can not be used for the FreeRTOS SysTick because:
             # - It has only one counter, which already in use esp_timer.
             #   A counter for SysTick should be stall in debug mode but work esp_timer.
@@ -410,6 +413,7 @@ menu "FreeRTOS"
         config FREERTOS_SYSTICK_USES_SYSTIMER
             bool
             default y if FREERTOS_CORETIMER_SYSTIMER_LVL1 || FREERTOS_CORETIMER_SYSTIMER_LVL3
+            select ESP_SLEEP_SYSTIMER_STALL_WORKAROUND if IDF_TARGET_ESP32C3
 
         config FREERTOS_SYSTICK_USES_CCOUNT
             bool

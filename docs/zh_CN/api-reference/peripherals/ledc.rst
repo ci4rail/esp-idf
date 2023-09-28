@@ -1,6 +1,7 @@
 LED PWM 控制器
 ==============
-{IDF_TARGET_LEDC_CHAN_NUM:default="6", esp32="16", esp32s2="8", esp32s3="8"}
+
+{IDF_TARGET_LEDC_MAX_FADE_RANGE_NUM: default="1", esp32c6="16", esp32h2="16"}
 
 :link_to_translation:`en:[English]`
 
@@ -8,7 +9,7 @@ LED PWM 控制器
 ------------
 
 LED 控制器 (LEDC) 主要用于控制 LED，也可产生 PWM 信号用于其他设备的控制。
-该控制器有 {IDF_TARGET_LEDC_CHAN_NUM} 路通道，可以产生独立的波形来驱动 RGB LED 等设备。
+该控制器有 {IDF_TARGET_SOC_LEDC_CHANNEL_NUM} 路通道，可以产生独立的波形来驱动 RGB LED 等设备。
 
 .. only:: esp32
 
@@ -188,25 +189,6 @@ LED PWM 控制器可在无需 CPU 干预的情况下自动改变占空比，实�
          - 32 MHz
          - 支持动态调频（DFS）功能
 
-.. only:: esp32h4
-
-    .. list-table:: {IDF_TARGET_NAME} LEDC 时钟源特性
-       :widths: 10 10 30
-       :header-rows: 1
-
-       * - 时钟名称
-         - 时钟频率
-         - 时钟功能
-       * - APB_CLK
-         - 96 MHz
-         - /
-       * - RC_FAST_CLK
-         - ~8 MHz
-         - 支持动态调频（DFS）功能，支持Light-sleep模式
-       * - XTAL_CLK
-         - 32 MHz
-         - 支持动态调频（DFS）功能
-
 .. note::
 
     .. only:: SOC_CLK_RC_FAST_SUPPORT_CALIBRATION
@@ -268,6 +250,12 @@ LED PWM 控制器硬件可逐渐改变占空比的数值。要使用此功能，
 * :cpp:func:`ledc_set_fade_with_time`
 * :cpp:func:`ledc_set_fade_with_step`
 * :cpp:func:`ledc_set_fade`
+
+.. only:: SOC_LEDC_GAMMA_CURVE_FADE_SUPPORTED
+
+    {IDF_TARGET_NAME} 的硬件额外支持多达 {IDF_TARGET_LEDC_MAX_FADE_RANGE_NUM} 次，无需 CPU 介入的连续渐变。此功能可以更加有效便捷得实现一个带伽马校正的渐变。
+
+    众所周知，人眼所感知的亮度与 PWM 占空比并非成线性关系。为了能使人感观上认为一盏灯明暗的变化是线性的，我们对其 PWM 信号的占空比控制必须为非线性的，俗称伽马校正。LED PWM 控制器可以通过多段线型拟合来模仿伽马曲线渐变。 你需要自己在应用程序中分配一段用以保存渐变参数的内存块，并提供开始和结束的占空比，伽马校正公式，以及期望的线性渐变段数信息，:cpp:func:`ledc_fill_multi_fade_param_list` 就能快速生成所有分段线性渐变的参数。或者你也可以自己直接构造一个 :cpp:type:`ledc_fade_param_config_t` 的数组。在获得所有渐变参数后，通过将 :cpp:type:`ledc_fade_param_config_t` 数组的指针和渐变区间数传入 :cpp:func:`ledc_set_multi_fade`，一次连续渐变的配置就完成了。
 
 .. only:: esp32
 
@@ -361,9 +349,13 @@ LED PWM 控制器 API 会在设定的频率和占空比分辨率超过 LED PWM �
 应用实例
 -------------------
 
+使用 LEDC 基本实例请参照 :example:`peripherals/ledc/ledc_basic`。
+
 使用 LEDC 改变占空比和渐变控制的实例请参照 :example:`peripherals/ledc/ledc_fade`。
 
-使用 LEDC 基本实例请参照 :example:`peripherals/ledc/ledc_basic`。
+.. only:: SOC_LEDC_GAMMA_CURVE_FADE_SUPPORTED
+
+    使用 LEDC 对 RGB LED 实现带伽马校正的颜色控制实例请参照 :example:`peripherals/ledc/ledc_gamma_curve_fade`。
 
 API 参考
 -------------

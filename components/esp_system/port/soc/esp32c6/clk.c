@@ -26,6 +26,7 @@
 #include "esp_private/esp_pmu.h"
 #include "esp_rom_uart.h"
 #include "esp_rom_sys.h"
+#include "ocode_init.h"
 
 /* Number of cycles to wait from the 32k XTAL oscillator to consider it running.
  * Larger values increase startup delay. Smaller values may cause false positive
@@ -44,6 +45,9 @@ static const char *TAG = "clk";
 {
 #if !CONFIG_IDF_ENV_FPGA
     pmu_init();
+    if (esp_rom_get_reset_reason(0) == RESET_REASON_CHIP_POWER_ON) {
+        esp_ocode_calib_init();
+    }
 
     assert(rtc_clk_xtal_freq_get() == RTC_XTAL_FREQ_40M);
 
@@ -290,4 +294,13 @@ __attribute__((weak)) void esp_perip_clk_init(void)
     /* Enable RNG clock. */
     periph_module_enable(PERIPH_RNG_MODULE);
 #endif
+
+    /* Enable TimerGroup 0 clock to ensure its reference counter will never
+     * be decremented to 0 during normal operation and preventing it from
+     * being disabled.
+     * If the TimerGroup 0 clock is disabled and then reenabled, the watchdog
+     * registers (Flashboot protection included) will be reenabled, and some
+     * seconds later, will trigger an unintended reset.
+     */
+    periph_module_enable(PERIPH_TIMG0_MODULE);
 }

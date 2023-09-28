@@ -42,13 +42,14 @@ ESP-IDF 中集成的电源管理算法可以根据应用程序组件的需求，
 
   Light-sleep 状态下，外设设有时钟门控，不会产生来自 GPIO 和内部外设的中断。:doc:`sleep_modes` 文档中所提到的唤醒源可用于从 Light-sleep 状态触发唤醒。
 
-.. only:: SOC_PM_SUPPORT_EXT_WAKEUP
+.. only:: SOC_PM_SUPPORT_EXT0_WAKEUP or SOC_PM_SUPPORT_EXT1_WAKEUP
 
   例如，EXT0 和 EXT1 唤醒源可以通过 GPIO 唤醒芯片。
 
 
 电源管理锁
 ----------------------
+{IDF_TARGET_MAX_CPU_FREQ: default="Not updated yet", esp32="80 MHz, 160 MHz, or 240 MHz", esp32s2="80 MHz, 160 MHz, 或 240 MHz", esp32s3="80 MHz, 160 MHz, 或 240 MHz", esp32c2="80 MHz 或 120 MHz", esp32c3="80 MHz 或 160 MHz", esp32c6="80 MHz 或 160 MHz"}
 
 应用程序可以通过获取或释放管理锁来控制电源管理算法。应用程序获取电源管理锁后，电源管理算法的操作将受到下面的限制。释放电源管理锁后，限制解除。
 
@@ -63,7 +64,7 @@ ESP-IDF 中集成的电源管理算法可以根据应用程序组件的需求，
   * - 电源管理锁
     - 描述
   * - ``ESP_PM_CPU_FREQ_MAX``
-    - 请求使用 :cpp:func:`esp_pm_configure` 将 CPU 频率设置为最大值。{IDF_TARGET_NAME} 可以将该值设置为 80 MHz、160 MHz 或 240 MHz。
+    - 请求使用 :cpp:func:`esp_pm_configure` 将 CPU 频率设置为最大值。{IDF_TARGET_NAME} 可以将该值设置为 {IDF_TARGET_MAX_CPU_FREQ}。
   * - ``ESP_PM_APB_FREQ_MAX``
     - 请求将 APB 频率设置为最大值，{IDF_TARGET_NAME} 支持的最大频率为 80 MHz。
   * - ``ESP_PM_NO_LIGHT_SLEEP``
@@ -74,14 +75,7 @@ ESP-IDF 中集成的电源管理算法可以根据应用程序组件的需求，
 
 下表列出了启用动态调频时如何切换 CPU 频率和 APB 频率。您可以使用 :cpp:func:`esp_pm_configure` 或者 :ref:`CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ` 指定 CPU 最大频率。
 
-.. only:: esp32
-
-   .. include:: inc/power_management_esp32.rst
-
-.. only:: not esp32
-
-   .. include:: inc/power_management_esp32s2_and_later.rst
-
+.. include:: inc/power_management_{IDF_TARGET_PATH_NAME}.rst
 
 如果没有获取任何管理锁，调用 :cpp:func:`esp_pm_configure` 将启动 Light-sleep 模式。 Light-sleep 模式持续时间由以下因素决定：
 
@@ -132,6 +126,49 @@ ESP-IDF 中集成的电源管理算法可以根据应用程序组件的需求，
     - Sigma-delta
     - 旧版定时器驱动（Timer Group)
     :SOC_MCPWM_SUPPORTED: - MCPWM
+
+
+Light-sleep 外设下电
+-------------------------
+
+.. only:: esp32c6 or esp32h2
+
+    {IDF_TARGET_NAME} 支持在 Light-sleep 时掉电外设的电源域.
+
+    如果在 menuconfig 中启用了 :ref:`CONFIG_PM_POWER_DOWN_PERIPHERAL_IN_LIGHT_SLEEP`，在初始化外设时，驱动会将外设工作的寄存器上下文注册到休眠备份链表中，
+    在进入休眠前，REG_DMA 外设会读取休眠备份链表中的配置，根据链表中的配置将外设的寄存器上下文备份至内存，REG_DMA 也会在唤醒时将上下文从内存恢复到外设寄存中。
+
+    目前 IDF 支持以下外设的 Light-sleep 上下文备份：
+    - INT_MTX
+    - TEE/APM
+    - IO_MUX / GPIO
+    - UART0
+    - TIMG0
+    - SPI0/1
+    - SYSTIMER
+
+    以下外设尚未支持：
+    - GDMA
+    - ETM
+    - TIMG1
+    - ASSIST_DEBUG
+    - Trace
+    - Crypto: AES/ECC/HMAC/RSA/SHA/DS/XTA_AES/ECDSA
+    - SPI2
+    - I2C
+    - I2S
+    - PCNT
+    - USB-Serial-JTAG
+    - TWAI
+    - LEDC
+    - MCPWM
+    - RMT
+    - SARADC
+    - SDIO
+    - PARL_IO
+    - UART1
+
+    对于未支持 Light-sleep 上下文备份的外设，若启用了电源管理功能，应在外设工作时持有 `ESP_PM_NO_LIGHT_SLEEP` 锁以避免进入休眠导致外设工作上下文丢失。
 
 API 参考
 -------------

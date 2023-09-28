@@ -41,7 +41,17 @@ const ip6_addr_t *__weak lwip_hook_nd6_get_gw(struct netif *netif, const ip6_add
     LWIP_UNUSED_ARG(netif);
     LWIP_UNUSED_ARG(dest);
 
-    return 0;
+    return NULL;
+}
+#endif
+
+#ifdef CONFIG_LWIP_HOOK_IP6_SELECT_SRC_ADDR_DEFAULT
+const ip_addr_t *__weak lwip_hook_ip6_select_source_address(struct netif *netif, const ip6_addr_t *dest)
+{
+    LWIP_UNUSED_ARG(netif);
+    LWIP_UNUSED_ARG(dest);
+
+    return NULL;
 }
 #endif
 
@@ -54,6 +64,8 @@ int __weak lwip_hook_ip6_input(struct pbuf *p, struct netif *inp)
     return 0;
 }
 #endif
+
+#ifdef CONFIG_LWIP_IPV4
 
 #ifdef LWIP_HOOK_IP4_ROUTE_SRC
 #if ESP_IP4_ROUTE
@@ -270,3 +282,5 @@ void dhcp_append_extra_opts(struct netif *netif, uint8_t state, struct dhcp_msg 
 #endif /* LWIP_DHCP_ENABLE_VENDOR_SPEC_IDS */
 
 }
+
+#endif /* CONFIG_LWIP_IPV4 */

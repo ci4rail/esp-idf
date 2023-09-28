@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -49,7 +49,7 @@ static inline void modem_syscon_ll_enable_ieee802154_mac_clock(modem_syscon_dev_
 }
 
 __attribute__((always_inline))
-static inline void modem_syscom_ll_enable_modem_sec_clock(modem_syscon_dev_t *hw, bool en)
+static inline void modem_syscon_ll_enable_modem_sec_clock(modem_syscon_dev_t *hw, bool en)
 {
     hw->clk_conf.clk_modem_sec_en = en;
     hw->clk_conf.clk_modem_sec_ecb_en = en;
@@ -105,10 +105,23 @@ static inline void modem_syscon_ll_enable_data_dump_force_clock(modem_syscon_dev
 {
     hw->clk_conf_force_on.clk_data_dump_fo = 1;
 }
+
+__attribute__((always_inline))
+static inline uint32_t modem_syscon_ll_get_ieee802154_icg_bitmap(modem_syscon_dev_t *hw)
+{
+    return hw->clk_conf_power_st.clk_zb_st_map;
+}
+
 __attribute__((always_inline))
 static inline void modem_syscon_ll_set_ieee802154_icg_bitmap(modem_syscon_dev_t *hw, uint32_t bitmap)
 {
     hw->clk_conf_power_st.clk_zb_st_map = bitmap;
+}
+
+__attribute__((always_inline))
+static inline uint32_t modem_syscon_ll_get_fe_icg_bitmap(modem_syscon_dev_t *hw)
+{
+    return hw->clk_conf_power_st.clk_fe_st_map;
 }
 
 __attribute__((always_inline))
@@ -118,9 +131,21 @@ static inline void modem_syscon_ll_set_fe_icg_bitmap(modem_syscon_dev_t *hw, uin
 }
 
 __attribute__((always_inline))
+static inline uint32_t modem_syscon_ll_get_bt_icg_bitmap(modem_syscon_dev_t *hw)
+{
+    return hw->clk_conf_power_st.clk_bt_st_map;
+}
+
+__attribute__((always_inline))
 static inline void modem_syscon_ll_set_bt_icg_bitmap(modem_syscon_dev_t *hw, uint32_t bitmap)
 {
     hw->clk_conf_power_st.clk_bt_st_map = bitmap;
+}
+
+__attribute__((always_inline))
+static inline uint32_t modem_syscon_ll_get_wifi_icg_bitmap(modem_syscon_dev_t *hw)
+{
+    return hw->clk_conf_power_st.clk_wifi_st_map;
 }
 
 __attribute__((always_inline))
@@ -130,9 +155,21 @@ static inline void modem_syscon_ll_set_wifi_icg_bitmap(modem_syscon_dev_t *hw, u
 }
 
 __attribute__((always_inline))
+static inline uint32_t modem_syscon_ll_get_modem_periph_icg_bitmap(modem_syscon_dev_t *hw)
+{
+    return hw->clk_conf_power_st.clk_modem_peri_st_map;
+}
+
+__attribute__((always_inline))
 static inline void modem_syscon_ll_set_modem_periph_icg_bitmap(modem_syscon_dev_t *hw, uint32_t bitmap)
 {
     hw->clk_conf_power_st.clk_modem_peri_st_map = bitmap;
+}
+
+__attribute__((always_inline))
+static inline uint32_t modem_syscon_ll_get_modem_apb_icg_bitmap(modem_syscon_dev_t *hw)
+{
+    return hw->clk_conf_power_st.clk_modem_apb_st_map;
 }
 
 __attribute__((always_inline))
@@ -205,30 +242,15 @@ static inline void modem_syscon_ll_reset_zbmac(modem_syscon_dev_t *hw)
 }
 
 __attribute__((always_inline))
-static inline void modem_syscon_ll_reset_modem_ecb(modem_syscon_dev_t *hw)
-{
-    hw->modem_rst_conf.rst_modem_ecb = 1;
-    hw->modem_rst_conf.rst_modem_ecb = 0;
-}
-
-__attribute__((always_inline))
-static inline void modem_syscon_ll_reset_modem_ccm(modem_syscon_dev_t *hw)
-{
-    hw->modem_rst_conf.rst_modem_ccm = 1;
-    hw->modem_rst_conf.rst_modem_ccm = 0;
-}
-
-__attribute__((always_inline))
-static inline void modem_syscon_ll_reset_modem_bah(modem_syscon_dev_t *hw)
-{
-    hw->modem_rst_conf.rst_modem_bah = 1;
-    hw->modem_rst_conf.rst_modem_bah = 0;
-}
-
-__attribute__((always_inline))
 static inline void modem_syscon_ll_reset_modem_sec(modem_syscon_dev_t *hw)
 {
+    hw->modem_rst_conf.rst_modem_ecb = 1;
+    hw->modem_rst_conf.rst_modem_ccm = 1;
+    hw->modem_rst_conf.rst_modem_bah = 1;
     hw->modem_rst_conf.rst_modem_sec = 1;
+    hw->modem_rst_conf.rst_modem_ecb = 0;
+    hw->modem_rst_conf.rst_modem_ccm = 0;
+    hw->modem_rst_conf.rst_modem_bah = 0;
     hw->modem_rst_conf.rst_modem_sec = 0;
 }
 
@@ -251,6 +273,28 @@ static inline void modem_syscon_ll_reset_all(modem_syscon_dev_t *hw)
 {
     hw->modem_rst_conf.val = 0xffffffff;
     hw->modem_rst_conf.val = 0;
+}
+
+
+__attribute__((always_inline))
+static inline void modem_syscon_ll_clk_conf1_configure(modem_syscon_dev_t *hw, bool en, uint32_t mask)
+{
+    if(en){
+        hw->clk_conf1.val = hw->clk_conf1.val | mask;
+    } else {
+        hw->clk_conf1.val = hw->clk_conf1.val & ~mask;
+    }
+}
+
+__attribute__((always_inline))
+static inline void modem_syscon_ll_clk_wifibb_configure(modem_syscon_dev_t *hw, bool en)
+{
+    /* Configure
+        clk_wifibb_22m / clk_wifibb_40m / clk_wifibb_44m / clk_wifibb_80m
+        clk_wifibb_40x / clk_wifibb_80x / clk_wifibb_40x1 / clk_wifibb_80x1
+        clk_wifibb_160x1
+    */
+    modem_syscon_ll_clk_conf1_configure(hw, en, 0x1ff);
 }
 
 __attribute__((always_inline))

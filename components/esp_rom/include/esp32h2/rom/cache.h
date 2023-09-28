@@ -170,6 +170,15 @@ extern const cache_op_cb_t* rom_cache_op_cb;
 void Cache_MMU_Init(void);
 
 /**
+  * @brief Init Cache for ROM boot, including resetting the Icache, initializing MMU, Enabling ICache, unmasking bus.
+  *
+  * @param None
+  *
+  * @return None
+  */
+void ROM_Boot_Cache_Init(void);
+
+/**
   * @brief Set ICache mmu mapping.
   *        Please do not call this function in your SDK application.
   *
@@ -586,6 +595,14 @@ uint32_t Cache_Get_IROM_MMU_End(void);
   * @return uint32_t : the word value of the address.
   */
 uint32_t Cache_Get_DROM_MMU_End(void);
+
+/**
+ * @brief Configure cache MMU page size according to instruction and rodata size
+ *
+ * @param irom_size The instruction cache MMU page size
+ * @param drom_size The rodata data cache MMU page size
+ */
+void Cache_Set_IDROM_MMU_Size(uint32_t irom_size, uint32_t drom_size);
 
 #define Cache_Dbus_MMU_Set(ext_ram, vaddr, paddr, psize, num, fixed) \
     Cache_MSPI_MMU_Set(ets_efuse_cache_encryption_enabled() ? MMU_SENSITIVE : 0, ext_ram, vaddr, paddr, psize, num, fixed)

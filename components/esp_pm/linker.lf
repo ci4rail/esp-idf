@@ -4,8 +4,6 @@ entries:
     if PM_RTOS_IDLE_OPT = y:
         pm_impl:esp_pm_impl_idle_hook (noflash)
         pm_impl:esp_pm_impl_waiti (noflash)
-    if PM_SLP_IRAM_OPT = y && IDF_TARGET_ESP32 = n:
-        pm_impl:periph_inform_out_light_sleep_overhead (noflash)
 
 [mapping:esp_hw_support_pm]
 archive: libesp_hw_support.a
@@ -15,8 +13,6 @@ entries:
         sleep_modes:esp_sleep_enable_timer_wakeup (noflash)
         sleep_modes:timer_wakeup_prepare (noflash)
         sleep_modes:get_power_down_flags (noflash)
-        if SOC_CONFIGURABLE_VDDSDIO_SUPPORTED:
-            rtc_init:rtc_vddsdio_get_config (noflash)
         esp_clk:esp_clk_slowclk_cal_set (noflash)
         esp_clk:esp_clk_slowclk_cal_get (noflash)
         esp_clk:esp_rtc_get_time_us (noflash)
@@ -48,10 +44,6 @@ entries:
 archive: libesp_timer.a
 entries:
     if PM_SLP_IRAM_OPT = y:
-        # esp_timer_restart is called from task_wdt_timer_feed, so put it
-        # in IRAM if task_wdt_timer_feed itself is in IRAM.
-        if ESP_TASK_WDT_USE_ESP_TIMER = y:
-            esp_timer:esp_timer_restart (noflash)
         if ESP_TIMER_IMPL_TG0_LAC = y:
             esp_timer_impl_lac:esp_timer_impl_lock (noflash)
             esp_timer_impl_lac:esp_timer_impl_unlock (noflash)
