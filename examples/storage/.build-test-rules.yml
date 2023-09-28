@@ -6,9 +6,14 @@ examples/storage/custom_flash_driver:
       temporary: true
       reason: target esp32c2 is not supported yet
 
+examples/storage/emmc:
+  enable:
+    - if: IDF_TARGET == "esp32s3"
+      reason: only support on esp32s3
+
 examples/storage/ext_flash_fatfs:
   disable:
-    - if: IDF_TARGET in ["esp32c2", "esp32c6", "esp32h2"]
+    - if: IDF_TARGET in ["esp32c2", "esp32c6", "esp32h2", "esp32p4"]
       temporary: true
       reason: target(s) not supported yet
   disable_test:
@@ -56,6 +61,16 @@ examples/storage/nvs_rw_value_cxx:
       temporary: true
       reason: lack of runners
 
+examples/storage/nvsgen:
+  disable:
+    - if: IDF_TARGET == "esp32c2"
+      temporary: true
+      reason: target esp32c2 is not supported yet
+  disable_test:
+    - if: IDF_TARGET in ["esp32s2", "esp32s3", "esp32c3", "esp32c6", "esp32h2"]
+      temporary: true
+      reason: lack of runners, should be same for every target
+
 examples/storage/partition_api/partition_find:
   disable:
     - if: IDF_TARGET == "esp32c2"
@@ -96,6 +111,12 @@ examples/storage/parttool:
       temporary: true
       reason: lack of runners
 
+examples/storage/perf_benchmark:
+  disable:
+    - if: IDF_TARGET == "esp32p4"
+      temporary: true
+      reason: target esp32p4 is not supported yet
+
 examples/storage/sd_card/sdmmc:
   disable:
     - if: SOC_SDMMC_HOST_SUPPORTED != 1
@@ -106,7 +127,7 @@ examples/storage/sd_card/sdmmc:
 
 examples/storage/sd_card/sdspi:
   disable:
-    - if: IDF_TARGET == "esp32h2"
+    - if: IDF_TARGET in ["esp32h2", "esp32p4"]
       temporary: true
       reason: Not supported
   disable_test:

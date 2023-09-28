@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include "hal/assert.h"
+#include "hal/ecc_types.h"
 #include "soc/ecc_mult_reg.h"
 
 #ifdef __cplusplus
@@ -40,9 +41,6 @@ static inline void ecc_ll_set_mode(ecc_mode_t mode)
     switch(mode) {
         case ECC_MODE_POINT_MUL:
             REG_SET_FIELD(ECC_MULT_CONF_REG, ECC_MULT_WORK_MODE, 0);
-            break;
-        case ECC_MODE_INVERSE_MUL:
-            REG_SET_FIELD(ECC_MULT_CONF_REG, ECC_MULT_WORK_MODE, 1);
             break;
         case ECC_MODE_VERIFY:
             REG_SET_FIELD(ECC_MULT_CONF_REG, ECC_MULT_WORK_MODE, 2);
@@ -108,7 +106,7 @@ static inline int ecc_ll_is_calc_finished(void)
 
 static inline ecc_mode_t ecc_ll_get_mode(void)
 {
-    return REG_GET_FIELD(ECC_MULT_CONF_REG, ECC_MULT_WORK_MODE);
+    return (ecc_mode_t)(REG_GET_FIELD(ECC_MULT_CONF_REG, ECC_MULT_WORK_MODE));
 }
 
 static inline int ecc_ll_get_verification_result(void)
@@ -118,7 +116,7 @@ static inline int ecc_ll_get_verification_result(void)
 
 static inline ecc_curve_t ecc_ll_get_curve(void)
 {
-    return REG_GET_FIELD(ECC_MULT_CONF_REG, ECC_MULT_KEY_LENGTH);
+    return (ecc_curve_t)(REG_GET_FIELD(ECC_MULT_CONF_REG, ECC_MULT_KEY_LENGTH));
 }
 
 static inline void ecc_ll_read_param(ecc_ll_param_t param, uint8_t *buf, uint16_t len)

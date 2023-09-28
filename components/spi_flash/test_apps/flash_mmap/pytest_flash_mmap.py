@@ -6,7 +6,6 @@ from pytest_embedded import Dut
 
 
 @pytest.mark.supported_targets
-@pytest.mark.temp_skip_ci(targets=['esp32c6', 'esp32h2'], reason='c6/h2 support TBD')
 @pytest.mark.generic
 @pytest.mark.parametrize(
     'config',
@@ -16,6 +15,46 @@ from pytest_embedded import Dut
     indirect=True,
 )
 def test_flash_mmap(dut: Dut) -> None:
-    dut.expect_exact('Press ENTER to see the list of tests')
-    dut.write('*')
-    dut.expect_unity_test_output(timeout=120)
+    dut.run_all_single_board_cases(timeout=30)
+
+
+@pytest.mark.esp32s3
+@pytest.mark.esp32c3
+@pytest.mark.esp32c2
+@pytest.mark.esp32c6
+@pytest.mark.esp32h2
+@pytest.mark.generic
+@pytest.mark.parametrize(
+    'config',
+    [
+        'rom_impl',
+    ],
+    indirect=True,
+)
+def test_flash_mmap_rom_impl(dut: Dut) -> None:
+    dut.run_all_single_board_cases(timeout=30)
+
+
+XIP_CONFIGS = [
+    pytest.param('xip_psram_esp32s2', marks=[pytest.mark.esp32s2]),
+    pytest.param('xip_psram_esp32s3', marks=[pytest.mark.esp32s3]),
+]
+
+
+@pytest.mark.generic
+@pytest.mark.parametrize('config', XIP_CONFIGS, indirect=True)
+def test_flash_mmap_xip_psram(dut: Dut) -> None:
+    dut.run_all_single_board_cases(timeout=30)
+
+
+@pytest.mark.esp32s3
+@pytest.mark.generic
+@pytest.mark.parametrize(
+    'config',
+    [
+        'xip_psram_with_rom_impl',
+    ],
+    indirect=True,
+)
+def test_flash_mmap_xip_psram_rom_impl(dut: Dut) -> None:
+    dut.run_all_single_board_cases(timeout=30)

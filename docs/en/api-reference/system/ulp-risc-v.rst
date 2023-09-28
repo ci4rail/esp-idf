@@ -1,8 +1,9 @@
-ULP RISC-V Coprocessor programming
+ULP RISC-V Coprocessor Programming
 ==================================
+
 :link_to_translation:`zh_CN:[中文]`
 
-The ULP RISC-V coprocessor is a variant of the ULP present in {IDF_TARGET_NAME}. Similar to ULP FSM, the ULP RISC-V coprocessor can perform tasks such as sensor readings while the main CPU stays in low power modes. The main difference between ULP FSM and ULP RISC-V is that the latter can be programmed in C using standard GNU tools. The ULP RISC-V coprocessor can access the RTC_SLOW_MEM memory region, and registers in RTC_CNTL, RTC_IO, and SARADC peripherals. The RISC-V processor is a 32-bit fixed point machine. Its instruction set is based on RV32IMC which includes hardware multiplication and division, and compressed code.
+The ULP RISC-V coprocessor is a variant of the ULP present in {IDF_TARGET_NAME}. Similar to ULP FSM, the ULP RISC-V coprocessor can perform tasks such as sensor readings while the main CPU stays in low power modes. The main difference between ULP FSM and ULP RISC-V is that the latter can be programmed in C using standard GNU tools. The ULP RISC-V coprocessor can access the RTC_SLOW_MEM memory region, and registers in ``RTC_CNTL``, ``RTC_IO``, and ``SARADC`` peripherals. The RISC-V processor is a 32-bit fixed point machine. Its instruction set is based on RV32IMC which includes hardware multiplication and division, and compressed code.
 
 Installing the ULP RISC-V Toolchain
 -----------------------------------
@@ -11,16 +12,20 @@ The ULP RISC-V coprocessor code is written in C (assembly is also possible) and 
 
 If you have already set up ESP-IDF with CMake build system according to the :doc:`Getting Started Guide <../../../get-started/index>`, then the toolchain should already be installed.
 
-.. note:: In earlier versions of ESP-IDF, RISC-V toolchain had a different prefix: `riscv-none-embed-gcc`.
+.. note::
+    
+    In earlier versions of ESP-IDF, RISC-V toolchain had a different prefix: ``riscv-none-embed-gcc``.
 
 Compiling the ULP RISC-V Code
 -----------------------------
 
 To compile the ULP RISC-V code as part of the component, the following steps must be taken:
 
-1. The ULP RISC-V code, written in C or assembly (must use the `.S` extension), must be placed in a separate directory inside the component directory, for instance, `ulp/`.
+1. The ULP RISC-V code, written in C or assembly (must use the ``.S`` extension), must be placed in a separate directory inside the component directory, for instance, ``ulp/``.
 
-.. note:: When registering the component (via ``idf_component_register``), this directory should not be added to the ``SRC_DIRS`` argument as it is currently done for the ULP FSM. See the step below for how to properly add ULP source files.
+.. note:: 
+    
+    When registering the component (via ``idf_component_register``), this directory should not be added to the ``SRC_DIRS`` argument as it is currently done for the ULP FSM. See the step below for how to properly add ULP source files.
 
 2. Call ``ulp_embed_binary`` from the component CMakeLists.txt after registration. For example::
 
@@ -33,13 +38,13 @@ To compile the ULP RISC-V code as part of the component, the following steps mus
 
     ulp_embed_binary(${ulp_app_name} "${ulp_sources}" "${ulp_exp_dep_srcs}")
 
- The first argument to ``ulp_embed_binary`` specifies the ULP binary name. The name specified here will also be used by other generated artifacts such as the ELF file, map file, header file and linker export file. The second argument specifies the ULP source files.  Finally, the third argument specifies the list of component source files which include the header file to be generated. This list is needed to build the dependencies correctly and ensure that the generated header file will be created before any of these files are compiled. See the section below for the concept of generated header files for ULP applications.
+ The first argument to ``ulp_embed_binary`` specifies the ULP binary name. The name specified here will also be used by other generated artifacts such as the ELF file, map file, header file, and linker export file. The second argument specifies the ULP source files. Finally, the third argument specifies the list of component source files which include the header file to be generated. This list is needed to build the dependencies correctly and ensure that the generated header file will be created before any of these files are compiled. See the section below for the concept of generated header files for ULP applications.
 
-3. Build the application as usual (e.g., `idf.py app`).
+3. Build the application as usual (e.g., ``idf.py app``).
 
    Inside, the build system will take the following steps to build ULP program:
 
-   1. **Run each source file through the C compiler and assembler.** This step generates the object files (.obj.c or .obj.S depending of source file processed) in the component build directory.
+   1. **Run each source file through the C compiler and assembler.** This step generates the object files (``.obj.c`` or ``.obj.S`` depending of source file processed) in the component build directory.
 
    2. **Run the linker script template through the C preprocessor.** The template is located in ``components/ulp/ld`` directory.
 
@@ -68,7 +73,7 @@ For example, the ULP RISC-V program may define a variable ``measurement_count`` 
 
     int some_function()
     {
-        //read the measurement count for use it later.
+        //read the measurement count for later use.
         int temp = measurement_count;
 
         ...do something.
@@ -115,7 +120,7 @@ Starting the ULP RISC-V Program
 
 To run a ULP RISC-V program, the main application needs to load the ULP program into RTC memory using the :cpp:func:`ulp_riscv_load_binary` function, and then start it using the :cpp:func:`ulp_riscv_run` function.
 
-Note that `CONFIG_ULP_COPROC_ENABLED` and `CONFIG_ULP_COPROC_TYPE_RISCV` options must be enabled in menuconfig to work with ULP RISC-V. To reserve memory for the ULP, the ``RTC slow memory reserved for coprocessor`` option must be set to a value big enough to store ULP RISC-V code and data. If the application components contain multiple ULP programs, then the size of the RTC memory must be sufficient to hold the largest one.
+Note that the ``CONFIG_ULP_COPROC_ENABLED`` and ``CONFIG_ULP_COPROC_TYPE_RISCV`` options must be enabled in menuconfig to work with ULP RISC-V. To reserve memory for the ULP, the ``RTC slow memory reserved for coprocessor`` option must be set to a value big enough to store ULP RISC-V code and data. If the application components contain multiple ULP programs, then the size of the RTC memory must be sufficient to hold the largest one.
 
 Each ULP RISC-V program is embedded into the ESP-IDF application as a binary blob. The application can reference this blob and load it in the following way (suppose ULP_APP_NAME was defined to ``ulp_app_name``):
 
@@ -138,7 +143,7 @@ Once the program is loaded into RTC memory, the application can start it by call
 ULP RISC-V Program Flow
 -----------------------
 
-{IDF_TARGET_RTC_CLK_FRE:default="150kHz", esp32s2="90kHz", esp32s3="136kHz"}
+{IDF_TARGET_RTC_CLK_FRE:default="150 kHz", esp32s2="90 kHz", esp32s3="136 kHz"}
 
 The ULP RISC-V coprocessor is started by a timer. The timer is started once :cpp:func:`ulp_riscv_run` is called. The timer counts the number of RTC_SLOW_CLK ticks (by default, produced by an internal {IDF_TARGET_RTC_CLK_FRE} RC oscillator). The number of ticks is set using ``RTC_CNTL_ULP_CP_TIMER_1_REG`` register. When starting the ULP, ``RTC_CNTL_ULP_CP_TIMER_1_REG`` will be used to set the number of timer ticks.
 
@@ -150,6 +155,41 @@ The program runs until the field ``RTC_CNTL_COCPU_DONE`` in register ``RTC_CNTL_
 
 To disable the timer (effectively preventing the ULP program from running again), please clear the ``RTC_CNTL_ULP_CP_SLP_TIMER_EN`` bit in the ``RTC_CNTL_ULP_CP_TIMER_REG`` register. This can be done both from the ULP code and from the main program.
 
+ULP RISC-V Peripheral Support
+------------------------------
+
+To enhance the capabilities of the ULP RISC-V coprocessor, it has access to peripherals which operate in the low-power (RTC) domain. The ULP RISC-V coprocessor can interact with these peripherals when the main CPU is in sleep mode, and can wake up the main CPU once a wakeup condition is reached. The following peripherals are supported.
+
+RTC I2C
+^^^^^^^^
+
+The RTC I2C controller provides I2C master functionality in the RTC domain. The ULP RISC-V coprocessor can read from or write to I2C slave devices using this controller. To use the RTC I2C peripheral, call the :cpp:func:`ulp_riscv_i2c_master_init` from your application running on the main core before initializing the ULP RISC-V core and going to sleep.
+
+Once the RTC I2C controller is initialized, the I2C slave device address must be programmed via the :cpp:func:`ulp_riscv_i2c_master_set_slave_addr` API before any read or write operation is performed.
+
+.. note:: 
+    
+    The RTC I2C peripheral always expects a slave sub-register address to be programmed via the :cpp:func:`ulp_riscv_i2c_master_set_slave_reg_addr` API. If it is not, the I2C peripheral uses the ``SENS_SAR_I2C_CTRL_REG[18:11]`` as the sub-register address for the subsequent read or write operations. This could make the RTC I2C peripheral incompatible with certain I2C devices or sensors which do not need any sub-register to be programmed.
+
+.. note:: 
+    
+    There is no hardware atomicity protection in accessing the RTC I2C peripheral between the main CPU and the ULP RISC-V core. Therefore, care must be taken that both cores are not accessing the peripheral simultaneously.
+
+In case your RTC I2C based ULP RISC-V program is not working as expected, the following sanity checks can help in debugging the issue:
+
+ * Incorrect SDA/SCL pin selection: The SDA pin can only be set up as GPIO1 or GPIO3 and SCL pin can only be set up as GPIO0 or GPIO2. Make sure that the pin configuration is correct.
+
+ * Incorrect I2C timing parameters: The RTC I2C bus timing configuration is limited by the I2C standard bus specification. Any timing parameters which violate the standard I2C bus specifications would result in an error. For details on the timing parameters, please read the `standard I2C bus specifications <https://en.wikipedia.org/wiki/I%C2%B2C>`_.
+
+ * If the I2C slave device or sensor does not require a sub-register address to be programmed, it may not be compatible with the RTC I2C peripheral. Please refer the notes above.
+
+ * If the RTC driver reports a ``Write Failed!`` or ``Read Failed!`` error log when running on the main CPU, then make sure:
+
+        * The I2C slave device or sensor works correctly with the standard I2C master on Espressif SoCs. This would rule out any problems with the I2C slave device itself.
+        * If the RTC I2C interrupt status log reports a ``TIMEOUT`` error or ``ACK`` error, it could typically mean that the I2C device did not respond to a ``START`` condition sent out by the RTC I2C controller. This could happen if the I2C slave device is not connected properly to the controller pins or if the I2C slave device is in a bad state. Make sure that the I2C slave device is in a good state and connected properly before continuing.
+        * If the RTC I2C interrupt log does not report any error status, it could mean that the driver is not fast enough in receiving data from the I2C slave device. This could happen as the RTC I2C controller does not have a TX/RX FIFO to store multiple bytes of data but rather, it depends on single byte transmissions using an interrupt status polling mechanism. This could be mitigated to some extent by making sure that the SCL clock of the peripheral is running as fast as possible. This can be tweaked by configuring the SCL low period and SCL high period values in the initialization config parameters for the peripheral.
+
+* Other methods of debugging problems would be to ensure that the RTC I2C controller is operational **only** on the main CPU **without** any ULP RISC-V code interfering and **without** any sleep mode being activated. This is the basic configuration under which the RTC I2C peripheral must work. This way you can rule out any potential issues due to the ULP or sleep modes.
 
 Debugging Your ULP RISC-V Program
 ----------------------------------
@@ -160,16 +200,17 @@ Keeping this in mind, here are some ways that may help you debug you ULP RISC-V 
 
  * Share program state through shared variables: as described in :ref:`ulp-riscv-access-variables`, both the main CPU and the ULP core can easily access global variables in RTC memory. Writing state information to such a variable from the ULP and reading it from the main CPU can help you discern what is happening on the ULP core. The downside of this approach is that it requires the main CPU to be awake, which will not always be the case. Keeping the main CPU awake might even, in some cases, mask problems, as some issues may only occur when certain power domains are powered down.
 
- * Use the bit-banged UART driver to print: the ULP RISC-V component comes with a low-speed bit-banged UART TX driver that can be used for printing information independently of the main CPU state. See :example:`system/ulp_riscv/uart_print` for an example of how to use this driver.
+ * Use the bit-banged UART driver to print: the ULP RISC-V component comes with a low-speed bit-banged UART TX driver that can be used for printing information independently of the main CPU state. See :example:`system/ulp/ulp_riscv/uart_print` for an example of how to use this driver.
 
  * Trap signal: the ULP RISC-V has a hardware trap that will trigger under certain conditions, e.g., illegal instruction. This will cause the main CPU to be woken up with the wake-up cause :cpp:enumerator:`ESP_SLEEP_WAKEUP_COCPU_TRAP_TRIG`.
 
 Application Examples
 --------------------
 
-* ULP RISC-V Coprocessor polls GPIO while main CPU is in deep sleep: :example:`system/ulp_riscv/gpio`.
-* ULP RISC-V Coprocessor uses bit-banged UART driver to print: :example:`system/ulp_riscv/uart_print`.
-* ULP RISC-V Coprocessor reads external temperature sensor while main CPU is in deep sleep: :example:`system/ulp_riscv/ds18b20_onewire`.
+* ULP RISC-V Coprocessor polls GPIO while main CPU is in deep sleep: :example:`system/ulp/ulp_riscv/gpio`.
+* ULP RISC-V Coprocessor uses bit-banged UART driver to print: :example:`system/ulp/ulp_riscv/uart_print`.
+* ULP RISC-V Coprocessor reads external temperature sensor while main CPU is in deep sleep: :example:`system/ulp/ulp_riscv/ds18b20_onewire`.
+* ULP RISC-V Coprocessor reads external I2C temperature and humidity sensor (BMP180) while the main CPU is in Deep-sleep and wakes up the main CPU once a threshold is met: :example:`system/ulp/ulp_riscv/i2c`.
 
 API Reference
 -------------
@@ -177,3 +218,4 @@ API Reference
 .. include-build-file:: inc/ulp_riscv.inc
 .. include-build-file:: inc/ulp_riscv_lock_shared.inc
 .. include-build-file:: inc/ulp_riscv_lock.inc
+.. include-build-file:: inc/ulp_riscv_i2c.inc

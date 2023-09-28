@@ -87,7 +87,7 @@ void IRAM_ATTR bootloader_flash_gpio_config(const esp_image_header_t* pfhdr)
     uint32_t pkg_ver = bootloader_common_get_chip_ver_pkg();
 
     if (pkg_ver == EFUSE_RD_CHIP_VER_PKG_ESP32D2WDQ5 ||
-        pkg_ver == EFUSE_RD_CHIP_VER_PKG_ESP32PICOD2 ||
+        pkg_ver == EFUSE_RD_CHIP_VER_PKG_ESP32U4WDH ||
         pkg_ver == EFUSE_RD_CHIP_VER_PKG_ESP32PICOD4 ||
         pkg_ver == EFUSE_RD_CHIP_VER_PKG_ESP32PICOV302) {
         // For ESP32D2WD or ESP32-PICO series,the SPI pins are already configured
@@ -201,7 +201,7 @@ void bootloader_configure_spi_pins(int drv)
     uint32_t pkg_ver = bootloader_common_get_chip_ver_pkg();
 
     if (pkg_ver == EFUSE_RD_CHIP_VER_PKG_ESP32D2WDQ5 ||
-        pkg_ver == EFUSE_RD_CHIP_VER_PKG_ESP32PICOD2 ||
+        pkg_ver == EFUSE_RD_CHIP_VER_PKG_ESP32U4WDH ||
         pkg_ver == EFUSE_RD_CHIP_VER_PKG_ESP32PICOD4 ||
         pkg_ver == EFUSE_RD_CHIP_VER_PKG_ESP32PICOV302) {
         // For ESP32D2WD or ESP32-PICO series,the SPI pins are already configured
@@ -308,19 +308,26 @@ static void print_flash_info(const esp_image_header_t *bootloader_hdr)
 
     /* SPI mode could have been set to QIO during boot already,
        so test the SPI registers not the flash header */
-    uint32_t spi_ctrl = REG_READ(SPI_CTRL_REG(0));
-    if (spi_ctrl & SPI_FREAD_QIO) {
+    esp_rom_spiflash_read_mode_t spi_mode = bootloader_flash_get_spi_mode();
+    switch (spi_mode) {
+    case ESP_ROM_SPIFLASH_QIO_MODE:
         str = "QIO";
-    } else if (spi_ctrl & SPI_FREAD_QUAD) {
+        break;
+    case ESP_ROM_SPIFLASH_QOUT_MODE:
         str = "QOUT";
-    } else if (spi_ctrl & SPI_FREAD_DIO) {
+        break;
+    case ESP_ROM_SPIFLASH_DIO_MODE:
         str = "DIO";
-    } else if (spi_ctrl & SPI_FREAD_DUAL) {
+        break;
+    case ESP_ROM_SPIFLASH_DOUT_MODE:
         str = "DOUT";
-    } else if (spi_ctrl & SPI_FASTRD_MODE) {
+        break;
+    case ESP_ROM_SPIFLASH_FASTRD_MODE:
         str = "FAST READ";
-    } else {
+        break;
+    default:
         str = "SLOW READ";
+        break;
     }
     ESP_EARLY_LOGI(TAG, "SPI Mode       : %s", str);
 

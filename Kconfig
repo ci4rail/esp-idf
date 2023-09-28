@@ -11,13 +11,39 @@ mainmenu "Espressif IoT Development Framework Configuration"
         default "y"
 
     config IDF_ENV_FPGA
-        # This option is for internal use only
         bool
         option env="IDF_ENV_FPGA"
+        help
+            - This option is for internal use only.
+            - Enabling this option will help enable all FPGA support so as to
+              run ESP-IDF on an FPGA. This can help reproduce some issues that
+              only happens on FPGA condition, or when you have to burn some
+              efuses multiple times.
+
+    config IDF_ENV_BRINGUP
+        bool
+        default "y" if IDF_TARGET_ESP32P4
+        help
+            - This option is ONLY used when doing new chip bringup.
+            - This option will only enable necessary hw / sw settings for running
+              a hello_world application.
+
 
     config IDF_CI_BUILD
         bool
         default y if "$(IDF_CI_BUILD)" = "y" || "$(IDF_CI_BUILD)" = 1
+
+    config IDF_TOOLCHAIN
+        # This option records the IDF target when sdkconfig is generated the first time.
+        # It is not updated if environment variable $IDF_TOOLCHAIN changes later, and
+        # the build system is responsible for detecting the mismatch between
+        # CONFIG_IDF_TOOLCHAIN and $IDF_TOOLCHAIN.
+        string
+        default "$IDF_TOOLCHAIN"
+
+    config IDF_TOOLCHAIN_CLANG
+        bool
+        default "y" if IDF_TOOLCHAIN="clang"
 
     config IDF_TARGET_ARCH_RISCV
         bool
@@ -39,6 +65,12 @@ mainmenu "Espressif IoT Development Framework Configuration"
         # CONFIG_IDF_TARGET and $IDF_TARGET.
         string
         default "$IDF_TARGET"
+
+    config IDF_INIT_VERSION
+        # This option records the IDF version when sdkconfig is generated the first time.
+        # It is not updated if environment variable $IDF_VERSION changes later
+        string
+        default "$IDF_INIT_VERSION"
 
     config IDF_TARGET_LINUX
         bool
@@ -66,28 +98,6 @@ mainmenu "Espressif IoT Development Framework Configuration"
         select FREERTOS_UNICORE
         select IDF_TARGET_ARCH_RISCV
 
-    config IDF_TARGET_ESP32H4
-        bool
-        default "y" if IDF_TARGET="esp32h4"
-        select FREERTOS_UNICORE
-        select IDF_TARGET_ARCH_RISCV
-
-    choice IDF_TARGET_ESP32H4_BETA_VERSION
-        prompt "ESP32-H4 beta version"
-        depends on IDF_TARGET_ESP32H4
-        default IDF_TARGET_ESP32H4_BETA_VERSION_2
-        help
-            Currently ESP32-H4 has several beta versions for internal use only.
-            Select the one that matches your chip model.
-
-        config IDF_TARGET_ESP32H4_BETA_VERSION_1
-            bool
-            prompt "ESP32-H4 beta1"
-        config IDF_TARGET_ESP32H4_BETA_VERSION_2
-            bool
-            prompt "ESP32-H4 beta2"
-    endchoice
-
     config IDF_TARGET_ESP32C2
         bool
         default "y" if IDF_TARGET="esp32c2"
@@ -100,12 +110,16 @@ mainmenu "Espressif IoT Development Framework Configuration"
         select FREERTOS_UNICORE
         select IDF_TARGET_ARCH_RISCV
 
+    config IDF_TARGET_ESP32P4
+        bool
+        default "y" if IDF_TARGET="esp32p4"
+        select IDF_TARGET_ARCH_RISCV
+
     config IDF_TARGET_ESP32H2
         bool
         default "y" if IDF_TARGET="esp32h2"
         select FREERTOS_UNICORE
         select IDF_TARGET_ARCH_RISCV
-        select ESPTOOLPY_NO_STUB    # // ESP32H2-TODO
 
     config IDF_TARGET_LINUX
         bool
@@ -117,11 +131,10 @@ mainmenu "Espressif IoT Development Framework Configuration"
         default 0x0002 if IDF_TARGET_ESP32S2
         default 0x0005 if IDF_TARGET_ESP32C3
         default 0x0009 if IDF_TARGET_ESP32S3
-        default 0x000A if IDF_TARGET_ESP32H4_BETA_VERSION_1
         default 0x000C if IDF_TARGET_ESP32C2
         default 0x000D if IDF_TARGET_ESP32C6
-        default 0x000E if IDF_TARGET_ESP32H4_BETA_VERSION_2 # ESP32-TODO: IDF-3475
         default 0x0010 if IDF_TARGET_ESP32H2
+        default 0x0012 if IDF_TARGET_ESP32P4
         default 0xFFFF
 
 
@@ -289,11 +302,11 @@ mainmenu "Espressif IoT Development Framework Configuration"
 
         choice COMPILER_OPTIMIZATION
             prompt "Optimization Level"
-            default COMPILER_OPTIMIZATION_DEFAULT
+            default COMPILER_OPTIMIZATION_DEBUG
             help
                 This option sets compiler optimization level (gcc -O argument) for the app.
 
-                - The "Default" setting will add the -0g flag to CFLAGS.
+                - The "Debug" setting will add the -0g flag to CFLAGS.
                 - The "Size" setting will add the -0s flag to CFLAGS.
                 - The "Performance" setting will add the -O2 flag to CFLAGS.
                 - The "None" setting will add the -O0 flag to CFLAGS.
@@ -312,7 +325,7 @@ mainmenu "Espressif IoT Development Framework Configuration"
                 Compiler optimization for the IDF bootloader is set separately,
                 see the BOOTLOADER_COMPILER_OPTIMIZATION setting.
 
-            config COMPILER_OPTIMIZATION_DEFAULT
+            config COMPILER_OPTIMIZATION_DEBUG
                 bool "Debug (-Og)"
             config COMPILER_OPTIMIZATION_SIZE
                 bool "Optimize for size (-Os)"
@@ -518,8 +531,52 @@ mainmenu "Espressif IoT Development Framework Configuration"
                 If enabled, RTL files will be produced during compilation. These files
                 can be used by other tools, for example to calculate call graphs.
 
+        choice COMPILER_RT_LIB
+            prompt "Compiler runtime library"
+            default COMPILER_RT_LIB_CLANGRT if IDF_TOOLCHAIN_CLANG
+            default COMPILER_RT_LIB_HOST if IDF_TARGET_LINUX
+            default COMPILER_RT_LIB_GCCLIB
+            help
+                Select runtime library to be used by compiler.
+                - GCC toolchain supports libgcc only.
+                - Clang allows to choose between libgcc or libclang_rt.
+                - For host builds ("linux" target), uses the default library.
+
+            config COMPILER_RT_LIB_GCCLIB
+                depends on !IDF_TARGET_LINUX
+                bool "libgcc"
+            config COMPILER_RT_LIB_CLANGRT
+                depends on IDF_TOOLCHAIN_CLANG && !IDF_TARGET_LINUX
+                bool "libclang_rt"
+            config COMPILER_RT_LIB_HOST
+                depends on IDF_TARGET_LINUX
+                bool "Host"
+        endchoice
+
+        config COMPILER_RT_LIB_NAME
+            string
+            default "clang_rt.builtins" if COMPILER_RT_LIB_CLANGRT
+            default "gcc" if COMPILER_RT_LIB_GCCLIB
+            default "" if COMPILER_RT_LIB_HOST
+
     endmenu # Compiler Options
 
     menu "Component config"
         source "$COMPONENT_KCONFIGS_SOURCE_FILE"
     endmenu
+
+    config IDF_EXPERIMENTAL_FEATURES
+        bool "Make experimental features visible"
+        default "n"
+        help
+            By enabling this option, ESP-IDF experimental feature options will be visible.
+
+            Note you should still enable a certain experimental feature option to use it, and you
+            should read the corresponding risk warning and known issue list carefully.
+
+            Current experimental feature list:
+
+            - CONFIG_ESPTOOLPY_FLASHFREQ_120M
+            - CONFIG_SPIRAM_SPEED_120M
+            - CONFIG_SPI_FLASH_32BIT_ADDR_ENABLE
+            - CONFIG_FREERTOS_USE_KERNEL_10_5_1

@@ -493,17 +493,17 @@ int wpa_parse_wpa_ie_rsn(const u8 *rsn_ie, size_t rsn_ie_len,
 	}
 
 	if (left >= 2) {
-		data->num_pmkid = WPA_GET_LE16(pos);
+		u16 num_pmkid = WPA_GET_LE16(pos);
 		pos += 2;
 		left -= 2;
-		if (left < (int) data->num_pmkid * PMKID_LEN) {
+		if (num_pmkid > (unsigned int) left / PMKID_LEN) {
 			wpa_printf(MSG_DEBUG, "%s: PMKID underflow "
-				   "(num_pmkid=%lu left=%d)",
-				   __func__, (unsigned long) data->num_pmkid,
-				   left);
+				   "(num_pmkid=%u left=%d)",
+				   __func__, num_pmkid, left);
 			data->num_pmkid = 0;
 			return -9;
 		} else {
+			data->num_pmkid = num_pmkid;
 			data->pmkid = pos;
 			pos += data->num_pmkid * PMKID_LEN;
 			left -= data->num_pmkid * PMKID_LEN;
@@ -1171,26 +1171,28 @@ int wpa_pmk_to_ptk(const u8 *pmk, size_t pmk_len, const char *label,
  * PMKID = HMAC-SHA1-128(PMK, "PMK Name" || AA || SPA)
  */
 void rsn_pmkid(const u8 *pmk, size_t pmk_len, const u8 *aa, const u8 *spa,
-	       u8 *pmkid, int use_sha256)
+	       u8 *pmkid, int akmp)
 {
-	char title[9];
+	char *title = "PMK Name";
 	const u8 *addr[3];
 	const size_t len[3] = { 8, ETH_ALEN, ETH_ALEN };
 	unsigned char hash[SHA256_MAC_LEN];
 
-    os_memcpy(title, "PMK Name", sizeof("PMK Name"));
 	addr[0] = (u8 *) title;
 	addr[1] = aa;
 	addr[2] = spa;
 
 #ifdef CONFIG_IEEE80211W
-	if (use_sha256) {
+	if (wpa_key_mgmt_sha256(akmp)) {
+		wpa_printf(MSG_DEBUG, "RSN: Derive PMKID using HMAC-SHA-256");
 		hmac_sha256_vector(pmk, pmk_len, 3, addr, len, hash);
-	}
-	else
+	} else
 #endif /* CONFIG_IEEE80211W */
-	hmac_sha1_vector(pmk, pmk_len, 3, addr, len, hash);
-	memcpy(pmkid, hash, PMKID_LEN);
+	{
+		wpa_printf(MSG_DEBUG, "RSN: Derive PMKID using HMAC-SHA-1");
+		hmac_sha1_vector(pmk, pmk_len, 3, addr, len, hash);
+	}
+	os_memcpy(pmkid, hash, PMKID_LEN);
 }
 
 

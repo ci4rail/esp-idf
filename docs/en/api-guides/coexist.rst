@@ -1,5 +1,6 @@
 RF Coexistence
 ==================
+
 :link_to_translation:`zh_CN:[中文]`
 
 Overview
@@ -10,7 +11,8 @@ Overview
 
 Supported Coexistence Scenario for {IDF_TARGET_NAME}
 ---------------------------------------------------------------------
-.. only:: esp32c3 or esp32s3 or esp32
+
+.. only:: esp32c3 or esp32s3 or esp32 or esp32c6
 
   .. table:: Supported Features of Wi-Fi and BLE Coexistence
 
@@ -75,6 +77,7 @@ Supported Coexistence Scenario for {IDF_TARGET_NAME}
   X: not supported
   S: supported and performance is stable in STA mode, otherwise not supported
 
+
 Coexistence Mechanism and Policy
 ------------------------------------------------
 
@@ -111,6 +114,8 @@ The RF resource allocation mechanism is based on priority. As shown below, both 
     }
 
 
+.. _coexist_policy:
+
 Coexistence Policy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -122,7 +127,7 @@ Coexistence Period and Time Slice
   Wi-Fi, BT, and BLE have their fixed time slice to use the RF. A coexistence period is divided into 3 time slices in the order of Wi-Fi, BT, and BLE. In the Wi-Fi slice, Wi-Fi's request to the coexistence arbitration module will have higher priority. Similarly, BT/BLE can enjoy higher priority at their own time slices. The duration of the coexistence period and the proportion of each time slice are divided into four categories according to the Wi-Fi status:
 
 
-.. only:: esp32c3 or esp32s3
+.. only:: esp32c3 or esp32s3 or esp32c6
 
   Wi-Fi and BLE have their fixed time slice to use the RF. In the Wi-Fi time slice, Wi-Fi will send a higher priority request to the coexistence arbitration module. Similarly, BLE can enjoy higher priority at their own time slice. The duration of the coexistence period and the proportion of each time slice are divided into four categories according to the Wi-Fi status:
 
@@ -130,7 +135,7 @@ Coexistence Period and Time Slice
 .. list::
 
   :esp32: 1) IDLE status: the coexistence of BT and BLE is controlled by Bluetooth module.
-  :esp32c3 or esp32s3: 1) IDLE status: RF module is controlled by Bluetooth module.
+  :esp32c3 or esp32s3 or esp32c6: 1) IDLE status: RF module is controlled by Bluetooth module.
   #) CONNECTED status: the coexistence period starts at the Target Beacon Transmission Time (TBTT) and is more than 100 ms.
   #) SCAN status: Wi-Fi slice and coexistence period are longer than in the CONNECTED status. To ensure Bluetooth performance, the Bluetooth time slice will also be adjusted accordingly.
   #) CONNECTING status: Wi-Fi slice is longer than in the CONNECTED status. To ensure Bluetooth performance, the Bluetooth time slice will also be adjusted accordingly.
@@ -151,6 +156,7 @@ Dynamic Priority
 
 The coexistence module assigns different priorities to different status of Wi-Fi and Bluetooth. And the priority for each status is dynamic. For example, in every N BLE Advertising events, there is always one event with high priority. If a high-priority BLE Advertising event occurs within the Wi-Fi time slice, the right to use the RF may be preempted by BLE.
 
+
 .. only:: SOC_WIFI_SUPPORTED
 
     Wi-Fi Connectionless Modules Coexistence
@@ -162,6 +168,7 @@ The coexistence module assigns different priorities to different status of Wi-Fi
 
     Please refer to :ref:`connectionless module power save <connectionless-module-power-save>` to get more detail.
 
+
 How to Use the Coexistence Feature
 --------------------------------------
 
@@ -169,6 +176,7 @@ Coexistence API
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 For most coexistence cases, {IDF_TARGET_NAME} will switch the coexistence status automatically without calling API. However, {IDF_TARGET_NAME} provides two APIs for the coexistence of BLE MESH and Wi-Fi. When the status of BLE MESH changes, call :code:`esp_coex_status_bit_clear` to clear the previous status first and then call :code:`esp_coex_status_bit_set` to set the current status.
+
 
 BLE MESH Coexistence Status
 """"""""""""""""""""""""""""""""""
@@ -183,7 +191,7 @@ As the firmware of Wi-Fi and Bluetooth are not aware of the current scenario of 
 Coexistence API Error Codes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-All coexistence APIs have custom return values, i.e. error codes. These error codes can be categorized as:
+All coexistence APIs have custom return values, i.e., error codes. These error codes can be categorized as:
 
   - No error. For example, the return value ESP_OK siginifies the API returned successfully.
   - Recoverable errors. For example, the return value ESP_ERR_INVALID_ARG signifies API parameter errors.

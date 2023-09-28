@@ -75,8 +75,8 @@ typedef union {
          */
         uint32_t xpd_comp:1;
         /** mode_comp : R/W; bitpos: [1]; default: 0;
-         *  1 to enable external reference from PAD[0]. 0 to enable internal reference,
-         *  meanwhile PAD[0] can be used as a regular GPIO.
+         *  1 to enable external reference from PAD[10]. 0 to enable internal reference,
+         *  meanwhile PAD[10] can be used as a regular GPIO.
          */
         uint32_t mode_comp:1;
         /** dref_comp : R/W; bitpos: [4:2]; default: 0;
@@ -140,15 +140,15 @@ typedef union {
  */
 typedef union {
     struct {
-        /** etm_ch0_event_sel : R/W; bitpos: [4:0]; default: 0;
+        /** etm_chn_event_sel : R/W; bitpos: [4:0]; default: 0;
          *  Etm event channel select gpio.
          */
-        uint32_t etm_ch0_event_sel:5;
+        uint32_t etm_chn_event_sel:5;
         uint32_t reserved_5:2;
-        /** etm_ch0_event_en : R/W; bitpos: [7]; default: 0;
+        /** etm_chn_event_en : R/W; bitpos: [7]; default: 0;
          *  Etm event send enable bit.
          */
-        uint32_t etm_ch0_event_en:1;
+        uint32_t etm_chn_event_en:1;
         uint32_t reserved_8:24;
     };
     uint32_t val;
@@ -275,8 +275,8 @@ typedef union {
 typedef struct gpio_sd_dev_t {
     volatile gpio_sigmadelta_chn_reg_t channel[4];
     uint32_t reserved_010[4];
-    volatile gpio_sigmadelta_misc_reg_t misc;
     volatile gpio_sigmadelta_clock_gate_reg_t clock_gate;
+    volatile gpio_sigmadelta_misc_reg_t misc;
 } gpio_sd_dev_t;
 
 typedef struct {
@@ -305,10 +305,15 @@ typedef struct {
     volatile gpio_ext_version_reg_t version;
 } gpio_ext_dev_t;
 
+// analog comparator is a stand alone peripheral, but it is connected to GPIO
+// so we rename it to analog_cmpr_dev_t from user's perspective
+typedef gpio_ext_dev_t analog_cmpr_dev_t;
+
 extern gpio_sd_dev_t SDM;
 extern gpio_glitch_filter_dev_t GLITCH_FILTER;
 extern gpio_etm_dev_t GPIO_ETM;
 extern gpio_ext_dev_t GPIO_EXT;
+extern analog_cmpr_dev_t ANALOG_CMPR;
 
 #ifndef __cplusplus
 _Static_assert(sizeof(gpio_ext_dev_t) == 0x100, "Invalid size of gpio_ext_dev_t structure");

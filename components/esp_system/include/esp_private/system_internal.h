@@ -18,6 +18,14 @@ extern "C" {
  * @note This function should not be called from FreeRTOS applications.
  *       Use esp_restart instead.
  *
+ * This function executes a CPU reset (see TRM).
+ *
+ * CPU resets do not reset digital peripherals, but this function will
+ * manually reset a subset of digital peripherals (depending on target) before
+ * carrying out the CPU reset.
+ *
+ * Memory protection is also cleared by a CPU reset.
+ *
  * This is an internal function called by esp_restart. It is called directly
  * by the panic handler and brownout detector interrupt.
  */
@@ -62,6 +70,11 @@ int64_t esp_system_get_time(void);
  * @returns the resolution in nanoseconds
  */
 uint32_t esp_system_get_time_resolution(void);
+
+/**
+ * @brief Before the system exit (e.g. panic, brownout, restart, etc.), this function is to be called to reset all necessary peripherals.
+ */
+void esp_system_reset_modules_on_exit(void);
 
 #ifdef __cplusplus
 }

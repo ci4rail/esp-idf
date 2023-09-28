@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -9,6 +9,8 @@
 #include <sys/param.h>
 #include "esp_log.h"
 #include "esp_intr_alloc.h"
+#include "esp_timer.h"
+#include "esp_check.h"
 #include "soc/soc_caps.h"
 #include "soc/soc_pins.h"
 #include "soc/gpio_periph.h"
@@ -20,16 +22,17 @@
 #include "sdmmc_private.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "esp_clk_tree.h"
 #include "soc/sdmmc_periph.h"
+#include "soc/soc_caps.h"
 #include "hal/gpio_hal.h"
 
 #define SDMMC_EVENT_QUEUE_LENGTH 32
 
-
-static void sdmmc_isr(void* arg);
+static void sdmmc_isr(void *arg);
 static void sdmmc_host_dma_init(void);
 
-static const char* TAG = "sdmmc_periph";
+static const char *TAG = "sdmmc_periph";
 static intr_handle_t s_intr_handle;
 static QueueHandle_t s_event_queue;
 static SemaphoreHandle_t s_io_intr_event;
@@ -53,7 +56,7 @@ static size_t s_slot_width[2] = {1, 1};
  * (for GPIO matrix).
  */
 #ifdef SOC_SDMMC_USE_GPIO_MATRIX
-static void configure_pin_gpio_matrix(uint8_t gpio_num, uint8_t gpio_matrix_sig, gpio_mode_t mode, const char* name);
+static void configure_pin_gpio_matrix(uint8_t gpio_num, uint8_t gpio_matrix_sig, gpio_mode_t mode, const char *name);
 #define configure_pin(name, slot, mode) \
     configure_pin_gpio_matrix(s_sdmmc_slot_gpio_num[slot].name, sdmmc_slot_gpio_sig[slot].name, mode, #name)
 static sdmmc_slot_io_info_t s_sdmmc_slot_gpio_num[SOC_SDMMC_NUM_SLOTS];
@@ -68,16 +71,29 @@ static void configure_pin_iomux(uint8_t gpio_num);
 
 static esp_err_t sdmmc_host_pullup_en_internal(int slot, int width);
 
-void sdmmc_host_reset(void)
+esp_err_t sdmmc_host_reset(void)
 {
     // Set reset bits
     SDMMC.ctrl.controller_reset = 1;
     SDMMC.ctrl.dma_reset = 1;
     SDMMC.ctrl.fifo_reset = 1;
+
     // Wait for the reset bits to be cleared by hardware
+    int64_t yield_delay_us = 100 * 1000; // initially 100ms
+    int64_t t0 = esp_timer_get_time();
+    int64_t t1 = 0;
     while (SDMMC.ctrl.controller_reset || SDMMC.ctrl.fifo_reset || SDMMC.ctrl.dma_reset) {
-        ;
+        t1 = esp_timer_get_time();
+        if (t1 - t0 > SDMMC_HOST_RESET_TIMEOUT_US) {
+            return ESP_ERR_TIMEOUT;
+        }
+        if (t1 - t0 > yield_delay_us) {
+            yield_delay_us *= 2;
+            vTaskDelay(1);
+        }
     }
+
+    return ESP_OK;
 }
 
 /* We have two clock divider stages:
@@ -107,34 +123,64 @@ void sdmmc_host_reset(void)
 
 static void sdmmc_host_set_clk_div(int div)
 {
-    // Set frequency to 160MHz / div
-    // div = p + 1
-    // duty cycle = (h + 1)/(p + 1) (should be = 1/2)
+    /**
+     * Set frequency to 160MHz / div
+     *
+     * n: counter resets at div_factor_n.
+     * l: negedge when counter equals div_factor_l.
+     * h: posedge when counter equals div_factor_h.
+     *
+     * We set the duty cycle to 1/2
+     */
+#if CONFIG_IDF_TARGET_ESP32
     assert (div > 1 && div <= 16);
-    int p = div - 1;
+    int h = div - 1;
+    int l = div / 2 - 1;
+
+    SDMMC.clock.div_factor_h = h;
+    SDMMC.clock.div_factor_l = l;
+    SDMMC.clock.div_factor_n = h;
+
+    // Set phases for in/out clocks
+    // 180 degree phase on input and output clocks
+    SDMMC.clock.phase_dout = 4;
+    SDMMC.clock.phase_din = 4;
+    SDMMC.clock.phase_core = 0;
+
+#elif CONFIG_IDF_TARGET_ESP32S3
+    assert (div > 1 && div <= 16);
+    int l = div - 1;
     int h = div / 2 - 1;
 
-    SDMMC.clock.div_factor_p = p;
     SDMMC.clock.div_factor_h = h;
-    SDMMC.clock.div_factor_m = p;
+    SDMMC.clock.div_factor_l = l;
+    SDMMC.clock.div_factor_n = l;
 
-    // Make sure 160 MHz source clock is used
+    // Make sure SOC_MOD_CLK_PLL_F160M (160 MHz) source clock is used
 #if SOC_SDMMC_SUPPORT_XTAL_CLOCK
     SDMMC.clock.clk_sel = 1;
 #endif
-#if SOC_SDMMC_USE_GPIO_MATRIX
-    // 90 degree phase on input and output clocks
-    const int inout_clock_phase = 1;
-#else
-    // 180 degree phase on input and output clocks
-    const int inout_clock_phase = 4;
-#endif
-    // Set phases for in/out clocks
-    SDMMC.clock.phase_dout = inout_clock_phase;
-    SDMMC.clock.phase_din = inout_clock_phase;
+
     SDMMC.clock.phase_core = 0;
+    /* 90 deg. delay for cclk_out to satisfy large hold time for SDR12 (up to 25MHz) and SDR25 (up to 50MHz) modes.
+     * Whether this delayed clock will be used depends on use_hold_reg bit in CMD structure,
+     * determined when sending out the command.
+     */
+    SDMMC.clock.phase_dout = 1;
+    SDMMC.clock.phase_din = 0;
+#endif  //CONFIG_IDF_TARGET_ESP32S3
+
     // Wait for the clock to propagate
     esp_rom_delay_us(10);
+}
+
+static inline int s_get_host_clk_div(void)
+{
+#if CONFIG_IDF_TARGET_ESP32
+    return SDMMC.clock.div_factor_h + 1;
+#elif CONFIG_IDF_TARGET_ESP32S3
+    return SDMMC.clock.div_factor_l + 1;
+#endif
 }
 
 static void sdmmc_host_input_clk_disable(void)
@@ -142,7 +188,7 @@ static void sdmmc_host_input_clk_disable(void)
     SDMMC.clock.val = 0;
 }
 
-static void sdmmc_host_clock_update_command(int slot)
+static esp_err_t sdmmc_host_clock_update_command(int slot)
 {
     // Clock update command (not a real command; just updates CIU registers)
     sdmmc_hw_cmd_t cmd_val = {
@@ -151,9 +197,18 @@ static void sdmmc_host_clock_update_command(int slot)
         .wait_complete = 1
     };
     bool repeat = true;
-    while(repeat) {
-        sdmmc_host_start_command(slot, cmd_val, 0);
+    while (repeat) {
+
+        ESP_RETURN_ON_ERROR(sdmmc_host_start_command(slot, cmd_val, 0), TAG, "sdmmc_host_start_command returned 0x%x", err_rc_);
+
+        int64_t yield_delay_us = 100 * 1000; // initially 100ms
+        int64_t t0 = esp_timer_get_time();
+        int64_t t1 = 0;
         while (true) {
+            t1 = esp_timer_get_time();
+            if (t1 - t0  > SDMMC_HOST_CLOCK_UPDATE_CMD_TIMEOUT_US) {
+                return ESP_ERR_TIMEOUT;
+            }
             // Sending clock update command to the CIU can generate HLE error.
             // According to the manual, this is okay and we must retry the command.
             if (SDMMC.rintsts.hle) {
@@ -167,12 +222,22 @@ static void sdmmc_host_clock_update_command(int slot)
                 repeat = false;
                 break;
             }
+            if (t1 - t0 > yield_delay_us) {
+                yield_delay_us *= 2;
+                vTaskDelay(1);
+            }
         }
     }
+
+    return ESP_OK;
 }
 
 void sdmmc_host_get_clk_dividers(const uint32_t freq_khz, int *host_div, int *card_div)
 {
+    uint32_t clk_src_freq_hz = 0;
+    esp_clk_tree_src_get_freq_hz(SDMMC_CLK_SRC_DEFAULT, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &clk_src_freq_hz);
+    assert(clk_src_freq_hz == (160 * 1000 * 1000));
+
     // Calculate new dividers
     if (freq_khz >= SDMMC_FREQ_HIGHSPEED) {
         *host_div = 4;       // 160 MHz / 4 = 40 MHz
@@ -189,14 +254,14 @@ void sdmmc_host_get_clk_dividers(const uint32_t freq_khz, int *host_div, int *ca
          * if exceeded, combine with the card divider to keep reasonable precision (applies mainly to low frequencies)
          * effective frequency range: 400 kHz - 32 MHz (32.1 - 39.9 MHz cannot be covered with given divider scheme)
          */
-        *host_div = (2 * APB_CLK_FREQ) / (freq_khz * 1000);
+        *host_div = (clk_src_freq_hz) / (freq_khz * 1000);
         if (*host_div > 15 ) {
             *host_div = 2;
-            *card_div = APB_CLK_FREQ / (2 * freq_khz * 1000);
-            if ( (APB_CLK_FREQ % (2 * freq_khz * 1000)) > 0 ) {
+            *card_div = (clk_src_freq_hz / 2) / (2 * freq_khz * 1000);
+            if ( ((clk_src_freq_hz / 2) % (2 * freq_khz * 1000)) > 0 ) {
                 (*card_div)++;
             }
-        } else if ( ((2 * APB_CLK_FREQ) % (freq_khz * 1000)) > 0 ) {
+        } else if ((clk_src_freq_hz % (freq_khz * 1000)) > 0) {
             (*host_div)++;
         }
     }
@@ -204,7 +269,10 @@ void sdmmc_host_get_clk_dividers(const uint32_t freq_khz, int *host_div, int *ca
 
 static int sdmmc_host_calc_freq(const int host_div, const int card_div)
 {
-    return 2 * APB_CLK_FREQ / host_div / ((card_div == 0) ? 1 : card_div * 2) / 1000;
+    uint32_t clk_src_freq_hz = 0;
+    esp_clk_tree_src_get_freq_hz(SDMMC_CLK_SRC_DEFAULT, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &clk_src_freq_hz);
+    assert(clk_src_freq_hz == (160 * 1000 * 1000));
+    return clk_src_freq_hz / host_div / ((card_div == 0) ? 1 : card_div * 2) / 1000;
 }
 
 esp_err_t sdmmc_host_set_card_clk(int slot, uint32_t freq_khz)
@@ -215,7 +283,12 @@ esp_err_t sdmmc_host_set_card_clk(int slot, uint32_t freq_khz)
 
     // Disable clock first
     SDMMC.clkena.cclk_enable &= ~BIT(slot);
-    sdmmc_host_clock_update_command(slot);
+    esp_err_t err = sdmmc_host_clock_update_command(slot);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "disabling clk failed");
+        ESP_LOGE(TAG, "%s: sdmmc_host_clock_update_command returned 0x%x", __func__, err);
+        return err;
+    }
 
     int host_div = 0;   /* clock divider of the host (SDMMC.clock) */
     int card_div = 0;   /* 1/2 of card clock divider (SDMMC.clkdiv) */
@@ -236,12 +309,22 @@ esp_err_t sdmmc_host_set_card_clk(int slot, uint32_t freq_khz)
             break;
     }
     sdmmc_host_set_clk_div(host_div);
-    sdmmc_host_clock_update_command(slot);
+    err = sdmmc_host_clock_update_command(slot);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "setting clk div failed");
+        ESP_LOGE(TAG, "%s: sdmmc_host_clock_update_command returned 0x%x", __func__, err);
+        return err;
+    }
 
     // Re-enable clocks
     SDMMC.clkena.cclk_enable |= BIT(slot);
     SDMMC.clkena.cclk_low_power |= BIT(slot);
-    sdmmc_host_clock_update_command(slot);
+    err = sdmmc_host_clock_update_command(slot);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "re-enabling clk failed");
+        ESP_LOGE(TAG, "%s: sdmmc_host_clock_update_command returned 0x%x", __func__, err);
+        return err;
+    }
 
     // set data timeout
     const uint32_t data_timeout_ms = 100;
@@ -256,7 +339,7 @@ esp_err_t sdmmc_host_set_card_clk(int slot, uint32_t freq_khz)
     return ESP_OK;
 }
 
-esp_err_t sdmmc_host_get_real_freq(int slot, int* real_freq_khz)
+esp_err_t sdmmc_host_get_real_freq(int slot, int *real_freq_khz)
 {
     if (real_freq_khz == NULL) {
         return ESP_ERR_INVALID_ARG;
@@ -265,14 +348,58 @@ esp_err_t sdmmc_host_get_real_freq(int slot, int* real_freq_khz)
         return ESP_ERR_INVALID_ARG;
     }
 
-    int host_div = SDMMC.clock.div_factor_p + 1;
+    int host_div = s_get_host_clk_div();
     int card_div = slot == 0 ? SDMMC.clkdiv.div0 : SDMMC.clkdiv.div1;
     *real_freq_khz = sdmmc_host_calc_freq(host_div, card_div);
 
     return ESP_OK;
 }
 
-esp_err_t sdmmc_host_start_command(int slot, sdmmc_hw_cmd_t cmd, uint32_t arg) {
+esp_err_t sdmmc_host_set_input_delay(int slot, sdmmc_delay_phase_t delay_phase)
+{
+#if CONFIG_IDF_TARGET_ESP32
+    //DIG-217
+    ESP_LOGW(TAG, "esp32 doesn't support input phase delay, fallback to 0 delay");
+    return ESP_ERR_NOT_SUPPORTED;
+#else
+    ESP_RETURN_ON_FALSE((slot == 0 || slot == 1), ESP_ERR_INVALID_ARG, TAG, "invalid slot");
+    ESP_RETURN_ON_FALSE(delay_phase < SOC_SDMMC_DELAY_PHASE_NUM, ESP_ERR_INVALID_ARG, TAG, "invalid delay phase");
+
+    uint32_t clk_src_freq_hz = 0;
+    ESP_RETURN_ON_ERROR(esp_clk_tree_src_get_freq_hz(SDMMC_CLK_SRC_DEFAULT, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &clk_src_freq_hz),
+                        TAG, "get source clock frequency failed");
+
+    //Now we're in high speed. Note ESP SDMMC Host HW only supports integer divider.
+    int delay_phase_num = 0;
+    switch (delay_phase) {
+        case SDMMC_DELAY_PHASE_1:
+            SDMMC.clock.phase_din = 0x1;
+            delay_phase_num = 1;
+            break;
+        case SDMMC_DELAY_PHASE_2:
+            SDMMC.clock.phase_din = 0x4;
+            delay_phase_num = 2;
+            break;
+        case SDMMC_DELAY_PHASE_3:
+            SDMMC.clock.phase_din = 0x6;
+            delay_phase_num = 3;
+            break;
+        default:
+            SDMMC.clock.phase_din = 0x0;
+            break;
+    }
+
+    int src_clk_period_ps = (1 * 1000 * 1000) / (clk_src_freq_hz / (1 * 1000 * 1000));
+    int phase_diff_ps = src_clk_period_ps * (SDMMC.clock.div_factor_n + 1) / SOC_SDMMC_DELAY_PHASE_NUM;
+    ESP_LOGD(TAG, "difference between input delay phases is %d ps", phase_diff_ps);
+    ESP_LOGI(TAG, "host sampling edge is delayed by %d ps", phase_diff_ps * delay_phase_num);
+#endif
+
+    return ESP_OK;
+}
+
+esp_err_t sdmmc_host_start_command(int slot, sdmmc_hw_cmd_t cmd, uint32_t arg)
+{
     if (!(slot == 0 || slot == 1)) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -282,8 +409,21 @@ esp_err_t sdmmc_host_start_command(int slot, sdmmc_hw_cmd_t cmd, uint32_t arg) {
     if (cmd.data_expected && cmd.rw && (SDMMC.wrtprt.cards & BIT(slot)) != 0) {
         return ESP_ERR_INVALID_STATE;
     }
+    /* Outputs should be synchronized to cclk_out */
+    cmd.use_hold_reg = 1;
+
+    int64_t yield_delay_us = 100 * 1000; // initially 100ms
+    int64_t t0 = esp_timer_get_time();
+    int64_t t1 = 0;
     while (SDMMC.cmd.start_command == 1) {
-        ;
+        t1 = esp_timer_get_time();
+        if (t1 - t0 > SDMMC_HOST_START_CMD_TIMEOUT_US) {
+            return ESP_ERR_TIMEOUT;
+        }
+        if (t1 - t0 > yield_delay_us) {
+            yield_delay_us *= 2;
+            vTaskDelay(1);
+        }
     }
     SDMMC.cmdarg = arg;
     cmd.card_num = slot;
@@ -305,7 +445,12 @@ esp_err_t sdmmc_host_init(void)
     sdmmc_host_set_clk_div(2);
 
     // Reset
-    sdmmc_host_reset();
+    esp_err_t err = sdmmc_host_reset();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "%s: sdmmc_host_reset returned 0x%x", __func__, err);
+        return err;
+    }
+
     ESP_LOGD(TAG, "peripheral version %"PRIx32", hardware config %08"PRIx32, SDMMC.verid, SDMMC.hcon);
 
     // Clear interrupt status and set interrupt mask to known state
@@ -383,7 +528,7 @@ static void configure_pin_iomux(uint8_t gpio_num)
 
 #elif SOC_SDMMC_USE_GPIO_MATRIX
 
-static void configure_pin_gpio_matrix(uint8_t gpio_num, uint8_t gpio_matrix_sig, gpio_mode_t mode, const char* name)
+static void configure_pin_gpio_matrix(uint8_t gpio_num, uint8_t gpio_matrix_sig, gpio_mode_t mode, const char *name)
 {
     assert (gpio_num != (uint8_t) GPIO_NUM_NC);
     ESP_LOGD(TAG, "using GPIO%d as %s pin", gpio_num, name);
@@ -400,7 +545,7 @@ static void configure_pin_gpio_matrix(uint8_t gpio_num, uint8_t gpio_matrix_sig,
 
 #endif // SOC_SDMMC_USE_{IOMUX,GPIO_MATRIX}
 
-esp_err_t sdmmc_host_init_slot(int slot, const sdmmc_slot_config_t* slot_config)
+esp_err_t sdmmc_host_init_slot(int slot, const sdmmc_slot_config_t *slot_config)
 {
     if (!s_intr_handle) {
         return ESP_ERR_INVALID_STATE;
@@ -413,15 +558,15 @@ esp_err_t sdmmc_host_init_slot(int slot, const sdmmc_slot_config_t* slot_config)
     }
     int gpio_cd = slot_config->cd;
     int gpio_wp = slot_config->wp;
+    bool gpio_wp_polarity = slot_config->flags & SDMMC_SLOT_FLAG_WP_ACTIVE_HIGH;
     uint8_t slot_width = slot_config->width;
 
     // Configure pins
-    const sdmmc_slot_info_t* slot_info = &sdmmc_slot_info[slot];
+    const sdmmc_slot_info_t *slot_info = &sdmmc_slot_info[slot];
 
     if (slot_width == SDMMC_SLOT_WIDTH_DEFAULT) {
         slot_width = slot_info->width;
-    }
-    else if (slot_width > slot_info->width) {
+    } else if (slot_width > slot_info->width) {
         return ESP_ERR_INVALID_ARG;
     }
     s_slot_width[slot] = slot_width;
@@ -505,13 +650,16 @@ esp_err_t sdmmc_host_init_slot(int slot, const sdmmc_slot_config_t* slot_config)
         // if not set, default to WP high (not write protected)
         matrix_in_wp = GPIO_MATRIX_CONST_ONE_INPUT;
     }
-    // WP signal is normally active low, but hardware expects
-    // an active-high signal, so invert it in GPIO matrix
-    esp_rom_gpio_connect_in_signal(matrix_in_wp, slot_info->write_protect, true);
+    // As hardware expects an active-high signal,
+    // if WP signal is active low, then invert it in GPIO matrix,
+    // else keep it in its default state
+    esp_rom_gpio_connect_in_signal(matrix_in_wp, slot_info->write_protect, (gpio_wp_polarity? false : true));
 
     // By default, set probing frequency (400kHz) and 1-bit bus
     esp_err_t ret = sdmmc_host_set_card_clk(slot, 400);
     if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "setting probing freq and 1-bit bus failed");
+        ESP_LOGE(TAG, "%s: sdmmc_host_set_card_clk returned 0x%x", __func__, ret);
         return ret;
     }
     ret = sdmmc_host_set_bus_width(slot, 1);
@@ -538,7 +686,7 @@ esp_err_t sdmmc_host_deinit(void)
     return ESP_OK;
 }
 
-esp_err_t sdmmc_host_wait_for_event(int tick_count, sdmmc_event_t* out_event)
+esp_err_t sdmmc_host_wait_for_event(int tick_count, sdmmc_event_t *out_event)
 {
     if (!out_event) {
         return ESP_ERR_INVALID_ARG;
@@ -609,6 +757,20 @@ esp_err_t sdmmc_host_set_bus_ddr_mode(int slot, bool ddr_enabled)
     return ESP_OK;
 }
 
+esp_err_t sdmmc_host_set_cclk_always_on(int slot, bool cclk_always_on)
+{
+    if (!(slot == 0 || slot == 1)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (cclk_always_on) {
+        SDMMC.clkena.cclk_low_power &= ~BIT(slot);
+    } else {
+        SDMMC.clkena.cclk_low_power |= BIT(slot);
+    }
+    sdmmc_host_clock_update_command(slot);
+    return ESP_OK;
+}
+
 static void sdmmc_host_dma_init(void)
 {
     SDMMC.ctrl.dma_enable = 1;
@@ -619,7 +781,6 @@ static void sdmmc_host_dma_init(void)
     SDMMC.idinten.ti = 1;
 }
 
-
 void sdmmc_host_dma_stop(void)
 {
     SDMMC.ctrl.use_internal_dma = 0;
@@ -628,7 +789,7 @@ void sdmmc_host_dma_stop(void)
     SDMMC.bmod.enable = 0;
 }
 
-void sdmmc_host_dma_prepare(sdmmc_desc_t* desc, size_t block_size, size_t data_size)
+void sdmmc_host_dma_prepare(sdmmc_desc_t *desc, size_t block_size, size_t data_size)
 {
     // Set size of data and DMA descriptor pointer
     SDMMC.bytcnt = data_size;
@@ -703,7 +864,8 @@ esp_err_t sdmmc_host_io_int_wait(int slot, TickType_t timeout_ticks)
  * may be dropped. We ignore this problem for now, since the there are no other
  * interesting events which can get lost due to this.
  */
-static void sdmmc_isr(void* arg) {
+static void sdmmc_isr(void *arg)
+{
     QueueHandle_t queue = (QueueHandle_t) arg;
     sdmmc_event_t event;
     int higher_priority_task_awoken = pdFALSE;
@@ -722,7 +884,7 @@ static void sdmmc_isr(void* arg) {
 
     uint32_t sdio_pending = SDMMC.mintsts.sdio;
     if (sdio_pending) {
-        // disable the interrupt (no need to clear here, this is done in sdmmc_host_io_wait_int)
+        // disable the interrupt (no need to clear here, this is done in sdmmc_host_io_int_wait)
         SDMMC.intmask.sdio &= ~sdio_pending;
         xSemaphoreGiveFromISR(s_io_intr_event, &higher_priority_task_awoken);
     }

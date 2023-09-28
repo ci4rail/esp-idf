@@ -11,7 +11,6 @@
 #include "esp_log.h"
 #include "esp_rom_gpio.h"
 #include "esp_rom_efuse.h"
-#include "esp32c6/rom/gpio.h"
 #include "esp32c6/rom/spi_flash.h"
 #include "esp32c6/rom/efuse.h"
 #include "soc/gpio_periph.h"
@@ -139,19 +138,26 @@ static void print_flash_info(const esp_image_header_t *bootloader_hdr)
 
     /* SPI mode could have been set to QIO during boot already,
        so test the SPI registers not the flash header */
-    uint32_t spi_ctrl = REG_READ(SPI_MEM_CTRL_REG(0));
-    if (spi_ctrl & SPI_MEM_FREAD_QIO) {
+    esp_rom_spiflash_read_mode_t spi_mode = bootloader_flash_get_spi_mode();
+    switch (spi_mode) {
+    case ESP_ROM_SPIFLASH_QIO_MODE:
         str = "QIO";
-    } else if (spi_ctrl & SPI_MEM_FREAD_QUAD) {
+        break;
+    case ESP_ROM_SPIFLASH_QOUT_MODE:
         str = "QOUT";
-    } else if (spi_ctrl & SPI_MEM_FREAD_DIO) {
+        break;
+    case ESP_ROM_SPIFLASH_DIO_MODE:
         str = "DIO";
-    } else if (spi_ctrl & SPI_MEM_FREAD_DUAL) {
+        break;
+    case ESP_ROM_SPIFLASH_DOUT_MODE:
         str = "DOUT";
-    } else if (spi_ctrl & SPI_MEM_FASTRD_MODE) {
+        break;
+    case ESP_ROM_SPIFLASH_FASTRD_MODE:
         str = "FAST READ";
-    } else {
+        break;
+    default:
         str = "SLOW READ";
+        break;
     }
     ESP_EARLY_LOGI(TAG, "SPI Mode       : %s", str);
 
@@ -198,6 +204,12 @@ esp_err_t bootloader_init_spi_flash(void)
 
 #if CONFIG_ESPTOOLPY_FLASHMODE_QIO || CONFIG_ESPTOOLPY_FLASHMODE_QOUT
     bootloader_enable_qio_mode();
+#endif
+
+    // Since the workaround in IDF-6709, the spi_speed value in the bootloader header
+    // is not the real value, overwrite it.
+#if CONFIG_ESPTOOLPY_FLASHFREQ_80M
+    bootloader_image_hdr.spi_speed = ESP_IMAGE_SPI_SPEED_DIV_1;
 #endif
 
     print_flash_info(&bootloader_image_hdr);

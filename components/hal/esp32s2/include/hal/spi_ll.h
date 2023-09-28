@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -41,7 +41,9 @@ extern "C" {
 #define HAL_SPI_SWAP_DATA_TX(data, len) HAL_SWAP32((uint32_t)(data) << (32 - len))
 #define SPI_LL_GET_HW(ID) ((ID)==0? ({abort();NULL;}):((ID)==1? &GPSPI2 : &GPSPI3))
 
-#define SPI_LL_DATA_MAX_BIT_LEN (1 << 23)
+#define SPI_LL_DMA_MAX_BIT_LEN    (1 << 23)    //reg len: 23 bits
+#define SPI_LL_CPU_MAX_BIT_LEN    (18 * 32)    //Fifo len: 18 words
+#define SPI_LL_MOSI_FREE_LEVEL    1            //Default level after bus initialized
 
 /**
  * The data structure holding calculated clock configuration. Since the
@@ -71,7 +73,6 @@ typedef enum {
     SPI_LL_INTR_CMDA =          BIT(13),    ///< Has received CMDA command. Only available in slave HD.
     SPI_LL_INTR_SEG_DONE =      BIT(14),
 } spi_ll_intr_t;
-FLAG_ATTR(spi_ll_intr_t)
 
 ///< Flags for conditions under which the transaction length should be recorded
 typedef enum {
@@ -80,7 +81,6 @@ typedef enum {
     SPI_LL_TRANS_LEN_COND_WRDMA =   BIT(2), ///< WRDMA length will be recorded
     SPI_LL_TRANS_LEN_COND_RDDMA =   BIT(3), ///< RDDMA length will be recorded
 } spi_ll_trans_len_cond_t;
-FLAG_ATTR(spi_ll_trans_len_cond_t)
 
 // SPI base command in esp32s2
 typedef enum {
@@ -175,6 +175,26 @@ static inline void spi_ll_slave_hd_init(spi_dev_t *hw)
 }
 
 /**
+ * Determine and unify the default level of mosi line when bus free
+ *
+ * @param hw Beginning address of the peripheral registers.
+ */
+static inline void spi_ll_set_mosi_free_level(spi_dev_t *hw, bool level)
+{
+    hw->ctrl.d_pol = level;     //set default level for MOSI only on IDLE state
+}
+
+/**
+ * Apply the register configurations and wait until it's done
+ *
+ * @param hw Beginning address of the peripheral registers.
+ */
+static inline void spi_ll_apply_config(spi_dev_t *hw)
+{
+    // S2 don't need this option
+}
+
+/**
  * Check whether user-defined transaction is done.
  *
  * @param hw Beginning address of the peripheral registers.
@@ -187,21 +207,11 @@ static inline bool spi_ll_usr_is_done(spi_dev_t *hw)
 }
 
 /**
- * Trigger start of user-defined transaction for master.
+ * Trigger start of user-defined transaction.
  *
  * @param hw Beginning address of the peripheral registers.
  */
-static inline void spi_ll_master_user_start(spi_dev_t *hw)
-{
-    hw->cmd.usr = 1;
-}
-
-/**
- * Trigger start of user-defined transaction for slave.
- *
- * @param hw Beginning address of the peripheral registers.
- */
-static inline void spi_ll_slave_user_start(spi_dev_t *hw)
+static inline void spi_ll_user_start(spi_dev_t *hw)
 {
     hw->cmd.usr = 1;
 }

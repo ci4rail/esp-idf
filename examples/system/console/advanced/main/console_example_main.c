@@ -19,13 +19,29 @@
 #include "esp_vfs_fat.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "soc/soc_caps.h"
 #include "cmd_system.h"
 #include "cmd_wifi.h"
 #include "cmd_nvs.h"
 
+/*
+ * We warn if a secondary serial console is enabled. A secondary serial console is always output-only and
+ * hence not very useful for interactive console applications. If you encounter this warning, consider disabling
+ * the secondary serial console in menuconfig unless you know what you are doing.
+ */
+#if SOC_USB_SERIAL_JTAG_SUPPORTED
+#if !CONFIG_ESP_CONSOLE_SECONDARY_NONE
+#warning "A secondary serial console is not useful when using the console component. Please disable it in menuconfig."
+#endif
+#endif
+
 #ifdef CONFIG_ESP_CONSOLE_USB_CDC
 #error This example is incompatible with USB CDC console. Please try "console_usb" example instead.
 #endif // CONFIG_ESP_CONSOLE_USB_CDC
+
+#ifdef CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+#error This example is incompatible with USB serial JTAG console.
+#endif // CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
 
 static const char* TAG = "example";
 #define PROMPT_STR CONFIG_IDF_TARGET
@@ -150,8 +166,11 @@ void app_main(void)
 
     /* Register commands */
     esp_console_register_help_command();
-    register_system();
+    register_system_common();
+    register_system_sleep();
+#if SOC_WIFI_SUPPORTED
     register_wifi();
+#endif
     register_nvs();
 
     /* Prompt to be printed before each line.

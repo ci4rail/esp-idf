@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2017-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2017-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -12,6 +12,7 @@
 #include "sdkconfig.h"
 #ifdef CONFIG_ESP_TLS_USING_MBEDTLS
 #include "mbedtls/ssl.h"
+#include "mbedtls/x509_crt.h"
 #ifdef CONFIG_ESP_TLS_SERVER_SESSION_TICKETS
 #include "mbedtls/ssl_ticket.h"
 #include "mbedtls/entropy.h"
@@ -70,6 +71,15 @@ typedef struct tls_keep_alive_cfg {
     int keep_alive_interval;              /*!< Keep-alive interval time (second) */
     int keep_alive_count;                 /*!< Keep-alive packet retry send count */
 } tls_keep_alive_cfg_t;
+
+/*
+* @brief ESP-TLS Address families
+*/
+typedef enum esp_tls_addr_family {
+    ESP_TLS_AF_UNSPEC = 0,                /**< Unspecified address family. */
+    ESP_TLS_AF_INET,                      /**< IPv4 address family. */
+    ESP_TLS_AF_INET6,                     /**< IPv6 address family. */
+} esp_tls_addr_family_t;
 
 /**
  * @brief      ESP-TLS configuration parameters
@@ -141,6 +151,10 @@ typedef struct esp_tls_cfg {
     unsigned int clientkey_password_len;    /*!< String length of the password pointed to by
                                                  clientkey_password */
 
+    bool use_ecdsa_peripheral;              /*!< Use the ECDSA peripheral for the private key operations */
+
+    uint8_t ecdsa_key_efuse_blk;            /*!< The efuse block where the ECDSA key is stored */
+
     bool non_block;                         /*!< Configure non-blocking mode. If set to true the
                                                  underneath socket will be configured in non
                                                  blocking mode after tls session is established */
@@ -182,6 +196,10 @@ typedef struct esp_tls_cfg {
 #ifdef CONFIG_ESP_TLS_CLIENT_SESSION_TICKETS
     esp_tls_client_session_t *client_session; /*! Pointer for the client session ticket context. */
 #endif /* CONFIG_ESP_TLS_CLIENT_SESSION_TICKETS */
+
+    esp_tls_addr_family_t addr_family;      /*!< The address family to use when connecting to a host. */
+    const int *ciphersuites_list;           /*!< Pointer to a zero-terminated array of IANA identifiers of TLS ciphersuites.
+                                                Please check the list validity by esp_tls_get_ciphersuites_list() API */
 } esp_tls_cfg_t;
 
 #ifdef CONFIG_ESP_TLS_SERVER
@@ -261,6 +279,10 @@ typedef struct esp_tls_cfg_server {
 
     unsigned int serverkey_password_len;        /*!< String length of the password pointed to by
                                                      serverkey_password */
+
+    bool use_ecdsa_peripheral;                  /*!< Use ECDSA peripheral to use private key */
+
+    uint8_t ecdsa_key_efuse_blk;                /*!< The efuse block where ECDSA key is stored */
 
     bool use_secure_element;                    /*!< Enable this option to use secure element or
                                                  atecc608a chip ( Integrated with ESP32-WROOM-32SE ) */
@@ -492,6 +514,42 @@ ssize_t esp_tls_get_bytes_avail(esp_tls_t *tls);
 esp_err_t esp_tls_get_conn_sockfd(esp_tls_t *tls, int *sockfd);
 
 /**
+ * @brief       Sets the connection socket file descriptor for the esp_tls session
+ *
+ * @param[in]   tls          handle to esp_tls context
+ *
+ * @param[in]   sockfd       sockfd value to set.
+ *
+ * @return     - ESP_OK on success and value of sockfd for the tls connection shall updated withthe provided value
+ *             - ESP_ERR_INVALID_ARG if (tls == NULL || sockfd < 0)
+ */
+esp_err_t esp_tls_set_conn_sockfd(esp_tls_t *tls, int sockfd);
+
+/**
+ * @brief       Gets the connection state for the esp_tls session
+ *
+ * @param[in]   tls          handle to esp_tls context
+ *
+ * @param[out]   conn_state   pointer to the connection state value.
+ *
+ * @return     - ESP_OK on success and value of sockfd for the tls connection shall updated withthe provided value
+ *             - ESP_ERR_INVALID_ARG (Invalid arguments)
+ */
+esp_err_t esp_tls_get_conn_state(esp_tls_t *tls, esp_tls_conn_state_t *conn_state);
+
+/**
+ * @brief       Sets the connection state for the esp_tls session
+ *
+ * @param[in]   tls          handle to esp_tls context
+ *
+ * @param[in]   conn_state   connection state value to set.
+ *
+ * @return     - ESP_OK on success and value of sockfd for the tls connection shall updated withthe provided value
+ *             - ESP_ERR_INVALID_ARG (Invalid arguments)
+ */
+esp_err_t esp_tls_set_conn_state(esp_tls_t *tls, esp_tls_conn_state_t conn_state);
+
+/**
  * @brief       Returns the ssl context
  *
  * @param[in]   tls          handle to esp_tls context
@@ -602,6 +660,15 @@ esp_err_t esp_tls_get_error_handle(esp_tls_t *tls, esp_tls_error_handle_t *error
  */
 mbedtls_x509_crt *esp_tls_get_global_ca_store(void);
 
+/**
+ * @brief Get supported TLS ciphersuites list.
+ *
+ * See https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-4 for the list of ciphersuites
+ *
+ * @return  Pointer to a zero-terminated array of IANA identifiers of TLS ciphersuites.
+ *
+ */
+const int *esp_tls_get_ciphersuites_list(void);
 #endif /* CONFIG_ESP_TLS_USING_MBEDTLS */
 #ifdef CONFIG_ESP_TLS_SERVER
 /**

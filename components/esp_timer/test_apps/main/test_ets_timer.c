@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -15,21 +15,7 @@
 #include "spi_flash_mmap.h"
 #include "esp_rom_sys.h"
 #include "esp_private/spi_flash_os.h"
-#if CONFIG_IDF_TARGET_ESP32
-#include "esp32/rom/ets_sys.h"  // for ETSTimer type
-#elif CONFIG_IDF_TARGET_ESP32S2
-#include "esp32s2/rom/ets_sys.h"
-#elif CONFIG_IDF_TARGET_ESP32S3
-#include "esp32s3/rom/ets_sys.h"
-#elif CONFIG_IDF_TARGET_ESP32C3
-#include "esp32c3/rom/ets_sys.h"
-#elif CONFIG_IDF_TARGET_ESP32H4
-#include "esp32h4/rom/ets_sys.h"
-#elif CONFIG_IDF_TARGET_ESP32C2
-#include "esp32c2/rom/ets_sys.h"
-#elif CONFIG_IDF_TARGET_ESP32C6
-#include "esp32c6/rom/ets_sys.h"
-#endif
+#include "rom/ets_sys.h"
 
 static void test_correct_delay_timer_func(void* arg)
 {

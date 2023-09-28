@@ -224,6 +224,7 @@
 #undef MBEDTLS_ECP_VERIFY_ALT
 #undef MBEDTLS_ECP_VERIFY_ALT_SOFT_FALLBACK
 #endif
+
 /**
  * \def MBEDTLS_ENTROPY_HARDWARE_ALT
  *
@@ -313,12 +314,36 @@
  * This is useful in non-threaded environments if you want to avoid blocking
  * for too long on ECC (and, hence, X.509 or SSL/TLS) operations.
  *
- * Uncomment this macro to enable restartable ECC computations.
+ * This option:
+ * - Adds xxx_restartable() variants of existing operations in the
+ *   following modules, with corresponding restart context types:
+ *   - ECP (for Short Weierstrass curves only): scalar multiplication (mul),
+ *     linear combination (muladd);
+ *   - ECDSA: signature generation & verification;
+ *   - PK: signature generation & verification;
+ *   - X509: certificate chain verification.
+ * - Adds mbedtls_ecdh_enable_restart() in the ECDH module.
+ * - Changes the behaviour of TLS 1.2 clients (not servers) when using the
+ *   ECDHE-ECDSA key exchange (not other key exchanges) to make all ECC
+ *   computations restartable:
+ *   - ECDH operations from the key exchange, only for Short Weierstrass
+ *     curves, only when MBEDTLS_USE_PSA_CRYPTO is not enabled.
+ *   - verification of the server's key exchange signature;
+ *   - verification of the server's certificate chain;
+ *   - generation of the client's signature if client authentication is used,
+ *     with an ECC key/certificate.
+ *
+ * \note  In the cases above, the usual SSL/TLS functions, such as
+ *        mbedtls_ssl_handshake(), can now return
+ *        MBEDTLS_ERR_SSL_CRYPTO_IN_PROGRESS.
  *
  * \note  This option only works with the default software implementation of
  *        elliptic curve functionality. It is incompatible with
- *        MBEDTLS_ECP_ALT, MBEDTLS_ECDH_XXX_ALT, MBEDTLS_ECDSA_XXX_ALT
- *        and MBEDTLS_ECDH_LEGACY_CONTEXT.
+ *        MBEDTLS_ECP_ALT, MBEDTLS_ECDH_XXX_ALT, MBEDTLS_ECDSA_XXX_ALT.
+ *
+ * Requires: MBEDTLS_ECP_C
+ *
+ * Uncomment this macro to enable restartable ECC computations.
  */
 #ifdef CONFIG_MBEDTLS_ECP_RESTARTABLE
 #define MBEDTLS_ECP_RESTARTABLE
@@ -461,6 +486,19 @@
 #define MBEDTLS_ECP_NIST_OPTIM
 #else
 #undef MBEDTLS_ECP_NIST_OPTIM
+#endif
+
+/**
+ * \def MBEDTLS_ECP_FIXED_POINT_OPTIM
+ *
+ * Enable speed up fixed-point multiplication.
+ *
+ * Comment this macro to disable FIXED POINT curves optimisation.
+ */
+#ifdef CONFIG_MBEDTLS_ECP_FIXED_POINT_OPTIM
+#define MBEDTLS_ECP_FIXED_POINT_OPTIM 1
+#else
+#define MBEDTLS_ECP_FIXED_POINT_OPTIM 0
 #endif
 
 /**
@@ -1104,6 +1142,19 @@
  */
 #define MBEDTLS_SSL_MAX_FRAGMENT_LENGTH
 
+/**
+ * \def MBEDTLS_SSL_RECORD_SIZE_LIMIT
+ *
+ * Enable support for RFC 8449 record_size_limit extension in SSL (TLS 1.3 only).
+ *
+ * \warning This extension is currently in development and must NOT be used except
+ *          for testing purposes.
+ *
+ * Requires: MBEDTLS_SSL_PROTO_TLS1_3
+ *
+ * Uncomment this macro to enable support for the record_size_limit extension
+ */
+//#define MBEDTLS_SSL_RECORD_SIZE_LIMIT
 
 /**
  * \def MBEDTLS_SSL_PROTO_TLS1_2
@@ -1261,21 +1312,21 @@
 #define MBEDTLS_SSL_TLS1_3_DEFAULT_NEW_SESSION_TICKETS 1
 
 /**
-* \def MBEDTLS_SSL_EARLY_DATA
-*
-* Enable support for RFC 8446 TLS 1.3 early data.
-*
-* Requires: MBEDTLS_SSL_SESSION_TICKETS and either
-*           MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_ENABLED or
-*           MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_EPHEMERAL_ENABLED
-*
-* Comment this to disable support for early data. If MBEDTLS_SSL_PROTO_TLS1_3
-* is not enabled, this option does not have any effect on the build.
-*
-* This feature is experimental, not completed and thus not ready for
-* production.
-*
-*/
+ * \def MBEDTLS_SSL_EARLY_DATA
+ *
+ * Enable support for RFC 8446 TLS 1.3 early data.
+ *
+ * Requires: MBEDTLS_SSL_SESSION_TICKETS and either
+ *           MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_ENABLED or
+ *           MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_EPHEMERAL_ENABLED
+ *
+ * Comment this to disable support for early data. If MBEDTLS_SSL_PROTO_TLS1_3
+ * is not enabled, this option does not have any effect on the build.
+ *
+ * This feature is experimental, not completed and thus not ready for
+ * production.
+ *
+ */
 //#define MBEDTLS_SSL_EARLY_DATA
 
 /**
@@ -2288,9 +2339,13 @@
  *           MBEDTLS_X509_CRT_PARSE_C MBEDTLS_X509_CRL_PARSE_C,
  *           MBEDTLS_BIGNUM_C, MBEDTLS_MD_C
  *
- * This module is required for the PKCS7 parsing modules.
+ * This module is required for the PKCS #7 parsing modules.
  */
-//#define MBEDTLS_PKCS7_C
+#ifdef CONFIG_MBEDTLS_PKCS7_C
+#define MBEDTLS_PKCS7_C
+#else
+#undef MBEDTLS_PKCS7_C
+#endif
 
 /**
  * \def MBEDTLS_PKCS12_C
@@ -2801,10 +2856,10 @@
 #undef MBEDTLS_SSL_CID_OUT_LEN_MAX
 #endif
 
-/** \def MBEDTLS_SSL_CID_PADDING_GRANULARITY
+/** \def MBEDTLS_SSL_CID_TLS1_3_PADDING_GRANULARITY
  *
  * This option controls the use of record plaintext padding
- * when using the Connection ID extension in DTLS 1.2.
+ * in TLS 1.3 and when using the Connection ID extension in DTLS 1.2.
  *
  * The padding will always be chosen so that the length of the
  * padded plaintext is a multiple of the value of this option.
@@ -2816,10 +2871,10 @@
  *       a power of two should be preferred.
  *
  */
-#ifdef CONFIG_MBEDTLS_SSL_DTLS_CONNECTION_ID
-#define MBEDTLS_SSL_CID_PADDING_GRANULARITY    CONFIG_MBEDTLS_SSL_CID_PADDING_GRANULARITY
+#ifdef CONFIG_MBEDTLS_SSL_CID_PADDING_GRANULARITY
+#define MBEDTLS_SSL_CID_TLS1_3_PADDING_GRANULARITY    CONFIG_MBEDTLS_SSL_CID_PADDING_GRANULARITY
 #else
-#undef MBEDTLS_SSL_CID_PADDING_GRANULARITY
+#undef MBEDTLS_SSL_CID_TLS1_3_PADDING_GRANULARITY
 #endif
 
 
@@ -2954,7 +3009,7 @@
 #endif
 
 /* This flag makes sure that we are not using
- * any functino that is deprecated by mbedtls */
+ * any function that is deprecated by mbedtls */
 #define MBEDTLS_DEPRECATED_REMOVED
 
 #endif /* ESP_CONFIG_H */

@@ -1,10 +1,7 @@
 Tips and Quirks
 ---------------
-:link_to_translation:`zh_CN:[中文]`
 
-.. See SOC_CPU_BREAKPOINTS_NUM, SOC_CPU_WATCHPOINTS_NUM in soc_caps.h
-{IDF_TARGET_CPU_BREAKPOINT_NUM:default="Not updated", esp32="2", esp32s2="2", esp32s3="2", esp32c3="8", esp32c2="2", "esp32c6"="4", "esp32h2"="8"}
-{IDF_TARGET_CPU_WATCHPOINT_NUM:default="Not updated", esp32="2", esp32s2="2", esp32s3="2", esp32c3="8", esp32c2="2", "esp32c6"="4", "esp32h2"="8"}
+:link_to_translation:`zh_CN:[中文]`
 
 This section provides collection of all tips and quirks referred to from various parts of this guide.
 
@@ -13,7 +10,7 @@ This section provides collection of all tips and quirks referred to from various
 Breakpoints and Watchpoints Available
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-{IDF_TARGET_NAME} debugger supports {IDF_TARGET_CPU_BREAKPOINT_NUM} hardware implemented breakpoints and 64 software ones. Hardware breakpoints are implemented by {IDF_TARGET_NAME} chip's logic and can be set anywhere in the code: either in flash or IRAM program's regions. Additionally there are 2 types of software breakpoints implemented by OpenOCD: flash (up to 32) and IRAM (up to 32) breakpoints. Currently GDB can not set software breakpoints in flash. So until this limitation is removed those breakpoints have to be emulated by OpenOCD as hardware ones (see :ref:`below <jtag-debugging-tip-where-breakpoints>` for details). {IDF_TARGET_NAME} also supports {IDF_TARGET_CPU_WATCHPOINT_NUM} watchpoints, so {IDF_TARGET_CPU_WATCHPOINT_NUM} variables can be watched for change or read by the GDB command ``watch myVariable``. Note that menuconfig option :ref:`CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK` uses the last watchpoint and will not provide expected results, if you also try to use it within OpenOCD/GDB. See menuconfig's help for detailed description.
+{IDF_TARGET_NAME} debugger supports {IDF_TARGET_SOC_CPU_BREAKPOINTS_NUM} hardware implemented breakpoints and 64 software ones. Hardware breakpoints are implemented by {IDF_TARGET_NAME} chip's logic and can be set anywhere in the code: either in flash or IRAM program's regions. Additionally there are 2 types of software breakpoints implemented by OpenOCD: flash (up to 32) and IRAM (up to 32) breakpoints. Currently GDB can not set software breakpoints in flash. So until this limitation is removed those breakpoints have to be emulated by OpenOCD as hardware ones (see :ref:`below <jtag-debugging-tip-where-breakpoints>` for details). {IDF_TARGET_NAME} also supports {IDF_TARGET_SOC_CPU_WATCHPOINTS_NUM} watchpoints, so {IDF_TARGET_SOC_CPU_WATCHPOINTS_NUM} variables can be watched for change or read by the GDB command ``watch myVariable``. Note that menuconfig option :ref:`CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK` uses the last watchpoint and will not provide expected results, if you also try to use it within OpenOCD/GDB. See menuconfig's help for detailed description.
 
 
 .. _jtag-debugging-tip-where-breakpoints:
@@ -29,7 +26,7 @@ Emulating part of hardware breakpoints using software flash ones means that the 
 Flash Mappings vs SW Flash Breakpoints
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In order to set/clear software breakpoints in flash, OpenOCD needs to know their flash addresses. To accomplish conversion from the {IDF_TARGET_NAME} address space to the flash one, OpenOCD uses mappings of program's code regions resided in flash. Those mappings are kept in the image header which is prepended to program binary data (code and data segments) and is specific to every application image written to the flash. So to support software flash breakpoints OpenOCD should know where application image under debugging is resided in the flash. By default OpenOCD reads partition table at 0x8000 and uses mappings from the first found application image, but there can be the cases when it will not work, e.g. partition table is not at standard flash location or even there can be multiple images: one factory and two OTA and you may want to debbug any of them. To cover all possible debugging scenarios OpenOCD supports special command which can be used to set arbitrary location of application image to debug. The command has the following format:
+In order to set/clear software breakpoints in flash, OpenOCD needs to know their flash addresses. To accomplish conversion from the {IDF_TARGET_NAME} address space to the flash one, OpenOCD uses mappings of program's code regions resided in flash. Those mappings are kept in the image header which is prepended to program binary data (code and data segments) and is specific to every application image written to the flash. So to support software flash breakpoints OpenOCD should know where application image under debugging is resided in the flash. By default OpenOCD reads partition table at 0x8000 and uses mappings from the first found application image, but there can be the cases when it will not work, e.g., partition table is not at standard flash location or even there can be multiple images: one factory and two OTA and you may want to debbug any of them. To cover all possible debugging scenarios OpenOCD supports special command which can be used to set arbitrary location of application image to debug. The command has the following format:
 
 ``esp appimage_offset <offset>``
 
@@ -109,14 +106,14 @@ In order to achieve higher data rates and minimize number of dropped packets it 
 
 .. _jtag-debugging-tip-debugger-startup-commands:
 
-What is the Meaning of Debugger's Startup Commands?
+What Is the Meaning of Debugger's Startup Commands?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 On startup, debugger is issuing sequence of commands to reset the chip and halt it at specific line of code. This sequence (shown below) is user defined to pick up at most convenient/appropriate line and start debugging.
 
 * ``set remote hardware-watchpoint-limit 2`` — Restrict GDB to using two hardware watchpoints supported by the chip, 2 for {IDF_TARGET_NAME}. For more information see https://sourceware.org/gdb/onlinedocs/gdb/Remote-Configuration.html.
 * ``mon reset halt`` — reset the chip and keep the CPUs halted
-* ``flushregs`` — monitor (``mon``) command can not inform GDB that the target state has changed. GDB will assume that whatever stack the target had before ``mon reset halt`` will still be valid. In fact, after reset the target state will change, and executing ``flushregs`` is a way to force GDB to get new state from the target.
+* ``maintenance flush register-cache`` — monitor (``mon``) command can not inform GDB that the target state has changed. GDB will assume that whatever stack the target had before ``mon reset halt`` will still be valid. In fact, after reset the target state will change, and executing ``maintenance flush register-cache`` is a way to force GDB to get new state from the target.
 * ``thb app_main`` — insert a temporary hardware breakpoint at ``app_main``, put here another function name if required
 * ``c`` — resume the program. It will then stop at breakpoint inserted at ``app_main``.
 
@@ -196,7 +193,7 @@ The board can be reset by entering ``mon reset`` or ``mon reset halt`` into GDB.
 
 .. _jtag-debugging-tip-jtag-pins-reconfigured:
 
-Can JTAG Pins be Used for Other Purposes?
+Can JTAG Pins Be Used for Other Purposes?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. only:: SOC_USB_SERIAL_JTAG_SUPPORTED

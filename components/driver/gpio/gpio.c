@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -7,6 +7,7 @@
 #include <esp_types.h>
 #include "esp_err.h"
 #include "freertos/FreeRTOS.h"
+#include "esp_heap_caps.h"
 #include "driver/gpio.h"
 #include "driver/rtc_io.h"
 #include "soc/soc.h"
@@ -21,6 +22,10 @@
 #include "esp_check.h"
 #include "hal/gpio_hal.h"
 #include "esp_rom_gpio.h"
+
+#if (SOC_RTCIO_PIN_COUNT > 0)
+#include "hal/rtc_io_hal.h"
+#endif
 
 static const char *GPIO_TAG = "gpio";
 #define GPIO_CHECK(a, str, ret_val) ESP_RETURN_ON_FALSE(a, ret_val, GPIO_TAG, "%s", str)
@@ -252,11 +257,13 @@ static esp_err_t gpio_hysteresis_disable(gpio_num_t gpio_num)
     return ESP_OK;
 }
 
+#if SOC_GPIO_SUPPORT_PIN_HYS_CTRL_BY_EFUSE
 static esp_err_t gpio_hysteresis_by_efuse(gpio_num_t gpio_num)
 {
     gpio_hal_hysteresis_from_efuse(gpio_context.gpio_hal, gpio_num);
     return ESP_OK;
 }
+#endif
 #endif  //SOC_GPIO_SUPPORT_PIN_HYS_FILTER
 
 esp_err_t gpio_set_pull_mode(gpio_num_t gpio_num, gpio_pull_mode_t pull)
@@ -356,7 +363,7 @@ esp_err_t gpio_config(const gpio_config_t *pGPIOConfig)
         if (((gpio_pin_mask >> io_num) & BIT(0))) {
             assert(io_reg != (intptr_t)NULL);
 
-#if SOC_RTCIO_INPUT_OUTPUT_SUPPORTED
+#if SOC_RTCIO_PIN_COUNT > 0
             if (rtc_gpio_is_valid_gpio(io_num)) {
                 rtc_gpio_deinit(io_num);
             }
@@ -411,10 +418,14 @@ esp_err_t gpio_config(const gpio_config_t *pGPIOConfig)
                 gpio_hysteresis_enable(io_num);
             } else if (pGPIOConfig->hys_ctrl_mode == GPIO_HYS_SOFT_DISABLE) {
                 gpio_hysteresis_disable(io_num);
-            } else {
+            }
+#if SOC_GPIO_SUPPORT_PIN_HYS_CTRL_BY_EFUSE
+            else {
                 gpio_hysteresis_by_efuse(io_num);
             }
+#endif
 #endif  //SOC_GPIO_SUPPORT_PIN_HYS_FILTER
+
             /* By default, all the pins have to be configured as GPIO pins. */
             gpio_hal_iomux_func_sel(io_reg, PIN_FUNC_GPIO);
         }
@@ -493,7 +504,8 @@ esp_err_t gpio_install_isr_service(int intr_alloc_flags)
 {
     GPIO_CHECK(gpio_context.gpio_isr_func == NULL, "GPIO isr service already installed", ESP_ERR_INVALID_STATE);
     esp_err_t ret = ESP_ERR_NO_MEM;
-    gpio_isr_func_t *isr_func = (gpio_isr_func_t *) calloc(GPIO_NUM_MAX, sizeof(gpio_isr_func_t));
+    const uint32_t alloc_caps = (intr_alloc_flags & ESP_INTR_FLAG_IRAM) ? MALLOC_CAP_INTERNAL : MALLOC_CAP_DEFAULT;
+    gpio_isr_func_t *isr_func = (gpio_isr_func_t *) heap_caps_calloc(GPIO_NUM_MAX, sizeof(gpio_isr_func_t), alloc_caps);
     if (isr_func) {
         portENTER_CRITICAL(&gpio_context.gpio_spinlock);
         if (gpio_context.gpio_isr_func == NULL) {
@@ -576,8 +588,15 @@ esp_err_t gpio_isr_register(void (*fn)(void *), void *arg, int intr_alloc_flags,
 {
     GPIO_CHECK(fn, "GPIO ISR null", ESP_ERR_INVALID_ARG);
     gpio_isr_alloc_t p;
+#if !CONFIG_IDF_TARGET_ESP32P4  //TODO: IDF-7995
     p.source = ETS_GPIO_INTR_SOURCE;
+#else
+    p.source = ETS_GPIO_INTR0_SOURCE;
+#endif
     p.intr_alloc_flags = intr_alloc_flags;
+#if SOC_ANA_CMPR_SUPPORTED
+    p.intr_alloc_flags |= ESP_INTR_FLAG_SHARED;
+#endif
     p.fn = fn;
     p.arg = arg;
     p.handle = handle;
@@ -730,6 +749,7 @@ esp_err_t gpio_hold_dis(gpio_num_t gpio_num)
     return ret;
 }
 
+#if !SOC_GPIO_SUPPORT_HOLD_SINGLE_IO_IN_DSLP
 void gpio_deep_sleep_hold_en(void)
 {
     portENTER_CRITICAL(&gpio_context.gpio_spinlock);
@@ -743,9 +763,9 @@ void gpio_deep_sleep_hold_dis(void)
     gpio_hal_deep_sleep_hold_dis(gpio_context.gpio_hal);
     portEXIT_CRITICAL(&gpio_context.gpio_spinlock);
 }
+#endif //!SOC_GPIO_SUPPORT_HOLD_SINGLE_IO_IN_DSLP
 
 #if SOC_GPIO_SUPPORT_FORCE_HOLD
-
 esp_err_t IRAM_ATTR gpio_force_hold_all()
 {
 #if SOC_RTCIO_HOLD_SUPPORTED
@@ -767,7 +787,7 @@ esp_err_t IRAM_ATTR gpio_force_unhold_all()
 #endif
     return ESP_OK;
 }
-#endif
+#endif //SOC_GPIO_SUPPORT_FORCE_HOLD
 
 void gpio_iomux_in(uint32_t gpio, uint32_t signal_idx)
 {

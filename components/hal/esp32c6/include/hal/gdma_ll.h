@@ -12,12 +12,15 @@
 #include "soc/gdma_struct.h"
 #include "soc/gdma_reg.h"
 #include "soc/soc_etm_source.h"
+#include "soc/pcr_struct.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #define GDMA_LL_GET_HW(id) (((id) == 0) ? (&GDMA) : NULL)
+
+#define GDMA_LL_CHANNEL_MAX_PRIORITY 5 // supported priority levels: [0,5]
 
 #define GDMA_LL_RX_EVENT_MASK       (0x7F)
 #define GDMA_LL_TX_EVENT_MASK       (0x3F)
@@ -39,6 +42,10 @@ extern "C" {
 #define GDMA_LL_EVENT_RX_ERR_EOF    (1<<2)
 #define GDMA_LL_EVENT_RX_SUC_EOF    (1<<1)
 #define GDMA_LL_EVENT_RX_DONE       (1<<0)
+
+#define GDMA_LL_AHB_GROUP_START_ID    0 // AHB GDMA group ID starts from 0
+#define GDMA_LL_AHB_NUM_GROUPS        1 // Number of AHB GDMA groups
+#define GDMA_LL_AHB_PAIRS_PER_GROUP   3 // Number of GDMA pairs in each AHB group
 
 #define GDMA_LL_TX_ETM_EVENT_TABLE(group, chan, event)                                     \
     (uint32_t[1][3][GDMA_ETM_EVENT_MAX]){{{                                                \
@@ -85,10 +92,30 @@ extern "C" {
                                          }}}[group][chan][task]
 
 ///////////////////////////////////// Common /////////////////////////////////////////
+
 /**
- * @brief Enable DMA clock gating
+ * @brief Enable the bus clock for the DMA module
  */
-static inline void gdma_ll_enable_clock(gdma_dev_t *dev, bool enable)
+static inline void gdma_ll_enable_bus_clock(int group_id, bool enable)
+{
+    (void)group_id;
+    PCR.gdma_conf.gdma_clk_en = enable;
+}
+
+/**
+ * @brief Reset the DMA module
+ */
+static inline void gdma_ll_reset_register(int group_id)
+{
+    (void)group_id;
+    PCR.gdma_conf.gdma_rst_en = 1;
+    PCR.gdma_conf.gdma_rst_en = 0;
+}
+
+/**
+ * @brief Force enable register clock
+ */
+static inline void gdma_ll_force_enable_reg_clock(gdma_dev_t *dev, bool enable)
 {
     dev->misc_conf.clk_en = enable;
 }
@@ -100,7 +127,7 @@ static inline void gdma_ll_enable_clock(gdma_dev_t *dev, bool enable)
 __attribute__((always_inline))
 static inline uint32_t gdma_ll_rx_get_interrupt_status(gdma_dev_t *dev, uint32_t channel)
 {
-    return dev->in_intr[channel].st.val & GDMA_LL_RX_EVENT_MASK;
+    return dev->in_intr[channel].st.val;
 }
 
 /**
@@ -109,9 +136,9 @@ static inline uint32_t gdma_ll_rx_get_interrupt_status(gdma_dev_t *dev, uint32_t
 static inline void gdma_ll_rx_enable_interrupt(gdma_dev_t *dev, uint32_t channel, uint32_t mask, bool enable)
 {
     if (enable) {
-        dev->in_intr[channel].ena.val |= (mask & GDMA_LL_RX_EVENT_MASK);
+        dev->in_intr[channel].ena.val |= mask;
     } else {
-        dev->in_intr[channel].ena.val &= ~(mask & GDMA_LL_RX_EVENT_MASK);
+        dev->in_intr[channel].ena.val &= ~mask;
     }
 }
 
@@ -121,7 +148,7 @@ static inline void gdma_ll_rx_enable_interrupt(gdma_dev_t *dev, uint32_t channel
 __attribute__((always_inline))
 static inline void gdma_ll_rx_clear_interrupt_status(gdma_dev_t *dev, uint32_t channel, uint32_t mask)
 {
-    dev->in_intr[channel].clr.val = (mask & GDMA_LL_RX_EVENT_MASK);
+    dev->in_intr[channel].clr.val = mask;
 }
 
 /**
@@ -273,10 +300,10 @@ static inline uint32_t gdma_ll_rx_get_error_eof_desc_addr(gdma_dev_t *dev, uint3
 }
 
 /**
- * @brief Get current RX descriptor's address
+ * @brief Get the pre-fetched RX descriptor's address
  */
 __attribute__((always_inline))
-static inline uint32_t gdma_ll_rx_get_current_desc_addr(gdma_dev_t *dev, uint32_t channel)
+static inline uint32_t gdma_ll_rx_get_prefetched_desc_addr(gdma_dev_t *dev, uint32_t channel)
 {
     return dev->channel[channel].in.in_dscr.val;
 }
@@ -324,7 +351,7 @@ static inline void gdma_ll_rx_enable_etm_task(gdma_dev_t *dev, uint32_t channel,
 __attribute__((always_inline))
 static inline uint32_t gdma_ll_tx_get_interrupt_status(gdma_dev_t *dev, uint32_t channel)
 {
-    return dev->out_intr[channel].st.val & GDMA_LL_TX_EVENT_MASK;
+    return dev->out_intr[channel].st.val;
 }
 
 /**
@@ -333,9 +360,9 @@ static inline uint32_t gdma_ll_tx_get_interrupt_status(gdma_dev_t *dev, uint32_t
 static inline void gdma_ll_tx_enable_interrupt(gdma_dev_t *dev, uint32_t channel, uint32_t mask, bool enable)
 {
     if (enable) {
-        dev->out_intr[channel].ena.val |= (mask & GDMA_LL_TX_EVENT_MASK);
+        dev->out_intr[channel].ena.val |= mask;
     } else {
-        dev->out_intr[channel].ena.val &= ~(mask & GDMA_LL_TX_EVENT_MASK);
+        dev->out_intr[channel].ena.val &= ~mask;
     }
 }
 
@@ -345,7 +372,7 @@ static inline void gdma_ll_tx_enable_interrupt(gdma_dev_t *dev, uint32_t channel
 __attribute__((always_inline))
 static inline void gdma_ll_tx_clear_interrupt_status(gdma_dev_t *dev, uint32_t channel, uint32_t mask)
 {
-    dev->out_intr[channel].clr.val = (mask & GDMA_LL_TX_EVENT_MASK);
+    dev->out_intr[channel].clr.val = mask;
 }
 
 /**
@@ -496,10 +523,10 @@ static inline uint32_t gdma_ll_tx_get_eof_desc_addr(gdma_dev_t *dev, uint32_t ch
 }
 
 /**
- * @brief Get current TX descriptor's address
+ * @brief Get the pre-fetched TX descriptor's address
  */
 __attribute__((always_inline))
-static inline uint32_t gdma_ll_tx_get_current_desc_addr(gdma_dev_t *dev, uint32_t channel)
+static inline uint32_t gdma_ll_tx_get_prefetched_desc_addr(gdma_dev_t *dev, uint32_t channel)
 {
     return dev->channel[channel].out.out_dscr.val;
 }

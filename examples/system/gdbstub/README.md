@@ -1,5 +1,5 @@
-| Supported Targets | ESP32 | ESP32-C3 | ESP32-C6 | ESP32-S2 | ESP32-S3 |
-| ----------------- | ----- | -------- | -------- | -------- | -------- |
+| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C6 | ESP32-H2 | ESP32-S2 | ESP32-S3 |
+| ----------------- | ----- | -------- | -------- | -------- | -------- | -------- | -------- |
 
 # GDBstub example
 
@@ -14,7 +14,9 @@ Upon exit from GDB, the application will continue to work in IDF Monitor as befo
 
 The example can run on any commonly available ESP32 development board.
 There are two possible ways to execute gdbstub with GDB: from IDF Monitor and as standalone application.
-gdbstub support ESP32, ESP32-S2 and ESP32-S3 chips.
+GDBStub is supported for all ESP chips.
+
+NOTE: On chips with an integrated USB Serial/JTAG Controller, it is reasonable to use OpenOCD + GDB for debugging.
 
 ### Configure the project
 
@@ -24,11 +26,9 @@ idf.py menuconfig
 ```
 Current example is pre-configured. The user can scroll through the system parameters and see the settings.
 Most important one is:
--> Component Config -> ESP System Settings -> Panic handler behaviour -> GDBStub on runtime
+-> Component Config -> GDB Stub -> GDBStub on runtime
 This selection switches gdbstub to runtime mode.
-Depending on the project, following settings could be used:
--> Component Config -> GDB Stub -> ...
-The user can enable or disable task list handling and define a maximum amount of tasks.
+Using another options in this menu, the user can also enable or disable task list handling and define a maximum amount of tasks.
 
 ### Build and Flash
 

@@ -586,7 +586,7 @@ BOOLEAN btsnd_hcic_ble_set_channels (BLE_CHANNELS channels);
 BOOLEAN btsnd_hcic_write_pin_type(UINT8 type);                   /* Write PIN Type */
 BOOLEAN btsnd_hcic_write_auto_accept(UINT8 flag);                /* Write Auto Accept */
 BOOLEAN btsnd_hcic_read_name (void);                             /* Read Local Name */
-BOOLEAN btsnd_hcic_write_page_tout(UINT16 timeout);              /* Write Page Timout */
+BOOLEAN btsnd_hcic_write_page_tout(UINT16 timeout);              /* Write Page Timeout */
 BOOLEAN btsnd_hcic_write_scan_enable(UINT8 flag);                /* Write Scan Enable */
 BOOLEAN btsnd_hcic_write_pagescan_cfg(UINT16 interval,
                                       UINT16 window);            /* Write Page Scan Activity */
@@ -1033,18 +1033,30 @@ UINT8 btsnd_hcic_ble_read_rf_path_compensation(void);
 UINT8 btsnd_hcic_ble_write_rf_path_compensation(UINT16 rf_tx_path, UINT16 rf_rx_path);
 
 #endif // #if (BLE_50_FEATURE_SUPPORT == TRUE)
-#if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
-UINT8 btsnd_hcic_ble_set_periodic_adv_recv_enable(UINT16 sync_handle, UINT8 enable);
 
-UINT8 btsnd_hcic_ble_periodic_adv_sync_trans(UINT16 conn_handle, UINT16 service_data, UINT16 sync_handle);
-
-UINT8 btsnd_hcic_ble_periodic_adv_set_info_trans(UINT16 conn_handle, UINT16 service_data, UINT8 adv_handle);
-
-UINT8 btsnd_hcic_ble_set_periodic_adv_sync_trans_params(UINT16 conn_handle, UINT8 mode, UINT16 skip, UINT16 sync_timeout, UINT8 cte_type);
-#endif // #if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
 #define HCIC_PARAM_SIZE_WRITE_AUTHENT_PAYLOAD_TOUT  4
 
 #define HCI__WRITE_AUTHENT_PAYLOAD_TOUT_HANDLE_OFF  0
 #define HCI__WRITE_AUTHENT_PAYLOAD_TOUT_TOUT_OFF    2
+
+#if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
+#define HCIC_PARAM_SIZE_PERIODIC_ADV_RECV_ENABLE                3
+#define HCI_PERIODIC_ADV_RECV_REPORT_EN                         1
+#define HCI_PERIODIC_ADV_RECV_DUP_FILTER_EN                     2
+#define HCIC_PARAM_SIZE_PERIODIC_ADV_SYNC_TRANS                 6
+#define HCIC_PARAM_SIZE_PERIODIC_ADV_SET_INFO_TRANS             5
+#define HCIC_PARAM_SIZE_SET_PAST_PARAMS                         8
+#define HCIC_PARAM_SIZE_SET_DEFAULT_PAST_PARAMS                 6
+
+UINT8 btsnd_hcic_ble_set_periodic_adv_recv_enable(UINT16 sync_handle, UINT8 enable);
+
+BOOLEAN btsnd_hcic_ble_periodic_adv_sync_trans(UINT16 conn_handle, UINT16 service_data, UINT16 sync_handle);
+
+BOOLEAN btsnd_hcic_ble_periodic_adv_set_info_trans(UINT16 conn_handle, UINT16 service_data, UINT8 adv_handle);
+
+BOOLEAN btsnd_hcic_ble_set_periodic_adv_sync_trans_params(UINT16 conn_handle, UINT8 mode, UINT16 skip, UINT16 sync_timeout, UINT8 cte_type);
+
+UINT8 btsnd_hcic_ble_set_default_periodic_adv_sync_trans_params(UINT8 mode, UINT16 skip, UINT16 sync_timeout, UINT8 cte_type);
+#endif // #if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
 
 #endif

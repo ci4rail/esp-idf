@@ -15,6 +15,7 @@
 #include "esp_wpa3_i.h"
 #include "endian.h"
 #include "esp_hostap.h"
+#include <inttypes.h>
 
 #ifdef CONFIG_SAE_PK
 #include "common/bss.h"
@@ -36,9 +37,18 @@ static esp_err_t wpa3_build_sae_commit(u8 *bssid, size_t *sae_msg_len)
     const u8 *pw = (const u8 *)esp_wifi_sta_get_prof_password_internal();
     struct wifi_ssid *ssid = esp_wifi_sta_get_prof_ssid_internal();
     uint8_t use_pt = esp_wifi_sta_get_use_h2e_internal();
+    char sae_pwd_id[SAE_H2E_IDENTIFIER_LEN+1] = {0};
+    bool valid_pwd_id = false;
+
+    if (use_pt != 0) {
+        memcpy(sae_pwd_id, esp_wifi_sta_get_sae_identifier_internal(), SAE_H2E_IDENTIFIER_LEN);
+        if (os_strlen(sae_pwd_id) > 0) {
+            valid_pwd_id = true;
+        }
+    }
 
     if (use_pt && !g_sae_pt) {
-        g_sae_pt = sae_derive_pt(g_allowed_groups, ssid->ssid, ssid->len, pw, strlen((const char *)pw), NULL);
+        g_sae_pt = sae_derive_pt(g_allowed_groups, ssid->ssid, ssid->len, pw, strlen((const char *)pw), valid_pwd_id ? sae_pwd_id : NULL);
     }
 
     if (wpa_sta_cur_pmksa_matches_akm()) {
@@ -134,7 +144,7 @@ reuse_data:
         return ESP_FAIL;
     }
 
-    if (sae_write_commit(&g_sae_data, g_sae_commit, g_sae_token, NULL) != ESP_OK) {
+    if (sae_write_commit(&g_sae_data, g_sae_commit, g_sae_token, valid_pwd_id ? sae_pwd_id : NULL) != ESP_OK) {
         wpa_printf(MSG_ERROR, "wpa3: failed to write SAE commit msg");
         wpabuf_free(g_sae_commit);
         g_sae_commit = NULL;
@@ -203,6 +213,7 @@ static u8 *wpa3_build_sae_msg(u8 *bssid, u32 sae_msg_type, size_t *sae_msg_len)
         case SAE_MSG_COMMIT:
             /* Do not go for SAE when WPS is ongoing */
             if (esp_wifi_get_wps_status_internal() != WPS_STATUS_DISABLE) {
+                *sae_msg_len = 0;
                 return NULL;
             }
             if (ESP_OK != wpa3_build_sae_commit(bssid, sae_msg_len))
@@ -228,9 +239,8 @@ static int wpa3_parse_sae_commit(u8 *buf, u32 len, u16 status)
     int ret;
 
     if (g_sae_data.state != SAE_COMMITTED) {
-        wpa_printf(MSG_ERROR, "wpa3: failed to parse SAE commit in state(%d)!",
-                   g_sae_data.state);
-        return ESP_FAIL;
+        wpa_printf(MSG_DEBUG, "wpa3: Discarding commit frame received in state %d", g_sae_data.state);
+        return ESP_ERR_WIFI_DISCARD;
     }
 
     if (status == WLAN_STATUS_ANTI_CLOGGING_TOKEN_REQ) {
@@ -253,7 +263,10 @@ static int wpa3_parse_sae_commit(u8 *buf, u32 len, u16 status)
 
     ret = sae_parse_commit(&g_sae_data, buf, len, NULL, 0, g_allowed_groups,
                            (status == WLAN_STATUS_SAE_HASH_TO_ELEMENT || status == WLAN_STATUS_SAE_PK));
-    if (ret) {
+    if (ret == SAE_SILENTLY_DISCARD) {
+        wpa_printf(MSG_DEBUG, "wpa3: Discarding commit frame due to reflection attack");
+        return ESP_ERR_WIFI_DISCARD;
+    } else if (ret) {
         wpa_printf(MSG_ERROR, "wpa3: could not parse commit(%d)", ret);
         return ret;
     }
@@ -299,7 +312,7 @@ static int wpa3_parse_sae_msg(u8 *buf, size_t len, u32 sae_msg_type, u16 status)
             esp_wpa3_free_sae_data();
             break;
         default:
-            wpa_printf(MSG_ERROR, "wpa3: Invalid SAE msg type(%d)!", sae_msg_type);
+            wpa_printf(MSG_ERROR, "wpa3: Invalid SAE msg type(%" PRId32 ")!", sae_msg_type);
             ret = ESP_FAIL;
             break;
     }
@@ -313,6 +326,14 @@ void esp_wifi_register_wpa3_cb(struct wpa_funcs *wpa_cb)
     wpa_cb->wpa3_parse_sae_msg = wpa3_parse_sae_msg;
 }
 
+void esp_wifi_unregister_wpa3_cb(void)
+{
+    extern struct wpa_funcs *wpa_cb;
+
+    wpa_cb->wpa3_build_sae_msg = NULL;
+    wpa_cb->wpa3_parse_sae_msg = NULL;
+
+}
 #endif /* CONFIG_WPA3_SAE */
 
 #ifdef CONFIG_SAE
@@ -391,7 +412,12 @@ static void wpa3_process_rx_commit(wpa3_hostap_auth_event_t *evt)
             goto free;
         }
     }
-    if (sta->lock && os_mutex_lock(sta->lock)) {
+
+    if (!sta->lock) {
+        sta->lock = os_semphr_create(1, 1);
+    }
+
+    if (sta->lock && os_semphr_take(sta->lock, 0)) {
         sta->sae_commit_processing = true;
         ret = handle_auth_sae(hapd, sta, frm->msg, frm->len, frm->bssid, frm->auth_transaction, frm->status);
 
@@ -400,13 +426,14 @@ static void wpa3_process_rx_commit(wpa3_hostap_auth_event_t *evt)
             goto free;
         }
         sta->sae_commit_processing = false;
-        os_mutex_unlock(sta->lock);
+        os_semphr_give(sta->lock);
         uint16_t aid = 0;
         if (ret != WLAN_STATUS_SUCCESS &&
             ret != WLAN_STATUS_ANTI_CLOGGING_TOKEN_REQ) {
-            if (esp_wifi_ap_get_sta_aid(frm->bssid, &aid) == ESP_OK && aid == 0) {
+            esp_wifi_ap_get_sta_aid(frm->bssid, &aid);
+            if (aid == 0) {
                 esp_wifi_ap_deauth_internal(frm->bssid, ret);
-             }
+            }
         }
     }
 
@@ -429,7 +456,7 @@ static void wpa3_process_rx_confirm(wpa3_hostap_auth_event_t *evt)
         return;
     }
 
-    if (sta->lock && os_mutex_lock(sta->lock)) {
+    if (sta->lock && os_semphr_take(sta->lock, 0)) {
         ret = handle_auth_sae(hapd, sta, frm->msg, frm->len, frm->bssid, frm->auth_transaction, frm->status);
 
         if (sta->remove_pending) {
@@ -442,10 +469,11 @@ static void wpa3_process_rx_confirm(wpa3_hostap_auth_event_t *evt)
                 goto done;
             }
         }
-        os_mutex_unlock(sta->lock);
+        os_semphr_give(sta->lock);
         if (ret != WLAN_STATUS_SUCCESS) {
             uint16_t aid = 0;
-            if (esp_wifi_ap_get_sta_aid(frm->bssid, &aid) == ESP_OK && aid == 0) {
+            esp_wifi_ap_get_sta_aid(frm->bssid, &aid);
+            if (aid == 0) {
                 esp_wifi_ap_deauth_internal(frm->bssid, ret);
             }
         }
@@ -504,23 +532,23 @@ static void esp_wpa3_hostap_task(void *pvParameters)
 
 int wpa3_hostap_auth_init(void *data)
 {
-    int ret = ESP_OK;
     if (g_wpa3_hostap_evt_queue) {
         wpa_printf(MSG_ERROR, "esp_wpa3_hostap_task has already been initialised");
-        return ret;
+        return ESP_OK;
     }
 
-    g_wpa3_hostap_auth_api_lock = os_semphr_create(1, 0);
-    if (!g_wpa3_hostap_auth_api_lock) {
-        wpa_printf(MSG_ERROR, "wpa3_hostap_auth_init: failed to create WPA3 hostap auth API lock");
-        return ESP_FAIL;
+    if (g_wpa3_hostap_auth_api_lock == NULL) {
+        g_wpa3_hostap_auth_api_lock = os_semphr_create(1, 1);
+        if (!g_wpa3_hostap_auth_api_lock) {
+            wpa_printf(MSG_ERROR, "wpa3_hostap_auth_init: failed to create WPA3 hostap auth API lock");
+            return ESP_FAIL;
+        }
     }
 
     g_wpa3_hostap_evt_queue =  os_queue_create(10, sizeof(wpa3_hostap_auth_event_t));
     if (!g_wpa3_hostap_evt_queue) {
         wpa_printf(MSG_ERROR, "wpa3_hostap_auth_init: failed to create queue");
-        ret = ESP_FAIL;
-        goto init_done;
+        return ESP_FAIL;
     }
 
     if (os_task_create(esp_wpa3_hostap_task, "esp_wpa3_hostap_task",
@@ -529,22 +557,18 @@ int wpa3_hostap_auth_init(void *data)
                     &g_wpa3_hostap_task_hdl) != pdPASS) {
         wpa_printf(MSG_ERROR, "wpa3_hostap_auth_init: failed to create task");
         os_queue_delete(g_wpa3_hostap_evt_queue);
-        ret = ESP_FAIL;
-        goto init_done;
+        return ESP_FAIL;
     }
 
     struct hostapd_data *hapd = (struct hostapd_data *)data;
     dl_list_init(&hapd->sae_commit_queue);
-
-init_done:
-    WPA3_HOSTAP_AUTH_API_UNLOCK();
-    return ret;
+    return ESP_OK;
 }
 
 bool wpa3_hostap_auth_deinit(void)
 {
     if (wpa3_hostap_post_evt(SIG_TASK_DEL, 0) != 0) {
-        wpa_printf(MSG_ERROR, "failed to send task delete event");
+        wpa_printf(MSG_DEBUG, "failed to send task delete event");
         return false;
     } else {
         return true;

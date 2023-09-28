@@ -1,102 +1,206 @@
 /*
- * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+#include "sdkconfig.h"
+#include "portmacro.h"
+#include "freertos/FreeRTOSConfig.h"
+#include "soc/soc_caps.h"
 
-    .global uxInterruptNesting
-    .global uxSchedulerRunning
+#if CONFIG_FREERTOS_USE_KERNEL_10_5_1
+#define pxCurrentTCB    pxCurrentTCBs
+.extern pxCurrentTCBs
+#else
+.extern pxCurrentTCB
+#endif
+
+#if CONFIG_ESP_SYSTEM_HW_STACK_GUARD
+#include "esp_private/hw_stack_guard.h"
+#endif
+
+    .global port_uxInterruptNesting
+    .global port_xSchedulerRunning
     .global xIsrStackTop
     .global pxCurrentTCB
     .global vTaskSwitchContext
     .global xPortSwitchFlag
+#if CONFIG_ESP_SYSTEM_HW_STACK_GUARD
+    .global xIsrStackBottom
+    .global port_offset_pxStack
+    .global port_offset_pxEndOfStack
+    .global esp_hw_stack_guard_monitor_stop
+    .global esp_hw_stack_guard_monitor_start
+    .global esp_hw_stack_guard_set_bounds
+#endif /* CONFIG_ESP_SYSTEM_HW_STACK_GUARD */
 
     .section .text
 
 /**
- * This function makes the RTOS aware about a ISR entering, it takes the
- * current task stack saved, places into the TCB, loads the ISR stack
- * the interrupted stack must be passed in a0. It needs to receive the
- * ISR nesting code improvements
+ * This function makes the RTOS aware about an ISR entering. It takes the
+ * current task stack pointer and places it into the pxCurrentTCB.
+ * It then loads the ISR stack into sp.
+ * TODO: ISR nesting code improvements ?
+ * In the routines below, let's use a0-a5 registers to let the compiler generate
+ * 16-bit instructions.
  */
-
     .global rtos_int_enter
     .type rtos_int_enter, @function
 rtos_int_enter:
-    /* preserve the return address */
-    mv t1, ra
-    mv t2, a0
+#if ( configNUM_CORES > 1 )
+    csrr    a5, mhartid                     /* a5 = coreID */
+    slli    a5, a5, 2                       /* a5 = coreID * 4 */
+    la      a0, port_xSchedulerRunning      /* a0 = &port_xSchedulerRunning */
+    add     a0, a0, a5                      /* a0 = &port_xSchedulerRunning[coreID] */
+    lw      a0, (a0)                        /* a0 = port_xSchedulerRunning[coreID] */
+#else
+    lw      a0, port_xSchedulerRunning      /* a0 = port_xSchedulerRunning */
+#endif /* ( configNUM_CORES > 1 ) */
+    beqz    a0, rtos_int_enter_end          /* if (port_xSchedulerRunning[coreID] == 0) jump to rtos_int_enter_end */
 
-    /* scheduler not enabled, jump directly to ISR handler */
-    lw t0, uxSchedulerRunning
-    beq t0,zero, rtos_enter_end
+    /* Increment the ISR nesting count */
+    la      a0, port_uxInterruptNesting     /* a0 = &port_uxInterruptNesting */
+#if ( configNUM_CORES > 1 )
+    add     a0, a0, a5                      /* a0 = &port_uxInterruptNesting[coreID] // a5 already contains coreID * 4 */
+#endif /* ( configNUM_CORES > 1 ) */
+    lw      a1, 0(a0)                       /* a1 = port_uxInterruptNesting[coreID] */
+    addi    a2, a1, 1                       /* a2 = a1 + 1 */
+    sw      a2, 0(a0)                       /* port_uxInterruptNesting[coreID] = a2 */
 
-    /* increments the ISR nesting count */
-	la t3, uxInterruptNesting
-	lw t4, 0x0(t3)
-	addi t5,t4,1
-	sw  t5, 0x0(t3)
+    /* If we reached here from another low-priority ISR, i.e, port_uxInterruptNesting[coreID] > 0, then skip stack pushing to TCB */
+    bnez    a1, rtos_int_enter_end          /* if (port_uxInterruptNesting[coreID] > 0) jump to rtos_int_enter_end */
 
-    /* If reached here from another low-prio ISR, skip stack pushing to TCB */
-	bne t4,zero, rtos_enter_end
+#if CONFIG_ESP_SYSTEM_HW_STACK_GUARD
+    /* esp_hw_stack_guard_monitor_stop(); pass the scratch registers */
+    ESP_HW_STACK_GUARD_MONITOR_STOP_CUR_CORE a0 a1
+#endif /* CONFIG_ESP_SYSTEM_HW_STACK_GUARD */
 
-    /* Save current TCB and load the ISR stack */
-    lw  t0, pxCurrentTCB
-    sw 	t2, 0x0(t0)
-    lw  sp, xIsrStackTop
+    /* Save the current sp in pxCurrentTCB[coreID] and load the ISR stack on to sp */
+#if ( configNUM_CORES > 1 )
+    la      a0, pxCurrentTCB                /* a0 = &pxCurrentTCB */
+    add     a0, a0, a5                      /* a0 = &pxCurrentTCB[coreID] // a5 already contains coreID * 4 */
+    lw      a0, (a0)                        /* a0 = pxCurrentTCB[coreID] */
+    sw      sp, 0(a0)                       /* pxCurrentTCB[coreID] = sp */
+    la      a0, xIsrStackTop                /* a0 = &xIsrStackTop */
+    add     a0, a0, a5                      /* a0 = &xIsrStackTop[coreID] // a5 already contains coreID * 4 */
+    lw      sp, (a0)                        /* sp = xIsrStackTop[coreID] */
+#else
+    lw      a0, pxCurrentTCB                /* a0 = pxCurrentTCB */
+    sw      sp, 0(a0)                       /* pxCurrentTCB[0] = sp */
+    lw      sp, xIsrStackTop                /* sp = xIsrStackTop */
+#endif /* ( configNUM_CORES > 1 ) */
 
-rtos_enter_end:
-    mv  ra, t1
+#if CONFIG_ESP_SYSTEM_HW_STACK_GUARD
+    /* Prepare the parameters for esp_hw_stack_guard_set_bounds(xIsrStackBottom, xIsrStackTop); */
+#if ( configNUM_CORES > 1 )
+    /* Load the xIsrStack for the current core and set the new bounds */
+    la      a0, xIsrStackBottom
+    add     a0, a0, a5                      /* a0 = &xIsrStackBottom[coreID] */
+    lw      a0, (a0)                        /* a0 = xIsrStackBottom[coreID] */
+#else
+    lw      a0, xIsrStackBottom
+#endif /* ( configNUM_CORES > 1 ) */
+    mv      a1, sp
+    /* esp_hw_stack_guard_set_bounds(xIsrStackBottom[coreID], xIsrStackTop[coreID]);
+     */
+    ESP_HW_STACK_GUARD_SET_BOUNDS_CUR_CORE a2
+    ESP_HW_STACK_GUARD_MONITOR_START_CUR_CORE a0 a1
+#endif /* CONFIG_ESP_SYSTEM_HW_STACK_GUARD */
+
+rtos_int_enter_end:
     ret
 
 /**
- * Recovers the next task to run stack pointer and place it into
- * a0, then the interrupt handler can restore the context of
- * the next task
+ * Restore the stack pointer of the next task to run.
  */
     .global rtos_int_exit
     .type rtos_int_exit, @function
 rtos_int_exit:
-    /* may skip RTOS aware interrupt since scheduler was not started */
-    lw t0, uxSchedulerRunning
-    beq t0,zero, rtos_exit_end
+#if ( configNUM_CORES > 1 )
+    csrr    a1, mhartid                     /* a1 = coreID */
+    slli    a1, a1, 2                       /* a1 = a1 * 4 */
+    la      a0, port_xSchedulerRunning      /* a0 = &port_xSchedulerRunning */
+    add     a0, a0, a1                      /* a0 = &port_xSchedulerRunning[coreID] */
+    lw      a0, (a0)                        /* a0 = port_xSchedulerRunning[coreID] */
+#else
+    lw      a0, port_xSchedulerRunning      /* a0 = port_xSchedulerRunning */
+#endif /* ( configNUM_CORES > 1 ) */
+    beqz    a0, rtos_int_exit_end           /* if (port_uxSchewdulerRunning == 0) jump to rtos_int_exit_end */
 
-    /* update nesting interrupts counter */
-    la t2, uxInterruptNesting
-    lw t3, 0x0(t2)
+    /* Update nesting interrupts counter */
+    la      a0, port_uxInterruptNesting     /* a0 = &port_uxInterruptNesting */
+#if ( configNUM_CORES > 1 )
+    add     a0, a0, a1                      /* a0 = &port_uxInterruptNesting[coreID] // a1 already contains coreID * 4 */
+#endif /* ( configNUM_CORES > 1 ) */
+    lw      a2, 0(a0)                       /* a2 = port_uxInterruptNesting[coreID] */
 
     /* Already zero, protect against underflow */
-    beq t3, zero, isr_skip_decrement
-    addi t3,t3, -1
-    sw  t3, 0x0(t2)
+    beqz    a2, isr_skip_decrement          /* if (port_uxInterruptNesting[coreID] == 0) jump to isr_skip_decrement */
+    addi    a2, a2, -1                      /* a2 = a2 - 1 */
+    sw      a2, 0(a0)                       /* port_uxInterruptNesting[coreID] = a2 */
+    /* May still have interrupts pending, skip section below and exit */
+    bnez    a2, rtos_int_exit_end
 
 isr_skip_decrement:
-
-    /* may still have interrupts pending, skip section below and exit */
-    bne t3,zero,rtos_exit_end
+    /* If the CPU reached this label, a2 (uxInterruptNesting) is 0 for sure */
 
     /* Schedule the next task if a yield is pending */
-    la t0, xPortSwitchFlag
-    lw t2, 0x0(t0)
-    beq t2, zero, no_switch
+    la      a0, xPortSwitchFlag             /* a0 = &xPortSwitchFlag */
+#if ( configNUM_CORES > 1 )
+    add     a0, a0, a1                      /* a0 = &xPortSwitchFlag[coreID] // a1 already contains coreID * 4  */
+#endif /* ( configNUM_CORES > 1 ) */
+    lw      a2, 0(a0)                       /* a2 = xPortSwitchFlag[coreID] */
+    beqz    a2, no_switch                   /* if (xPortSwitchFlag[coreID] == 0) jump to no_switch */
 
-    /* preserve return address and schedule next task
-       stack pointer for riscv should always be 16 byte aligned */
-    addi sp,sp,-16
-    sw  ra, 0(sp)
-    call vTaskSwitchContext
-    lw  ra, 0(sp)
-    addi sp, sp, 16
+    /* Preserve return address and schedule next task. To speed up the process, instead of allocating stack
+     * space, let's use a callee-saved register: s0. Since the caller is not using it, let's use it. */
+    mv      s0, ra
+    call    vTaskSwitchContext
+    mv      ra, s0
 
     /* Clears the switch pending flag */
-    la t0, xPortSwitchFlag
-    mv t2, zero
-    sw  t2, 0x0(t0)
+    la      a0, xPortSwitchFlag             /* a0 = &xPortSwitchFlag */
+#if ( configNUM_CORES > 1 )
+    /* C routine vTaskSwitchContext may change the temp registers, so we read again */
+    csrr    a1, mhartid                     /* a1 = coreID */
+    slli    a1, a1, 2                       /* a1 = a1 * 4 */
+    add     a0, a0, a1                      /* a0 = &xPortSwitchFlag[coreID]; */
+#endif /* ( configNUM_CORES > 1 ) */
+    sw      zero, 0(a0)                     /* xPortSwitchFlag[coreID] = 0; */
 
 no_switch:
-    /* Recover the stack of next task and prepare to exit : */
-    lw a0, pxCurrentTCB
-    lw a0, 0x0(a0)
 
-rtos_exit_end:
+#if CONFIG_ESP_SYSTEM_HW_STACK_GUARD
+    /* esp_hw_stack_guard_monitor_stop(); pass the scratch registers */
+    ESP_HW_STACK_GUARD_MONITOR_STOP_CUR_CORE a0 a1
+#endif /* CONFIG_ESP_SYSTEM_HW_STACK_GUARD */
+
+
+#if ( configNUM_CORES > 1 )
+    /* Recover the stack of next task and prepare to exit */
+    csrr    a1, mhartid
+    slli    a1, a1, 2
+    la      a0, pxCurrentTCB                /* a0 = &pxCurrentTCB */
+    add     a0, a0, a1                      /* a0 = &pxCurrentTCB[coreID] */
+    lw      a0, 0(a0)                       /* a0 = pxCurrentTCB[coreID] */
+    lw      sp, 0(a0)                       /* sp = previous sp */
+#else
+    /* Recover the stack of next task */
+    lw      a0, pxCurrentTCB
+    lw      sp, 0(a0)
+#endif /* ( configNUM_CORES > 1 ) */
+
+
+#if CONFIG_ESP_SYSTEM_HW_STACK_GUARD
+    /* esp_hw_stack_guard_set_bounds(pxCurrentTCB[0]->pxStack,
+     *                               pxCurrentTCB[0]->pxEndOfStack);
+     */
+    lw      a1, PORT_OFFSET_PX_END_OF_STACK(a0)
+    lw      a0, PORT_OFFSET_PX_STACK(a0)
+    ESP_HW_STACK_GUARD_SET_BOUNDS_CUR_CORE a2
+    /* esp_hw_stack_guard_monitor_start(); */
+    ESP_HW_STACK_GUARD_MONITOR_START_CUR_CORE a0 a1
+#endif /* CONFIG_ESP_SYSTEM_HW_STACK_GUARD */
+
+rtos_int_exit_end:
     ret

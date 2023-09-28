@@ -1,17 +1,21 @@
 # SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: Apache-2.0
 import asyncio
+import importlib
+import json
 import os
 import re
 import subprocess
 import sys
 from asyncio.subprocess import Process
 from io import open
+from pkgutil import iter_modules
 from types import FunctionType
 from typing import Any, Dict, Generator, List, Match, Optional, TextIO, Tuple, Union
 
 import click
 import yaml
+from esp_idf_monitor import get_ansi_converter
 from idf_py_actions.errors import NoSerialPortFoundError
 
 from .constants import GENERATORS
@@ -26,6 +30,37 @@ SHELL_COMPLETE_VAR = '_IDF.PY_COMPLETE'
 
 # was shell completion invoked?
 SHELL_COMPLETE_RUN = SHELL_COMPLETE_VAR in os.environ
+
+
+# The ctx dict "abuses" how python evaluates default parameter values.
+# https://docs.python.org/3/reference/compound_stmts.html#function-definitions
+# Default parameter values are evaluated from left to right
+# when the function definition is executed
+def get_build_context(ctx: Dict={}) -> Dict:
+    """
+    The build context is set in the ensure_build_directory function. It can be used
+    in modules or other code, which don't have direct access to such information.
+    It returns dictionary with the following keys:
+
+    'proj_desc' - loaded project_description.json file
+
+    Please make sure that ensure_build_directory was called otherwise the build
+    context dictionary will be empty. Also note that it might not be thread-safe to
+    modify the returned dictionary. It should be considered read-only.
+    """
+    return ctx
+
+
+def _set_build_context(args: 'PropertyDict') -> None:
+    # private helper to set global build context from ensure_build_directory
+    ctx = get_build_context()
+
+    proj_desc_fn = f'{args.build_dir}/project_description.json'
+    try:
+        with open(proj_desc_fn, 'r') as f:
+            ctx['proj_desc'] = json.load(f)
+    except (OSError, ValueError) as e:
+        raise FatalError(f'Cannot load {proj_desc_fn}: {e}')
 
 
 def executable_exists(args: List) -> bool:
@@ -132,52 +167,98 @@ def debug_print_idf_version() -> None:
     print_warning(f'ESP-IDF {idf_version() or "version unknown"}')
 
 
+def load_hints() -> Dict:
+    """Helper function to load hints yml file"""
+    hints: Dict = {
+        'yml': [],
+        'modules': []
+    }
+
+    current_module_dir = os.path.dirname(__file__)
+    with open(os.path.join(current_module_dir, 'hints.yml'), 'r') as file:
+        hints['yml'] = yaml.safe_load(file)
+
+    hint_modules_dir = os.path.join(current_module_dir, 'hint_modules')
+    if not os.path.exists(hint_modules_dir):
+        return hints
+
+    sys.path.append(hint_modules_dir)
+    for _, name, _ in iter_modules([hint_modules_dir]):
+        # Import modules for hint processing and add list of their 'generate_hint' functions into hint dict.
+        # If the module doesn't have the function 'generate_hint', it will raise an exception
+        try:
+            hints['modules'].append(getattr(importlib.import_module(name), 'generate_hint'))
+        except ModuleNotFoundError:
+            red_print(f'Failed to import "{name}" from "{hint_modules_dir}" as a module')
+            raise SystemExit(1)
+        except AttributeError:
+            red_print('Module "{}" does not have function generate_hint.'.format(name))
+            raise SystemExit(1)
+
+    return hints
+
+
+def generate_hints_buffer(output: str, hints: Dict) -> Generator:
+    """Helper function to process hints within a string buffer"""
+    # Call modules for possible hints with unchanged output. Note that
+    # hints in hints.yml expect new line trimmed, but modules should
+    # get the output unchanged. Please see tools/idf_py_actions/hints.yml
+    for generate_hint in hints['modules']:
+        module_hint = generate_hint(output)
+        if module_hint:
+            yield module_hint
+
+    # hints expect new lines trimmed
+    output = ' '.join(line.strip() for line in output.splitlines() if line.strip())
+    for hint in hints['yml']:
+        variables_list = hint.get('variables')
+        hint_list, hint_vars, re_vars = [], [], []
+        match: Optional[Match[str]] = None
+        try:
+            if variables_list:
+                for variables in variables_list:
+                    hint_vars = variables['hint_variables']
+                    re_vars = variables['re_variables']
+                    regex = hint['re'].format(*re_vars)
+                    if re.compile(regex).search(output):
+                        try:
+                            hint_list.append(hint['hint'].format(*hint_vars))
+                        except KeyError as e:
+                            red_print('Argument {} missing in {}. Check hints.yml file.'.format(e, hint))
+                            sys.exit(1)
+            else:
+                match = re.compile(hint['re']).search(output)
+        except KeyError as e:
+            red_print('Argument {} missing in {}. Check hints.yml file.'.format(e, hint))
+            sys.exit(1)
+        except re.error as e:
+            red_print('{} from hints.yml have {} problem. Check hints.yml file.'.format(hint['re'], e))
+            sys.exit(1)
+        if hint_list:
+            for message in hint_list:
+                yield ' '.join(['HINT:', message])
+        elif match:
+            extra_info = ', '.join(match.groups()) if hint.get('match_to_output', '') else ''
+            try:
+                yield ' '.join(['HINT:', hint['hint'].format(extra_info)])
+            except KeyError:
+                raise KeyError("Argument 'hint' missing in {}. Check hints.yml file.".format(hint))
+
+
 def generate_hints(*filenames: str) -> Generator:
     """Getting output files and printing hints on how to resolve errors based on the output."""
-    with open(os.path.join(os.path.dirname(__file__), 'hints.yml'), 'r') as file:
-        hints = yaml.safe_load(file)
+    hints = load_hints()
     for file_name in filenames:
         with open(file_name, 'r') as file:
-            output = ' '.join(line.strip() for line in file if line.strip())
-        for hint in hints:
-            variables_list = hint.get('variables')
-            hint_list, hint_vars, re_vars = [], [], []
-            match: Optional[Match[str]] = None
-            try:
-                if variables_list:
-                    for variables in variables_list:
-                        hint_vars = variables['hint_variables']
-                        re_vars = variables['re_variables']
-                        regex = hint['re'].format(*re_vars)
-                        if re.compile(regex).search(output):
-                            try:
-                                hint_list.append(hint['hint'].format(*hint_vars))
-                            except KeyError as e:
-                                red_print('Argument {} missing in {}. Check hints.yml file.'.format(e, hint))
-                                sys.exit(1)
-                else:
-                    match = re.compile(hint['re']).search(output)
-            except KeyError as e:
-                red_print('Argument {} missing in {}. Check hints.yml file.'.format(e, hint))
-                sys.exit(1)
-            except re.error as e:
-                red_print('{} from hints.yml have {} problem. Check hints.yml file.'.format(hint['re'], e))
-                sys.exit(1)
-            if hint_list:
-                for message in hint_list:
-                    yield ' '.join(['HINT:', message])
-            elif match:
-                extra_info = ', '.join(match.groups()) if hint.get('match_to_output', '') else ''
-                try:
-                    yield ' '.join(['HINT:', hint['hint'].format(extra_info)])
-                except KeyError:
-                    raise KeyError("Argument 'hint' missing in {}. Check hints.yml file.".format(hint))
+            yield from generate_hints_buffer(file.read(), hints)
 
 
 def fit_text_in_terminal(out: str) -> str:
     """Fit text in terminal, if the string is not fit replace center with `...`"""
     space_for_dots = 3  # Space for "..."
     terminal_width, _ = os.get_terminal_size()
+    if not terminal_width:
+        return out
     if terminal_width <= space_for_dots:
         # if the wide of the terminal is too small just print dots
         return '.' * terminal_width
@@ -190,7 +271,7 @@ def fit_text_in_terminal(out: str) -> str:
 
 class RunTool:
     def __init__(self, tool_name: str, args: List, cwd: str, env: Dict=None, custom_error_handler: FunctionType=None, build_dir: str=None,
-                 hints: bool=True, force_progression: bool=False, interactive: bool=False) -> None:
+                 hints: bool=True, force_progression: bool=False, interactive: bool=False, convert_output: bool=False) -> None:
         self.tool_name = tool_name
         self.args = args
         self.cwd = cwd
@@ -201,6 +282,7 @@ class RunTool:
         self.hints = hints
         self.force_progression = force_progression
         self.interactive = interactive
+        self.convert_output = convert_output
 
     def __call__(self) -> None:
         def quote_arg(arg: str) -> str:
@@ -231,8 +313,10 @@ class RunTool:
             return
 
         if stderr_output_file and stdout_output_file:
-            for hint in generate_hints(stderr_output_file, stdout_output_file):
-                yellow_print(hint)
+            # hints in interactive mode were already processed, don't print them again
+            if not self.interactive:
+                for hint in generate_hints(stderr_output_file, stdout_output_file):
+                    yellow_print(hint)
             raise FatalError('{} failed with exit code {}, output of the command is in the {} and {}'.format(self.tool_name, process.returncode,
                              stderr_output_file, stdout_output_file))
 
@@ -252,7 +336,11 @@ class RunTool:
             p = await asyncio.create_subprocess_exec(*cmd, env=env_copy, limit=1024 * 256, cwd=self.cwd, stdout=asyncio.subprocess.PIPE,
                                                      stderr=asyncio.subprocess.PIPE)
         except NotImplementedError:
-            sys.exit(f'ERROR: {sys.executable} doesn\'t support asyncio. The issue can be worked around by re-running idf.py with the "--no-hints" argument.')
+            message = f'ERROR: {sys.executable} doesn\'t support asyncio. The issue can be worked around by re-running idf.py with the "--no-hints" argument.'
+            if sys.platform == 'win32':
+                message += ' To fix the issue use the Windows Installer for setting up your python environment, ' \
+                    'available from: https://dl.espressif.com/dl/esp-idf/'
+            sys.exit(message)
 
         stderr_output_file = os.path.join(self.build_dir, log_dir_name, f'idf_py_stderr_output_{p.pid}')
         stdout_output_file = os.path.join(self.build_dir, log_dir_name, f'idf_py_stdout_output_{p.pid}')
@@ -272,9 +360,14 @@ class RunTool:
 
         def print_progression(output: str) -> None:
             # Print a new line on top of the previous line
-            sys.stdout.write('\x1b[K')
-            print('\r', end='')
-            print(fit_text_in_terminal(output.strip('\n\r')), end='', file=output_stream)
+            print('\r' + fit_text_in_terminal(output.strip('\n\r')) + '\x1b[K', end='', file=output_stream)
+            output_stream.flush()
+
+        def is_progression(output: str) -> bool:
+            # try to find possible progression by a pattern match
+            if re.match(r'^\[\d+/\d+\]|.*\(\d+ \%\)$', output):
+                return True
+            return False
 
         async def read_stream() -> Optional[str]:
             try:
@@ -299,7 +392,16 @@ class RunTool:
                     if len(buffer) > 4:
                         # Multi-byte character contain up to 4 bytes and if buffer have more then 4 bytes
                         # and still can not decode it we can just ignore some bytes
-                        return buffer.decode(errors='ignore')
+                        return buffer.decode(errors='replace')
+
+        # use ANSI color converter for Monitor on Windows
+        output_converter = get_ansi_converter(output_stream) if self.convert_output else output_stream
+
+        # used in interactive mode to print hints after matched line
+        hints = load_hints()
+        last_line = ''
+        is_progression_last_line = False
+        is_progression_processing_enabled = self.force_progression and output_stream.isatty() and '-v' not in self.args
 
         try:
             with open(output_filename, 'w', encoding='utf8') as output_file:
@@ -310,6 +412,7 @@ class RunTool:
                         output = await read_stream()
                     if not output:
                         break
+
                     output_noescape = delete_ansi_escape(output)
                     # Always remove escape sequences when writing the build log.
                     output_file.write(output_noescape)
@@ -319,12 +422,23 @@ class RunTool:
                     if not output_stream.isatty():
                         output = output_noescape
 
-                    if self.force_progression and output[0] == '[' and '-v' not in self.args and output_stream.isatty():
-                        # print output in progression way but only the progression related (that started with '[') and if verbose flag is not set
+                    if is_progression_processing_enabled and is_progression(output):
                         print_progression(output)
+                        is_progression_last_line = True
                     else:
-                        output_stream.write(output)
-                        output_stream.flush()
+                        if is_progression_last_line:
+                            output_converter.write(os.linesep)
+                            is_progression_last_line = False
+                        output_converter.write(output)
+                        output_converter.flush()
+
+                        # process hints for last line and print them right away
+                        if self.interactive:
+                            last_line += output
+                            if last_line[-1] == '\n':
+                                for hint in generate_hints_buffer(last_line, hints):
+                                    yellow_print(hint)
+                                last_line = ''
         except (RuntimeError, EnvironmentError) as e:
             yellow_print('WARNING: The exception {} was raised and we can\'t capture all your {} and '
                          'hints on how to resolve errors can be not accurate.'.format(e, output_stream.name.strip('<>')))
@@ -384,19 +498,27 @@ def _parse_cmakecache(path: str) -> Dict:
     return result
 
 
-def _new_cmakecache_entries(cache_path: str, new_cache_entries: List) -> bool:
-    if not os.path.exists(cache_path):
-        return True
+def _parse_cmdl_cmakecache(entries: List) -> Dict[str, str]:
+    """
+    Parse list of CMake cache entries passed in via the -D option.
 
-    if new_cache_entries:
-        current_cache = _parse_cmakecache(cache_path)
+    Returns a dict of name:value.
+    """
+    result: Dict = {}
+    for entry in entries:
+        key, value = entry.split('=', 1)
+        value = _strip_quotes(value)
+        result[key] = value
 
-        for entry in new_cache_entries:
-            key, value = entry.split('=', 1)
-            current_value = current_cache.get(key, None)
-            if current_value is None or _strip_quotes(value) != current_value:
-                return True
+    return result
 
+
+def _new_cmakecache_entries(cache: Dict, cache_cmdl: Dict) -> bool:
+    for entry in cache_cmdl:
+        if entry not in cache:
+            return True
+        if cache_cmdl[entry] != cache[entry]:
+            return True
     return False
 
 
@@ -410,7 +532,8 @@ def _detect_cmake_generator(prog_name: str) -> Any:
     raise FatalError("To use %s, either the 'ninja' or 'GNU make' build tool must be available in the PATH" % prog_name)
 
 
-def ensure_build_directory(args: 'PropertyDict', prog_name: str, always_run_cmake: bool=False) -> None:
+def ensure_build_directory(args: 'PropertyDict', prog_name: str, always_run_cmake: bool=False,
+                           env: Dict=None) -> None:
     """Check the build directory exists and that cmake has been run there.
 
     If this isn't the case, create the build directory (if necessary) and
@@ -444,12 +567,14 @@ def ensure_build_directory(args: 'PropertyDict', prog_name: str, always_run_cmak
     cache_path = os.path.join(build_dir, 'CMakeCache.txt')
     cache = _parse_cmakecache(cache_path) if os.path.exists(cache_path) else {}
 
-    # Validate or set IDF_TARGET
-    _guess_or_check_idf_target(args, prog_name, cache)
-
     args.define_cache_entry.append('CCACHE_ENABLE=%d' % args.ccache)
 
-    if always_run_cmake or _new_cmakecache_entries(cache_path, args.define_cache_entry):
+    cache_cmdl = _parse_cmdl_cmakecache(args.define_cache_entry)
+
+    # Validate IDF_TARGET
+    _check_idf_target(args, prog_name, cache, cache_cmdl, env)
+
+    if always_run_cmake or _new_cmakecache_entries(cache, cache_cmdl):
         if args.generator is None:
             args.generator = _detect_cmake_generator(prog_name)
         try:
@@ -469,7 +594,7 @@ def ensure_build_directory(args: 'PropertyDict', prog_name: str, always_run_cmak
             cmake_args += [project_dir]
 
             hints = not args.no_hints
-            RunTool('cmake', cmake_args, cwd=args.build_dir, hints=hints)()
+            RunTool('cmake', cmake_args, cwd=args.build_dir, env=env, hints=hints)()
         except Exception:
             # don't allow partially valid CMakeCache.txt files,
             # to keep the "should I run cmake?" logic simple
@@ -508,6 +633,9 @@ def ensure_build_directory(args: 'PropertyDict', prog_name: str, always_run_cmak
     except KeyError:
         pass
 
+    # set global build context
+    _set_build_context(args)
+
 
 def merge_action_lists(*action_lists: Dict) -> Dict:
     merged_actions: Dict = {
@@ -520,6 +648,27 @@ def merge_action_lists(*action_lists: Dict) -> Dict:
         merged_actions['actions'].update(action_list.get('actions', {}))
         merged_actions['global_action_callbacks'].extend(action_list.get('global_action_callbacks', []))
     return merged_actions
+
+
+def get_sdkconfig_filename(args: 'PropertyDict', cache_cmdl: Dict=None) -> str:
+    """
+    Get project's sdkconfig file name.
+    """
+    if not cache_cmdl:
+        cache_cmdl = _parse_cmdl_cmakecache(args.define_cache_entry)
+    config = cache_cmdl.get('SDKCONFIG')
+    if config:
+        return os.path.abspath(config)
+
+    proj_desc_path = os.path.join(args.build_dir, 'project_description.json')
+    try:
+        with open(proj_desc_path, 'r') as f:
+            proj_desc = json.load(f)
+        return str(proj_desc['config_file'])
+    except (OSError, KeyError):
+        pass
+
+    return os.path.join(args.project_dir, 'sdkconfig')
 
 
 def get_sdkconfig_value(sdkconfig_file: str, key: str) -> Optional[str]:
@@ -549,48 +698,55 @@ def is_target_supported(project_path: str, supported_targets: List) -> bool:
     return get_target(project_path) in supported_targets
 
 
-def _guess_or_check_idf_target(args: 'PropertyDict', prog_name: str, cache: Dict) -> None:
+def _check_idf_target(args: 'PropertyDict', prog_name: str, cache: Dict,
+                      cache_cmdl: Dict, env: Dict=None) -> None:
     """
-    If CMakeCache.txt doesn't exist, and IDF_TARGET is not set in the environment, guess the value from
-    sdkconfig or sdkconfig.defaults, and pass it to CMake in IDF_TARGET variable.
-
-    Otherwise, cross-check the three settings (sdkconfig, CMakeCache, environment) and if there is
+    Cross-check the three settings (sdkconfig, CMakeCache, environment) and if there is
     mismatch, fail with instructions on how to fix this.
     """
-    # Default locations of sdkconfig files.
-    # FIXME: they may be overridden in the project or by a CMake variable (IDF-1369).
-    # These are used to guess the target from sdkconfig, or set the default target by sdkconfig.defaults.
-    idf_target_from_sdkconfig = get_target(args.project_dir)
-    idf_target_from_sdkconfig_defaults = get_target(args.project_dir, 'sdkconfig.defaults')
+    sdkconfig = get_sdkconfig_filename(args, cache_cmdl)
+    idf_target_from_sdkconfig = get_sdkconfig_value(sdkconfig, 'CONFIG_IDF_TARGET')
     idf_target_from_env = os.environ.get('IDF_TARGET')
     idf_target_from_cache = cache.get('IDF_TARGET')
+    idf_target_from_cache_cmdl = cache_cmdl.get('IDF_TARGET')
 
-    if not cache and not idf_target_from_env:
-        # CMakeCache.txt does not exist yet, and IDF_TARGET is not set in the environment.
-        guessed_target = idf_target_from_sdkconfig or idf_target_from_sdkconfig_defaults
-        if guessed_target:
-            if args.verbose:
-                print("IDF_TARGET is not set, guessed '%s' from sdkconfig" % (guessed_target))
-            args.define_cache_entry.append('IDF_TARGET=' + guessed_target)
+    # Called from set-target action. The original sdkconfig will be renamed
+    # in cmake, so ignore any CONFIG_IDF_TARGET which may be defined in
+    # stale sdkconfig.
+    if env and env.get('_IDF_PY_SET_TARGET_ACTION') == '1':
+        idf_target_from_sdkconfig = None
 
-    elif idf_target_from_env:
+    if idf_target_from_env:
         # Let's check that IDF_TARGET values are consistent
         if idf_target_from_sdkconfig and idf_target_from_sdkconfig != idf_target_from_env:
-            raise FatalError("Project sdkconfig was generated for target '{t_conf}', but environment variable IDF_TARGET "
+            raise FatalError("Project sdkconfig '{cfg}' was generated for target '{t_conf}', but environment variable IDF_TARGET "
                              "is set to '{t_env}'. Run '{prog} set-target {t_env}' to generate new sdkconfig file for target {t_env}."
-                             .format(t_conf=idf_target_from_sdkconfig, t_env=idf_target_from_env, prog=prog_name))
+                             .format(cfg=sdkconfig, t_conf=idf_target_from_sdkconfig, t_env=idf_target_from_env, prog=prog_name))
 
         if idf_target_from_cache and idf_target_from_cache != idf_target_from_env:
             raise FatalError("Target settings are not consistent: '{t_env}' in the environment, '{t_cache}' in CMakeCache.txt. "
                              "Run '{prog} fullclean' to start again."
                              .format(t_env=idf_target_from_env, t_cache=idf_target_from_cache, prog=prog_name))
 
-    elif idf_target_from_cache and idf_target_from_sdkconfig and idf_target_from_cache != idf_target_from_sdkconfig:
+        if idf_target_from_cache_cmdl and idf_target_from_cache_cmdl != idf_target_from_env:
+            raise FatalError("Target '{t_cmdl}' specified on command line is not consistent with "
+                             "target '{t_env}' in the environment."
+                             .format(t_cmdl=idf_target_from_cache_cmdl, t_env=idf_target_from_env))
+    elif idf_target_from_cache_cmdl:
+        # Check if -DIDF_TARGET is consistent with target in CMakeCache.txt
+        if idf_target_from_cache and idf_target_from_cache != idf_target_from_cache_cmdl:
+            raise FatalError("Target '{t_cmdl}' specified on command line is not consistent with "
+                             "target '{t_cache}' in CMakeCache.txt. Run '{prog} set-target {t_cmdl}' to re-generate "
+                             'CMakeCache.txt.'
+                             .format(t_cache=idf_target_from_cache, t_cmdl=idf_target_from_cache_cmdl, prog=prog_name))
+
+    elif idf_target_from_cache:
         # This shouldn't happen, unless the user manually edits CMakeCache.txt or sdkconfig, but let's check anyway.
-        raise FatalError("Project sdkconfig was generated for target '{t_conf}', but CMakeCache.txt contains '{t_cache}'. "
-                         "To keep the setting in sdkconfig ({t_conf}) and re-generate CMakeCache.txt, run '{prog} fullclean'. "
-                         "To re-generate sdkconfig for '{t_cache}' target, run '{prog} set-target {t_cache}'."
-                         .format(t_conf=idf_target_from_sdkconfig, t_cache=idf_target_from_cache, prog=prog_name))
+        if idf_target_from_sdkconfig and idf_target_from_cache != idf_target_from_sdkconfig:
+            raise FatalError("Project sdkconfig '{cfg}' was generated for target '{t_conf}', but CMakeCache.txt contains '{t_cache}'. "
+                             "To keep the setting in sdkconfig ({t_conf}) and re-generate CMakeCache.txt, run '{prog} fullclean'. "
+                             "To re-generate sdkconfig for '{t_cache}' target, run '{prog} set-target {t_cache}'."
+                             .format(cfg=sdkconfig, t_conf=idf_target_from_sdkconfig, t_cache=idf_target_from_cache, prog=prog_name))
 
 
 class TargetChoice(click.Choice):

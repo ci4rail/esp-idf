@@ -3,8 +3,6 @@ I2C 驱动程序
 
 :link_to_translation:`en:[English]`
 
-{IDF_TARGET_I2C_NUM:default="2", esp32c3="1", esp32h4="1", esp32c2="1"}
-
 概述
 ---------
 
@@ -12,7 +10,7 @@ I2C 是一种串行同步半双工通信协议，总线上可以同时挂载多�
 
 I2C 具有简单且制造成本低廉等优点，主要用于低速外围设备的短距离通信（一英尺以内）。
 
-{IDF_TARGET_NAME} 有 {IDF_TARGET_I2C_NUM} 个 I2C 控制器（也称为端口），负责处理在 I2C 总线上的通信。每个控制器都可以设置为主机或从机。
+{IDF_TARGET_NAME} 有 {IDF_TARGET_SOC_I2C_NUM} 个 I2C 控制器（也称为端口），负责处理在 I2C 总线上的通信。每个控制器都可以设置为主机或从机。
 
 驱动程序的功能
 ---------------
@@ -33,7 +31,7 @@ I2C 驱动程序管理在 I2C 总线上设备的通信，该驱动程序具备�
 
 {IDF_TARGET_I2C_ROLE:default="主机或从机", esp32c2="主机"}
 
-以下部分将指导您完成 I2C 驱动程序配置和工作的基本步骤：
+I2C 驱动程序配置和工作的基本步骤如下：
 
 1. :ref:`i2c-api-configure-driver` - 设置初始化参数（如主机模式或从机模式，SDA 和 SCL 使用的 GPIO 管脚，时钟速度等）
 2. :ref:`i2c-api-install-driver`- 激活一个 I2C 控制器的驱动，该控制器可为主机也可为从机

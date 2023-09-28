@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -26,10 +26,12 @@
 
 #include "sdkconfig.h"
 
+#if !CONFIG_ESP_SYSTEM_PANIC_SILENT_REBOOT
 #if __has_include("esp_app_desc.h")
 #define WITH_ELF_SHA256
 #include "esp_app_desc.h"
 #endif
+#endif // CONFIG_ESP_SYSTEM_PANIC_SILENT_REBOOT
 
 #if CONFIG_ESP_COREDUMP_ENABLE
 #include "esp_core_dump.h"
@@ -63,7 +65,7 @@
 #define MWDT_DEFAULT_TICKS_PER_US       500
 
 bool g_panic_abort = false;
-static char *s_panic_abort_details = NULL;
+char *g_panic_abort_details = NULL;
 
 static wdt_hal_context_t rtc_wdt_ctx = RWDT_HAL_CONTEXT_DEFAULT();
 
@@ -222,7 +224,7 @@ static inline void disable_all_wdts(void)
 
 static void print_abort_details(const void *f)
 {
-    panic_print_str(s_panic_abort_details);
+    panic_print_str(g_panic_abort_details);
 }
 
 // Control arrives from chip-specific panic handler, environment prepared for
@@ -237,7 +239,7 @@ void esp_panic_handler(panic_info_t *info)
     // If the exception was due to an abort, override some of the panic info
     if (g_panic_abort) {
         info->description = NULL;
-        info->details = s_panic_abort_details ? print_abort_details : NULL;
+        info->details = g_panic_abort_details ? print_abort_details : NULL;
         info->reason = NULL;
         info->exception = PANIC_EXCEPTION_ABORT;
     }
@@ -332,11 +334,9 @@ void esp_panic_handler(panic_info_t *info)
 
 #ifdef WITH_ELF_SHA256
     panic_print_str("\r\nELF file SHA256: ");
-    char sha256_buf[65];
-    esp_app_get_elf_sha256(sha256_buf, sizeof(sha256_buf));
-    panic_print_str(sha256_buf);
+    panic_print_str(esp_app_get_elf_sha256_str());
     panic_print_str("\r\n");
-#endif
+#endif // WITH_ELF_SHA256
 
     panic_print_str("\r\n");
 
@@ -428,6 +428,7 @@ void esp_panic_handler(panic_info_t *info)
 #else /* CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT || CONFIG_ESP_SYSTEM_PANIC_SILENT_REBOOT */
     disable_all_wdts();
     panic_print_str("CPU halted.\r\n");
+    esp_system_reset_modules_on_exit();
     while (1);
 #endif /* CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT || CONFIG_ESP_SYSTEM_PANIC_SILENT_REBOOT */
 #endif /* CONFIG_ESP_SYSTEM_PANIC_GDBSTUB */
@@ -437,7 +438,7 @@ void esp_panic_handler(panic_info_t *info)
 void IRAM_ATTR __attribute__((noreturn, no_sanitize_undefined)) panic_abort(const char *details)
 {
     g_panic_abort = true;
-    s_panic_abort_details = (char *) details;
+    g_panic_abort_details = (char *) details;
 
 #if CONFIG_APPTRACE_ENABLE
 #if CONFIG_APPTRACE_SV_ENABLE

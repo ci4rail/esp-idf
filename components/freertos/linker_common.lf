@@ -6,33 +6,54 @@ archive: libfreertos.a
 entries:
     # ------------------------------------------------------------------------------------------------------------------
     # esp_additions/private_include/freertos_tasks_c_additions.h
+    # Placement Rules (FreeRTOS API Additions):
+    #   - Default: Place all functions in internal RAM.
+    #   - CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH: Place functions in flash if they are never called from an ISR
+    #     context (directly or indirectly).
     # Placement Rules (Task Snapshot):
     #   - Default: Place all functions in internal RAM.
     #   - CONFIG_FREERTOS_PLACE_SNAPSHOT_FUNS_INTO_FLASH: Place functions in flash
     #   - vTaskGetSnapshot is omitted on purpose as it is used to by the Task Watchdog (TWDT) interrupt handler, we want
     #     to always keep it in IRAM
-    # Placement Rules (FreeRTOS API Additions):
-    #   - Default: Place all functions in internal RAM.
-    #   - CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH: Place functions in flash if they are never called from an ISR
-    #     context (directly or indirectly).
     # ------------------------------------------------------------------------------------------------------------------
+    if FREERTOS_PLACE_FUNCTIONS_INTO_FLASH = y:
+        # Kernel Control
+        if FREERTOS_SMP = n && FREERTOS_UNICORE = n:
+            tasks:prvTakeKernelLock (default)
+            tasks:prvReleaseKernelLock (default)
+        # Task Creation
+        tasks:xTaskCreatePinnedToCore (default)
+        tasks:xTaskCreateStaticPinnedToCore (default)
+        # Task Utilities
+        tasks:xTaskGetCoreID (default)
+        tasks:xTaskGetIdleTaskHandleForCore (default)
+        tasks:xTaskGetCurrentTaskHandleForCore (default)
+        if FREERTOS_USE_KERNEL_10_5_1 = y && FREERTOS_GENERATE_RUN_TIME_STATS = y:
+            tasks:ulTaskGetIdleRunTimeCounterForCore (default)
+            tasks:ulTaskGetIdleRunTimePercentForCore (default)
+        tasks:pxTaskGetStackStart (default)
+        tasks:prvTaskPriorityRaise (default)
+        tasks:prvTaskPriorityRestore (default)
+        # TLSP Deletion Callbacks
+        if FREERTOS_TLSP_DELETION_CALLBACKS = y:
+            tasks:vTaskSetThreadLocalStoragePointerAndDelCallback (default)
     # Task Snapshot
     if FREERTOS_PLACE_SNAPSHOT_FUNS_INTO_FLASH = y:
         tasks:pxGetNextTaskList (default)
         tasks:pxTaskGetNext (default)
         tasks:uxTaskGetSnapshotAll (default)
-    # FreeRTOS API Additions
-    if FREERTOS_PLACE_FUNCTIONS_INTO_FLASH = y:
-        if FREERTOS_SMP = y:
-            tasks:xTaskCreatePinnedToCore (default)
-            tasks:xTaskCreateStaticPinnedToCore (default)
-        tasks:xTaskGetCurrentTaskHandleForCPU (default)
-        tasks:xTaskGetIdleTaskHandleForCPU (default)
-        tasks:xTaskGetAffinity (default)
-        if FREERTOS_TLSP_DELETION_CALLBACKS = y:
-            tasks:vTaskSetThreadLocalStoragePointerAndDelCallback (default)
-        tasks:prvTaskPriorityRaise (default)
-        tasks:prvTaskPriorityRestore (default)
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # freertos_compatibility.c
+    # Placement Rules: Functions always in flash as they are never called from an ISR
+    # ------------------------------------------------------------------------------------------------------------------
+    freertos_compatibility (default)
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # idf_additions.c
+    # Placement Rules: Functions always in flash as they are never called from an ISR
+    # ------------------------------------------------------------------------------------------------------------------
+    idf_additions (default)
 
     # ------------------------------------------------------------------------------------------------------------------
     # app_startup.c
@@ -41,10 +62,21 @@ entries:
     app_startup (default)           # Place functions (but not Data and BSS) to flash
 
     # ------------------------------------------------------------------------------------------------------------------
-    # FreeRTOS-openocd.c
-    # Placement Rules: All functions/data in internal RAM as they are called/used by OpenOCD
+    # heap_idf.c
+    # Placement Rules:
+    #   - Default: Place all functions in internal RAM.
+    #   - CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH: Place functions in flash if they are never called from an ISR
+    #     context (directly or indirectly).
     # ------------------------------------------------------------------------------------------------------------------
-    FreeRTOS-openocd (noflash)
+    heap_idf (noflash_text)         # Default all functions to internal RAM
+    if FREERTOS_PLACE_FUNCTIONS_INTO_FLASH = y:
+        heap_idf:pvPortMalloc (default)
+        heap_idf:vPortFree (default)
+        heap_idf:xPortGetFreeHeapSize (default)
+        heap_idf:xPortGetMinimumEverFreeHeapSize (default)
+        if FREERTOS_SMP = n:
+            heap_idf:xPortCheckValidTCBMem (default)
+            heap_idf:xPortcheckValidStackMem (default)
 
     # ------------------------------------------------------------------------------------------------------------------
     # port_common.c
@@ -55,8 +87,17 @@ entries:
     # ------------------------------------------------------------------------------------------------------------------
     port_common (noflash_text)      # Default all functions to internal RAM
     if FREERTOS_PLACE_FUNCTIONS_INTO_FLASH = y:
-        if FREERTOS_SMP = n:
-            port_common:xPortCheckValidTCBMem (default)
-            port_common:xPortcheckValidStackMem (default)
         port_common:vApplicationGetIdleTaskMemory (default)
         port_common:vApplicationGetTimerTaskMemory (default)
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # port_systick.c
+    #   - Default: Place all functions in internal RAM.
+    #   - CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH: Place functions in flash if they are never called from an ISR
+    #     context (directly or indirectly).
+    # ------------------------------------------------------------------------------------------------------------------
+    port_systick(noflash_text)
+    if FREERTOS_PLACE_FUNCTIONS_INTO_FLASH = y:
+        if FREERTOS_SYSTICK_USES_SYSTIMER = y:
+            port_systick:vSystimerSetup (default)
+        port_systick:vPortSetupTimer (default)

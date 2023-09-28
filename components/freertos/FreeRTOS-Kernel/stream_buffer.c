@@ -45,6 +45,8 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "stream_buffer.h"
+/* Include private IDF API additions for critical thread safety macros */
+#include "esp_private/freertos_idf_additions_priv.h"
 
 #if ( configUSE_TASK_NOTIFICATIONS != 1 )
     #error configUSE_TASK_NOTIFICATIONS must be set to 1 to build stream_buffer.c
@@ -385,6 +387,34 @@ static void prvInitialiseNewStreamBuffer( StreamBuffer_t * const pxStreamBuffer,
     }
 
 #endif /* ( configSUPPORT_STATIC_ALLOCATION == 1 ) */
+/*-----------------------------------------------------------*/
+
+#if ( configSUPPORT_STATIC_ALLOCATION == 1 )
+    BaseType_t xStreamBufferGetStaticBuffers( StreamBufferHandle_t xStreamBuffer,
+                                              uint8_t ** ppucStreamBufferStorageArea,
+                                              StaticStreamBuffer_t ** ppxStaticStreamBuffer )
+    {
+        BaseType_t xReturn;
+        const StreamBuffer_t * const pxStreamBuffer = xStreamBuffer;
+
+        configASSERT( pxStreamBuffer );
+        configASSERT( ppucStreamBufferStorageArea );
+        configASSERT( ppxStaticStreamBuffer );
+
+        if( ( pxStreamBuffer->ucFlags & sbFLAGS_IS_STATICALLY_ALLOCATED ) != ( uint8_t ) 0 )
+        {
+            *ppucStreamBufferStorageArea = pxStreamBuffer->pucBuffer;
+            *ppxStaticStreamBuffer = ( StaticStreamBuffer_t * ) pxStreamBuffer;
+            xReturn = pdTRUE;
+        }
+        else
+        {
+            xReturn = pdFALSE;
+        }
+
+        return xReturn;
+    }
+#endif /* configSUPPORT_STATIC_ALLOCATION */
 /*-----------------------------------------------------------*/
 
 void vStreamBufferDelete( StreamBufferHandle_t xStreamBuffer )

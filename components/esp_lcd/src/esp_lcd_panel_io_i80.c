@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -25,10 +25,11 @@
 #include "esp_lcd_panel_io.h"
 #include "esp_rom_gpio.h"
 #include "soc/soc_caps.h"
-#include "clk_tree.h"
+#include "esp_clk_tree.h"
 #include "esp_memory_utils.h"
 #include "hal/dma_types.h"
 #include "hal/gpio_hal.h"
+#include "hal/cache_hal.h"
 #include "esp_private/gdma.h"
 #include "driver/gpio.h"
 #include "esp_private/periph_ctrl.h"
@@ -36,15 +37,16 @@
 #include "soc/lcd_periph.h"
 #include "hal/lcd_ll.h"
 #include "hal/lcd_hal.h"
+#include "esp_cache.h"
+
+#define ALIGN_UP(size, align)    (((size) + (align) - 1) & ~((align) - 1))
+#define ALIGN_DOWN(size, align)  ((size) & ~((align) - 1))
 
 static const char *TAG = "lcd_panel.io.i80";
 
 typedef struct esp_lcd_i80_bus_t esp_lcd_i80_bus_t;
 typedef struct lcd_panel_io_i80_t lcd_panel_io_i80_t;
 typedef struct lcd_i80_trans_descriptor_t lcd_i80_trans_descriptor_t;
-
-// This function is located in ROM (also see esp_rom/${target}/ld/${target}.rom.ld)
-extern int Cache_WriteBack_Addr(uint32_t addr, uint32_t size);
 
 static esp_err_t panel_io_i80_tx_param(esp_lcd_panel_io_t *io, int lcd_cmd, const void *param, size_t param_size);
 static esp_err_t panel_io_i80_tx_color(esp_lcd_panel_io_t *io, int lcd_cmd, const void *color, size_t color_size);
@@ -142,7 +144,12 @@ esp_err_t esp_lcd_new_i80_bus(const esp_lcd_i80_bus_config_t *bus_config, esp_lc
     ESP_GOTO_ON_FALSE(bus_id >= 0, ESP_ERR_NOT_FOUND, err, TAG, "no free i80 bus slot");
     bus->bus_id = bus_id;
     // enable APB to access LCD registers
-    periph_module_enable(lcd_periph_signals.buses[bus_id].module);
+    PERIPH_RCC_ACQUIRE_ATOMIC(lcd_periph_signals.panels[bus_id].module, ref_count) {
+        if (ref_count == 0) {
+            lcd_ll_enable_bus_clock(bus_id, true);
+            lcd_ll_reset_register(bus_id);
+        }
+    }
     // initialize HAL layer, so we can call LL APIs later
     lcd_hal_init(&bus->hal, bus_id);
     // reset peripheral and FIFO
@@ -197,7 +204,11 @@ err:
             gdma_del_channel(bus->dma_chan);
         }
         if (bus->bus_id >= 0) {
-            periph_module_disable(lcd_periph_signals.buses[bus->bus_id].module);
+            PERIPH_RCC_RELEASE_ATOMIC(lcd_periph_signals.panels[bus->bus_id].module, ref_count) {
+                if (ref_count == 0) {
+                    lcd_ll_enable_bus_clock(bus->bus_id, false);
+                }
+            }
             lcd_com_remove_device(LCD_COM_DEVICE_TYPE_I80, bus->bus_id);
         }
         if (bus->format_buffer) {
@@ -218,7 +229,11 @@ esp_err_t esp_lcd_del_i80_bus(esp_lcd_i80_bus_handle_t bus)
     ESP_GOTO_ON_FALSE(LIST_EMPTY(&bus->device_list), ESP_ERR_INVALID_STATE, err, TAG, "device list not empty");
     int bus_id = bus->bus_id;
     lcd_com_remove_device(LCD_COM_DEVICE_TYPE_I80, bus_id);
-    periph_module_disable(lcd_periph_signals.buses[bus_id].module);
+    PERIPH_RCC_RELEASE_ATOMIC(lcd_periph_signals.panels[bus_id].module, ref_count) {
+        if (ref_count == 0) {
+            lcd_ll_enable_bus_clock(bus_id, false);
+        }
+    }
     gdma_disconnect(bus->dma_chan);
     gdma_del_channel(bus->dma_chan);
     esp_intr_free(bus->intr);
@@ -327,6 +342,11 @@ static esp_err_t panel_io_i80_del(esp_lcd_panel_io_t *io)
     portENTER_CRITICAL(&bus->spinlock);
     LIST_REMOVE(i80_device, device_list_entry);
     portEXIT_CRITICAL(&bus->spinlock);
+
+    // reset CS to normal GPIO
+    if (i80_device->cs_gpio_num >= 0) {
+        gpio_reset_pin(i80_device->cs_gpio_num);
+    }
 
     ESP_LOGD(TAG, "del i80 lcd panel io @%p", i80_device);
     vQueueDelete(i80_device->trans_queue);
@@ -471,8 +491,10 @@ static esp_err_t panel_io_i80_tx_color(esp_lcd_panel_io_t *io, int lcd_cmd, cons
     trans_desc->user_ctx = i80_device->user_ctx;
 
     if (esp_ptr_external_ram(color)) {
-        // flush framebuffer from cache to the physical PSRAM
-        Cache_WriteBack_Addr((uint32_t)color, color_size);
+        uint32_t dcache_line_size = cache_hal_get_cache_line_size(CACHE_TYPE_DATA);
+        // flush frame buffer from cache to the physical PSRAM
+        // note the esp_cache_msync function will check the alignment of the address and size, make sure they're aligned to current cache line size
+        esp_cache_msync((void *)ALIGN_DOWN((intptr_t)color, dcache_line_size), ALIGN_UP(color_size, dcache_line_size), 0);
     }
 
     // send transaction to trans_queue
@@ -488,7 +510,7 @@ static esp_err_t lcd_i80_select_periph_clock(esp_lcd_i80_bus_handle_t bus, lcd_c
 {
     // get clock source frequency
     uint32_t src_clk_hz = 0;
-    ESP_RETURN_ON_ERROR(clk_tree_src_get_freq_hz((soc_module_clk_t)clk_src, CLK_TREE_SRC_FREQ_PRECISION_CACHED, &src_clk_hz),
+    ESP_RETURN_ON_ERROR(esp_clk_tree_src_get_freq_hz((soc_module_clk_t)clk_src, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &src_clk_hz),
                         TAG, "get clock source frequency failed");
 
     // force to use integer division, as fractional division might lead to clock jitter
@@ -518,7 +540,11 @@ static esp_err_t lcd_i80_init_dma_link(esp_lcd_i80_bus_handle_t bus)
     gdma_channel_alloc_config_t dma_chan_config = {
         .direction = GDMA_CHANNEL_DIRECTION_TX,
     };
-    ret = gdma_new_channel(&dma_chan_config, &bus->dma_chan);
+#if SOC_GDMA_TRIG_PERIPH_LCD0_BUS == SOC_GDMA_BUS_AHB
+    ret = gdma_new_ahb_channel(&dma_chan_config, &bus->dma_chan);
+#elif SOC_GDMA_TRIG_PERIPH_LCD0_BUS == SOC_GDMA_BUS_AXI
+    ret = gdma_new_axi_channel(&dma_chan_config, &bus->dma_chan);
+#endif
     ESP_GOTO_ON_ERROR(ret, err, TAG, "alloc DMA channel failed");
     gdma_connect(bus->dma_chan, GDMA_MAKE_TRIGGER(GDMA_TRIG_PERIPH_LCD, 0));
     gdma_strategy_config_t strategy_config = {
@@ -579,9 +605,16 @@ static void lcd_periph_trigger_quick_trans_done_event(esp_lcd_i80_bus_handle_t b
 static void lcd_start_transaction(esp_lcd_i80_bus_t *bus, lcd_i80_trans_descriptor_t *trans_desc)
 {
     // by default, the dummy phase is disabled because it's not common for most LCDs
+    uint32_t dummy_cycles = 0;
+    uint32_t cmd_cycles = trans_desc->cmd_value >= 0 ? trans_desc->cmd_cycles : 0;
     // Number of data phase cycles are controlled by DMA buffer length, we only need to enable/disable the phase here
-    lcd_ll_set_phase_cycles(bus->hal.dev, trans_desc->cmd_cycles, 0, trans_desc->data ? 1 : 0);
-    lcd_ll_set_command(bus->hal.dev, bus->bus_width, trans_desc->cmd_value);
+    uint32_t data_cycles = trans_desc->data ? 1 : 0;
+    if (trans_desc->cmd_value >= 0) {
+        lcd_ll_set_command(bus->hal.dev, bus->bus_width, trans_desc->cmd_value);
+    }
+    lcd_ll_set_phase_cycles(bus->hal.dev, cmd_cycles, dummy_cycles, data_cycles);
+    lcd_ll_set_blank_cycles(bus->hal.dev, 1, 1);
+
     if (trans_desc->data) { // some specific LCD commands can have no parameters
         gdma_start(bus->dma_chan, (intptr_t)(bus->dma_nodes));
         // delay 1us is sufficient for DMA to pass data to LCD FIFO

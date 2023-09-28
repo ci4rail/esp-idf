@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -106,6 +106,7 @@ typedef struct {
     bool                    fec_required;           /*!< FEC is required or not, true by default */
     bool                    include_txpower;        /*!< EIR data include TX power, false by default */
     bool                    include_uuid;           /*!< EIR data include UUID, false by default */
+    bool                    include_name;           /*!< EIR data include device name, true by default */
     uint8_t                 flag;                   /*!< EIR flags, see ESP_BT_EIR_FLAG for details, EIR will not include flag if it is 0, 0 by default */
     uint16_t                manufacturer_len;       /*!< Manufacturer data length, 0 by default */
     uint8_t                 *p_manufacturer_data;   /*!< Manufacturer data point */
@@ -217,6 +218,8 @@ typedef enum {
     ESP_BT_GAP_QOS_CMPL_EVT,                        /*!< QOS complete event */
     ESP_BT_GAP_ACL_CONN_CMPL_STAT_EVT,              /*!< ACL connection complete status event */
     ESP_BT_GAP_ACL_DISCONN_CMPL_STAT_EVT,           /*!< ACL disconnection complete status event */
+    ESP_BT_GAP_SET_PAGE_TO_EVT,                     /*!< Set page timeout event */
+    ESP_BT_GAP_GET_PAGE_TO_EVT,                     /*!< Get page timeout event */
     ESP_BT_GAP_EVT_MAX,
 } esp_bt_gap_cb_event_t;
 
@@ -370,6 +373,21 @@ typedef union {
                                                     which from the master to a particular slave on the ACL
                                                     logical transport. unit is 0.625ms. */
     } qos_cmpl;                                /*!< QoS complete parameter struct */
+
+    /**
+     * @brief ESP_BT_GAP_SET_PAGE_TO_EVT
+     */
+    struct page_to_set_param {
+        esp_bt_status_t stat;                   /*!< set page timeout status*/
+    } set_page_timeout;                         /*!< set page timeout parameter struct */
+
+    /**
+     * @brief ESP_BT_GAP_GET_PAGE_TO_EVT
+     */
+    struct page_to_get_param {
+        esp_bt_status_t stat;                   /*!< get page timeout status*/
+        uint16_t page_to;                       /*!< page_timeout value to be set, unit is 0.625ms. */
+    } get_page_timeout;                         /*!< get page timeout parameter struct */
 
     /**
      * @brief ESP_BT_GAP_ACL_CONN_CMPL_STAT_EVT
@@ -576,7 +594,9 @@ esp_err_t esp_bt_gap_config_eir_data(esp_bt_eir_data_t *eir_data);
 /**
  * @brief           This function is called to set class of device.
  *                  The structure esp_bt_gap_cb_t will be called with ESP_BT_GAP_SET_COD_EVT after set COD ends.
- *                  Some profile have special restrictions on class of device, changes may cause these profile do not work.
+ *                  This function should be called after Bluetooth profiles are initialized, otherwise the user configured
+ *                  class of device can be overwritten.
+ *                  Some profiles have special restrictions on class of device, and changes may make these profiles unable to work.
  *
  * @param[in]       cod - class of device
  * @param[in]       mode - setting mode
@@ -689,7 +709,6 @@ esp_err_t esp_bt_gap_set_pin(esp_bt_pin_type_t pin_type, uint8_t pin_code_len, e
 */
 esp_err_t esp_bt_gap_pin_reply(esp_bd_addr_t bd_addr, bool accept, uint8_t pin_code_len, esp_bt_pin_code_t pin_code);
 
-#if (BT_SSP_INCLUDED == TRUE)
 /**
 * @brief            Set a GAP security parameter value. Overrides the default value.
 *
@@ -738,8 +757,6 @@ esp_err_t esp_bt_gap_ssp_passkey_reply(esp_bd_addr_t bd_addr, bool accept, uint3
 */
 esp_err_t esp_bt_gap_ssp_confirm_reply(esp_bd_addr_t bd_addr, bool accept);
 
-#endif /*(BT_SSP_INCLUDED == TRUE)*/
-
 /**
 * @brief            Set the AFH channels
 *
@@ -782,6 +799,35 @@ esp_err_t esp_bt_gap_read_remote_name(esp_bd_addr_t remote_bda);
 *
 */
 esp_err_t esp_bt_gap_set_qos(esp_bd_addr_t remote_bda, uint32_t t_poll);
+
+/**
+ * @brief           Set the page timeout
+ *                  esp_bt_gap_cb_t will be called with ESP_BT_GAP_SET_PAGE_TO_EVT
+ *                  after set page timeout ends. The value to be set will not be effective util the
+ *                  next page procedure, it's suggested to set the page timeout before initiating
+ *                  a connection.
+ *
+ * @param[in]       page_to: Page timeout, the maximum time the master will wait for a
+                             Base-band page response from the remote device at a locally
+                             initiated connection attempt. The valid range is 0x0016 ~ 0xffff,
+                             the default value is 0x2000, unit is 0.625ms.
+ *
+ * @return          - ESP_OK: success
+ *                  - ESP_ERR_INVALID_STATE: if bluetooth stack is not yet enabled
+ *                  - other: failed
+ */
+esp_err_t esp_bt_gap_set_page_timeout(uint16_t page_to);
+
+/**
+ * @brief           Get the page timeout
+ *                  esp_bt_gap_cb_t will be called with ESP_BT_GAP_GET_PAGE_TO_EVT
+ *                  after get page timeout ends
+ *
+ * @return          - ESP_OK: success
+ *                  - ESP_ERR_INVALID_STATE: if bluetooth stack is not yet enabled
+ *                  - other: failed
+ */
+esp_err_t esp_bt_gap_get_page_timeout(void);
 
 #ifdef __cplusplus
 }

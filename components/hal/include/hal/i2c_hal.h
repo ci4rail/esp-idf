@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,12 +14,17 @@
 
 #pragma once
 
-#include "hal/i2c_ll.h"
+#include "soc/soc_caps.h"
 #include "hal/i2c_types.h"
+#if SOC_I2C_SUPPORTED
+#include "hal/i2c_ll.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#if SOC_I2C_SUPPORTED
 
 /**
  * @brief I2C hal Context definition
@@ -27,6 +32,22 @@ extern "C" {
 typedef struct {
     i2c_dev_t *dev;
 } i2c_hal_context_t;
+
+/**
+ * @brief Timing configuration structure. Used for I2C reset internally.
+ */
+typedef struct {
+    int high_period; /*!< high_period time */
+    int low_period; /*!< low_period time */
+    int wait_high_period; /*!< wait_high_period time */
+    int rstart_setup; /*!< restart setup */
+    int start_hold; /*!< start hold time */
+    int stop_setup; /*!< stop setup */
+    int stop_hold; /*!< stop hold time */
+    int sda_sample; /*!< high_period time */
+    int sda_hold; /*!< sda hold time */
+    int timeout; /*!< timeout value */
+} i2c_hal_timing_config_t;
 
 #if SOC_I2C_SUPPORT_SLAVE
 
@@ -130,6 +151,8 @@ void i2c_hal_get_timing_config(i2c_hal_context_t *hal, i2c_hal_timing_config_t *
  * @param timing_config Timing config structure.
  */
 void i2c_hal_set_timing_config(i2c_hal_context_t *hal, i2c_hal_timing_config_t *timing_config);
+
+#endif  // #if SOC_I2C_SUPPORTED
 
 #ifdef __cplusplus
 }

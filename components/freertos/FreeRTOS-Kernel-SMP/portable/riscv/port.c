@@ -9,6 +9,7 @@
 #include "soc/soc_caps.h"
 #include "soc/periph_defs.h"
 #include "soc/system_reg.h"
+#include "soc/interrupt_reg.h"
 #include "hal/systimer_hal.h"
 #include "hal/systimer_ll.h"
 #include "riscv/rvruntime-frames.h"
@@ -27,6 +28,7 @@
 #include "esp_log.h"
 #include "FreeRTOS.h"       /* This pulls in portmacro.h */
 #include "task.h"
+#include "port_systick.h"
 #include "portmacro.h"
 #include "esp_memory_utils.h"
 #ifdef CONFIG_FREERTOS_SYSTICK_USES_SYSTIMER
@@ -40,6 +42,17 @@
 #endif //CONFIG_PM_TRACE
 
 _Static_assert(portBYTE_ALIGNMENT == 16, "portBYTE_ALIGNMENT must be set to 16");
+#if CONFIG_ESP_SYSTEM_HW_STACK_GUARD
+/**
+ * offsetof() can not be used in asm code. Then we need make sure that
+ * PORT_OFFSET_PX_STACK and PORT_OFFSET_PX_END_OF_STACK have expected values.
+ * Macro used in the portasm.S instead of variables to save at least 4 instruction calls
+ * which accessing DRAM memory. This optimization saves CPU time in the interrupt handling.
+ */
+
+_Static_assert(offsetof( StaticTask_t, pxDummy6 ) == PORT_OFFSET_PX_STACK);
+_Static_assert(offsetof( StaticTask_t, pxDummy8 ) == PORT_OFFSET_PX_END_OF_STACK);
+#endif // CONFIG_ESP_SYSTEM_HW_STACK_GUARD
 
 /* ---------------------------------------------------- Variables ------------------------------------------------------
  *
@@ -50,7 +63,7 @@ volatile UBaseType_t uxInterruptNesting = 0;
 portMUX_TYPE port_xTaskLock = portMUX_INITIALIZER_UNLOCKED;
 portMUX_TYPE port_xISRLock = portMUX_INITIALIZER_UNLOCKED;
 volatile BaseType_t xPortSwitchFlag = 0;
-__attribute__((aligned(16))) static StackType_t xIsrStack[configISR_STACK_SIZE];
+__attribute__((aligned(16))) StackType_t xIsrStack[configISR_STACK_SIZE];
 StackType_t *xIsrStackTop = &xIsrStack[0] + (configISR_STACK_SIZE & (~((portPOINTER_SIZE_TYPE)portBYTE_ALIGNMENT_MASK)));
 
 // Variables used for IDF style critical sections. These are orthogonal to FreeRTOS critical sections
@@ -98,127 +111,6 @@ void vPortSetStackWatchpoint(void *pxStackStart)
     esp_cpu_set_watchpoint(STACK_WATCH_POINT_NUMBER, (char *)addr, STACK_WATCH_AREA_SIZE, ESP_CPU_WATCHPOINT_STORE);
 }
 
-// ---------------------- Tick Timer -----------------------
-
-BaseType_t xPortSysTickHandler(void);
-
-#ifdef CONFIG_FREERTOS_SYSTICK_USES_CCOUNT
-
-#ifdef CONFIG_FREERTOS_CORETIMER_0
-    #define SYSTICK_INTR_ID (ETS_INTERNAL_TIMER0_INTR_SOURCE+ETS_INTERNAL_INTR_SOURCE_OFF)
-#endif
-#ifdef CONFIG_FREERTOS_CORETIMER_1
-    #define SYSTICK_INTR_ID (ETS_INTERNAL_TIMER1_INTR_SOURCE+ETS_INTERNAL_INTR_SOURCE_OFF)
-#endif
-
-#elif CONFIG_FREERTOS_SYSTICK_USES_SYSTIMER
-
-_Static_assert(SOC_CPU_CORES_NUM <= SOC_SYSTIMER_ALARM_NUM - 1, "the number of cores must match the number of core alarms in SYSTIMER");
-
-void SysTickIsrHandler(void *arg);
-
-static uint32_t s_handled_systicks[portNUM_PROCESSORS] = { 0 };
-
-#define SYSTICK_INTR_ID (ETS_SYSTIMER_TARGET0_EDGE_INTR_SOURCE)
-
-/**
- * @brief Set up the systimer peripheral to generate the tick interrupt
- *
- * Both timer alarms are configured in periodic mode.
- * It is done at the same time so SysTicks for both CPUs occur at the same time or very close.
- * Shifts a time of triggering interrupts for core 0 and core 1.
- */
-void vPortSetupTimer(void)
-{
-    unsigned cpuid = xPortGetCoreID();
-#ifdef CONFIG_FREERTOS_CORETIMER_SYSTIMER_LVL3
-    const unsigned level = ESP_INTR_FLAG_LEVEL3;
-#else
-    const unsigned level = ESP_INTR_FLAG_LEVEL1;
-#endif
-    /* Systimer HAL layer object */
-    static systimer_hal_context_t systimer_hal;
-    /* set system timer interrupt vector */
-    ESP_ERROR_CHECK(esp_intr_alloc(ETS_SYSTIMER_TARGET0_EDGE_INTR_SOURCE + cpuid, ESP_INTR_FLAG_IRAM | level, SysTickIsrHandler, &systimer_hal, NULL));
-
-    if (cpuid == 0) {
-        periph_module_enable(PERIPH_SYSTIMER_MODULE);
-        systimer_hal_init(&systimer_hal);
-        systimer_hal_tick_rate_ops_t ops = {
-            .ticks_to_us = systimer_ticks_to_us,
-            .us_to_ticks = systimer_us_to_ticks,
-        };
-        systimer_hal_set_tick_rate_ops(&systimer_hal, &ops);
-        systimer_ll_set_counter_value(systimer_hal.dev, SYSTIMER_COUNTER_OS_TICK, 0);
-        systimer_ll_apply_counter_value(systimer_hal.dev, SYSTIMER_COUNTER_OS_TICK);
-
-        for (cpuid = 0; cpuid < SOC_CPU_CORES_NUM; cpuid++) {
-            systimer_hal_counter_can_stall_by_cpu(&systimer_hal, SYSTIMER_COUNTER_OS_TICK, cpuid, false);
-        }
-
-        for (cpuid = 0; cpuid < portNUM_PROCESSORS; ++cpuid) {
-            uint32_t alarm_id = SYSTIMER_ALARM_OS_TICK_CORE0 + cpuid;
-
-            /* configure the timer */
-            systimer_hal_connect_alarm_counter(&systimer_hal, alarm_id, SYSTIMER_COUNTER_OS_TICK);
-            systimer_hal_set_alarm_period(&systimer_hal, alarm_id, 1000000UL / CONFIG_FREERTOS_HZ);
-            systimer_hal_select_alarm_mode(&systimer_hal, alarm_id, SYSTIMER_ALARM_MODE_PERIOD);
-            systimer_hal_counter_can_stall_by_cpu(&systimer_hal, SYSTIMER_COUNTER_OS_TICK, cpuid, true);
-            if (cpuid == 0) {
-                systimer_hal_enable_alarm_int(&systimer_hal, alarm_id);
-                systimer_hal_enable_counter(&systimer_hal, SYSTIMER_COUNTER_OS_TICK);
-#ifndef CONFIG_FREERTOS_UNICORE
-                // SysTick of core 0 and core 1 are shifted by half of period
-                systimer_hal_counter_value_advance(&systimer_hal, SYSTIMER_COUNTER_OS_TICK, 1000000UL / CONFIG_FREERTOS_HZ / 2);
-#endif
-            }
-        }
-    } else {
-        uint32_t alarm_id = SYSTIMER_ALARM_OS_TICK_CORE0 + cpuid;
-        systimer_hal_enable_alarm_int(&systimer_hal, alarm_id);
-    }
-}
-
-/**
- * @brief Systimer interrupt handler.
- *
- * The Systimer interrupt for SysTick works in periodic mode no need to calc the next alarm.
- * If a timer interrupt is ever serviced more than one tick late, it is necessary to process multiple ticks.
- */
-IRAM_ATTR void SysTickIsrHandler(void *arg)
-{
-    uint32_t cpuid = xPortGetCoreID();
-    systimer_hal_context_t *systimer_hal = (systimer_hal_context_t *)arg;
-#ifdef CONFIG_PM_TRACE
-    ESP_PM_TRACE_ENTER(TICK, cpuid);
-#endif
-
-    uint32_t alarm_id = SYSTIMER_ALARM_OS_TICK_CORE0 + cpuid;
-    do {
-        systimer_ll_clear_alarm_int(systimer_hal->dev, alarm_id);
-
-        uint32_t diff = systimer_hal_get_counter_value(systimer_hal, SYSTIMER_COUNTER_OS_TICK) / systimer_ll_get_alarm_period(systimer_hal->dev, alarm_id) - s_handled_systicks[cpuid];
-        if (diff > 0) {
-            if (s_handled_systicks[cpuid] == 0) {
-                s_handled_systicks[cpuid] = diff;
-                diff = 1;
-            } else {
-                s_handled_systicks[cpuid] += diff;
-            }
-
-            do {
-                xPortSysTickHandler();
-            } while (--diff);
-        }
-    } while (systimer_ll_is_alarm_int_fired(systimer_hal->dev, alarm_id));
-
-#ifdef CONFIG_PM_TRACE
-    ESP_PM_TRACE_EXIT(TICK, cpuid);
-#endif
-}
-
-#endif // CONFIG_FREERTOS_SYSTICK_USES_SYSTIMER
-
 
 
 /* ---------------------------------------------- Port Implementations -------------------------------------------------
@@ -231,8 +123,8 @@ UBaseType_t ulPortSetInterruptMask(void)
 {
     int ret;
     unsigned old_mstatus = RV_CLEAR_CSR(mstatus, MSTATUS_MIE);
-    ret = REG_READ(INTERRUPT_CORE0_CPU_INT_THRESH_REG);
-    REG_WRITE(INTERRUPT_CORE0_CPU_INT_THRESH_REG, RVHAL_EXCM_LEVEL);
+    ret = REG_READ(INTERRUPT_CURRENT_CORE_INT_THRESH_REG);
+    REG_WRITE(INTERRUPT_CURRENT_CORE_INT_THRESH_REG, RVHAL_EXCM_LEVEL);
     RV_SET_CSR(mstatus, old_mstatus & MSTATUS_MIE);
     /**
      * In theory, this function should not return immediately as there is a
@@ -250,7 +142,7 @@ UBaseType_t ulPortSetInterruptMask(void)
 
 void vPortClearInterruptMask(UBaseType_t mask)
 {
-    REG_WRITE(INTERRUPT_CORE0_CPU_INT_THRESH_REG, mask);
+    REG_WRITE(INTERRUPT_CURRENT_CORE_INT_THRESH_REG, mask);
     /**
      * The delay between the moment we unmask the interrupt threshold register
      * and the moment the potential requested interrupt is triggered is not
@@ -317,6 +209,63 @@ void vPortYieldFromISR( void )
     uxSchedulerRunning = 1;
     xPortSwitchFlag = 1;
 }
+// ----------------------- System --------------------------
+
+// ------------------- Run Time Stats ----------------------
+
+// --------------------- TCB Cleanup -----------------------
+
+#if ( CONFIG_FREERTOS_TLSP_DELETION_CALLBACKS )
+static void vPortTLSPointersDelCb( void *pxTCB )
+{
+    /* Typecast pxTCB to StaticTask_t type to access TCB struct members.
+     * pvDummy15 corresponds to pvThreadLocalStoragePointers member of the TCB.
+     */
+    StaticTask_t *tcb = ( StaticTask_t * )pxTCB;
+
+    /* The TLSP deletion callbacks are stored at an offset of (configNUM_THREAD_LOCAL_STORAGE_POINTERS/2) */
+    TlsDeleteCallbackFunction_t *pvThreadLocalStoragePointersDelCallback = ( TlsDeleteCallbackFunction_t * )( &( tcb->pvDummy15[ ( configNUM_THREAD_LOCAL_STORAGE_POINTERS / 2 ) ] ) );
+
+    /* We need to iterate over half the depth of the pvThreadLocalStoragePointers area
+     * to access all TLS pointers and their respective TLS deletion callbacks.
+     */
+    for ( int x = 0; x < ( configNUM_THREAD_LOCAL_STORAGE_POINTERS / 2 ); x++ ) {
+        if ( pvThreadLocalStoragePointersDelCallback[ x ] != NULL ) {  //If del cb is set
+            /* In case the TLSP deletion callback has been overwritten by a TLS pointer, gracefully abort. */
+            if ( !esp_ptr_executable( pvThreadLocalStoragePointersDelCallback[ x ] ) ) {
+                ESP_LOGE("FreeRTOS", "Fatal error: TLSP deletion callback at index %d overwritten with non-excutable pointer %p", x, pvThreadLocalStoragePointersDelCallback[ x ]);
+                abort();
+            }
+
+            pvThreadLocalStoragePointersDelCallback[ x ]( x, tcb->pvDummy15[ x ] );   //Call del cb
+        }
+    }
+}
+#endif /* CONFIG_FREERTOS_TLSP_DELETION_CALLBACKS */
+
+void vPortTCBPreDeleteHook( void *pxTCB )
+{
+    #if ( CONFIG_FREERTOS_TASK_PRE_DELETION_HOOK )
+        /* Call the user defined task pre-deletion hook */
+        extern void vTaskPreDeletionHook( void * pxTCB );
+        vTaskPreDeletionHook( pxTCB );
+    #endif /* CONFIG_FREERTOS_TASK_PRE_DELETION_HOOK */
+
+    #if ( CONFIG_FREERTOS_ENABLE_STATIC_TASK_CLEAN_UP )
+        /*
+         * If the user is using the legacy task pre-deletion hook, call it.
+         * Todo: Will be removed in IDF-8097
+         */
+        #warning "CONFIG_FREERTOS_ENABLE_STATIC_TASK_CLEAN_UP is deprecated. Use CONFIG_FREERTOS_TASK_PRE_DELETION_HOOK instead."
+        extern void vPortCleanUpTCB( void * pxTCB );
+        vPortCleanUpTCB( pxTCB );
+    #endif /* CONFIG_FREERTOS_ENABLE_STATIC_TASK_CLEAN_UP */
+
+    #if ( CONFIG_FREERTOS_TLSP_DELETION_CALLBACKS )
+        /* Call TLS pointers deletion callbacks */
+        vPortTLSPointersDelCb( pxTCB );
+    #endif /* CONFIG_FREERTOS_TLSP_DELETION_CALLBACKS */
+}
 
 /* ------------------------------------------------ FreeRTOS Portable --------------------------------------------------
  * - Provides implementation for functions required by FreeRTOS
@@ -348,42 +297,6 @@ void vPortEndScheduler(void)
     /* very unlikely this function will be called, so just trap here */
     abort();
 }
-
-// ----------------------- Memory --------------------------
-
-#define FREERTOS_SMP_MALLOC_CAPS    (MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT)
-
-void *pvPortMalloc( size_t xSize )
-{
-    return heap_caps_malloc(xSize, FREERTOS_SMP_MALLOC_CAPS);
-}
-
-void vPortFree( void *pv )
-{
-    heap_caps_free(pv);
-}
-
-void vPortInitialiseBlocks( void )
-{
-    ;   //Does nothing, heap is initialized separately in ESP-IDF
-}
-
-size_t xPortGetFreeHeapSize( void )
-{
-    return esp_get_free_heap_size();
-}
-
-#if( configSTACK_ALLOCATION_FROM_SEPARATE_HEAP == 1 )
-void *pvPortMallocStack( size_t xSize )
-{
-    return NULL;
-}
-
-void vPortFreeStack( void *pv )
-{
-
-}
-#endif
 
 // ------------------------ Stack --------------------------
 
@@ -568,58 +481,6 @@ StackType_t *pxPortInitialiseStack(StackType_t *pxTopOfStack, TaskFunction_t pxC
     //TODO: IDF-2393
 }
 
-// ------- Thread Local Storage Pointers Deletion Callbacks -------
-
-#if ( CONFIG_FREERTOS_TLSP_DELETION_CALLBACKS )
-void vPortTLSPointersDelCb( void *pxTCB )
-{
-    /* Typecast pxTCB to StaticTask_t type to access TCB struct members.
-     * pvDummy15 corresponds to pvThreadLocalStoragePointers member of the TCB.
-     */
-    StaticTask_t *tcb = ( StaticTask_t * )pxTCB;
-
-    /* The TLSP deletion callbacks are stored at an offset of (configNUM_THREAD_LOCAL_STORAGE_POINTERS/2) */
-    TlsDeleteCallbackFunction_t *pvThreadLocalStoragePointersDelCallback = ( TlsDeleteCallbackFunction_t * )( &( tcb->pvDummy15[ ( configNUM_THREAD_LOCAL_STORAGE_POINTERS / 2 ) ] ) );
-
-    /* We need to iterate over half the depth of the pvThreadLocalStoragePointers area
-     * to access all TLS pointers and their respective TLS deletion callbacks.
-     */
-    for ( int x = 0; x < ( configNUM_THREAD_LOCAL_STORAGE_POINTERS / 2 ); x++ ) {
-        if ( pvThreadLocalStoragePointersDelCallback[ x ] != NULL ) {  //If del cb is set
-            /* In case the TLSP deletion callback has been overwritten by a TLS pointer, gracefully abort. */
-            if ( !esp_ptr_executable( pvThreadLocalStoragePointersDelCallback[ x ] ) ) {
-                ESP_LOGE("FreeRTOS", "Fatal error: TLSP deletion callback at index %d overwritten with non-excutable pointer %p", x, pvThreadLocalStoragePointersDelCallback[ x ]);
-                abort();
-            }
-
-            pvThreadLocalStoragePointersDelCallback[ x ]( x, tcb->pvDummy15[ x ] );   //Call del cb
-        }
-    }
-}
-#endif // CONFIG_FREERTOS_TLSP_DELETION_CALLBACKS
-
-// -------------------- Tick Handler -----------------------
-
-extern void esp_vApplicationIdleHook(void);
-extern void esp_vApplicationTickHook(void);
-
-BaseType_t xPortSysTickHandler(void)
-{
-#if configBENCHMARK
-    portbenchmarkIntLatency();
-#endif //configBENCHMARK
-    traceISR_ENTER(SYSTICK_INTR_ID);
-    BaseType_t ret = xTaskIncrementTick();
-    //Manually call the IDF tick hooks
-    esp_vApplicationTickHook();
-    if (ret != pdFALSE) {
-        portYIELD_FROM_ISR();
-    } else {
-        traceISR_EXIT();
-    }
-    return ret;
-}
-
 // ------------------- Hook Functions ----------------------
 
 void __attribute__((weak)) vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
@@ -644,6 +505,7 @@ void vApplicationTickHook( void )
 }
 #endif
 
+extern void esp_vApplicationIdleHook(void);
 #if CONFIG_FREERTOS_USE_MINIMAL_IDLE_HOOK
 /*
 By default, the port uses vApplicationMinimalIdleHook() to run IDF style idle
@@ -662,26 +524,3 @@ void vApplicationMinimalIdleHook( void )
     esp_vApplicationIdleHook(); //Run IDF style hooks
 }
 #endif // CONFIG_FREERTOS_USE_MINIMAL_IDLE_HOOK
-
-/*
- * Hook function called during prvDeleteTCB() to cleanup any
- * user defined static memory areas in the TCB.
- */
-#if CONFIG_FREERTOS_ENABLE_STATIC_TASK_CLEAN_UP
-void __real_vPortCleanUpTCB( void *pxTCB );
-
-void __wrap_vPortCleanUpTCB( void *pxTCB )
-#else
-void vPortCleanUpTCB ( void *pxTCB )
-#endif /* CONFIG_FREERTOS_ENABLE_STATIC_TASK_CLEAN_UP */
-{
-#if ( CONFIG_FREERTOS_ENABLE_STATIC_TASK_CLEAN_UP )
-    /* Call user defined vPortCleanUpTCB */
-    __real_vPortCleanUpTCB( pxTCB );
-#endif /* CONFIG_FREERTOS_ENABLE_STATIC_TASK_CLEAN_UP */
-
-#if ( CONFIG_FREERTOS_TLSP_DELETION_CALLBACKS )
-    /* Call TLS pointers deletion callbacks */
-    vPortTLSPointersDelCb( pxTCB );
-#endif /* CONFIG_FREERTOS_TLSP_DELETION_CALLBACKS */
-}

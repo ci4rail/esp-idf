@@ -69,7 +69,7 @@ static void mcpwm_timer_unregister_from_group(mcpwm_timer_t *timer)
     mcpwm_release_group_handle(group);
 }
 
-static esp_err_t mcpwm_timer_destory(mcpwm_timer_t *timer)
+static esp_err_t mcpwm_timer_destroy(mcpwm_timer_t *timer)
 {
     if (timer->intr) {
         ESP_RETURN_ON_ERROR(esp_intr_free(timer->intr), TAG, "uninstall interrupt service failed");
@@ -91,6 +91,10 @@ esp_err_t mcpwm_new_timer(const mcpwm_timer_config_t *config, mcpwm_timer_handle
     ESP_GOTO_ON_FALSE(config && ret_timer, ESP_ERR_INVALID_ARG, err, TAG, "invalid argument");
     ESP_GOTO_ON_FALSE(config->group_id < SOC_MCPWM_GROUPS && config->group_id >= 0, ESP_ERR_INVALID_ARG,
                       err, TAG, "invalid group ID:%d", config->group_id);
+    if (config->intr_priority) {
+        ESP_GOTO_ON_FALSE(1 << (config->intr_priority) & MCPWM_ALLOW_INTR_PRIORITY_MASK, ESP_ERR_INVALID_ARG, err,
+                          TAG, "invalid interrupt priority:%d", config->intr_priority);
+    }
 
     timer = heap_caps_calloc(1, sizeof(mcpwm_timer_t), MCPWM_MEM_ALLOC_CAPS);
     ESP_GOTO_ON_FALSE(timer, ESP_ERR_NO_MEM, err, TAG, "no mem for timer");
@@ -100,12 +104,19 @@ esp_err_t mcpwm_new_timer(const mcpwm_timer_config_t *config, mcpwm_timer_handle
     int group_id = group->group_id;
     mcpwm_hal_context_t *hal = &group->hal;
     int timer_id = timer->timer_id;
+
+    // if interrupt priority specified before, it cannot be changed until the group is released
+    // check if the new priority specified consistents with the old one
+    ESP_GOTO_ON_ERROR(mcpwm_check_intr_priority(group, config->intr_priority), err, TAG, "set group intrrupt priority failed");
+
     // select the clock source
-    ESP_GOTO_ON_ERROR(mcpwm_select_periph_clock(group, (soc_module_clk_t)config->clk_src), err, TAG, "set group clock failed");
+    mcpwm_timer_clock_source_t clk_src = config->clk_src ? config->clk_src : MCPWM_TIMER_CLK_SRC_DEFAULT;
+    ESP_GOTO_ON_ERROR(mcpwm_select_periph_clock(group, (soc_module_clk_t)clk_src), err, TAG, "set group clock failed");
     // reset the timer to a determined state
     mcpwm_hal_timer_reset(hal, timer_id);
     // set timer resolution
-    uint32_t prescale = group->resolution_hz / config->resolution_hz;
+    uint32_t prescale = 0;
+    ESP_GOTO_ON_ERROR(mcpwm_set_prescale(group, config->resolution_hz, MCPWM_LL_MAX_TIMER_PRESCALE, &prescale), err, TAG, "set prescale failed");
     mcpwm_ll_timer_set_clock_prescale(hal->dev, timer_id, prescale);
     timer->resolution_hz = group->resolution_hz / prescale;
     if (timer->resolution_hz != config->resolution_hz) {
@@ -136,7 +147,7 @@ esp_err_t mcpwm_new_timer(const mcpwm_timer_config_t *config, mcpwm_timer_handle
 
 err:
     if (timer) {
-        mcpwm_timer_destory(timer);
+        mcpwm_timer_destroy(timer);
     }
     return ret;
 }
@@ -159,7 +170,7 @@ esp_err_t mcpwm_del_timer(mcpwm_timer_handle_t timer)
 
     ESP_LOGD(TAG, "del timer (%d,%d)", group->group_id, timer_id);
     // recycle memory resource
-    ESP_RETURN_ON_ERROR(mcpwm_timer_destory(timer), TAG, "destory timer failed");
+    ESP_RETURN_ON_ERROR(mcpwm_timer_destroy(timer), TAG, "destroy timer failed");
     return ESP_OK;
 }
 
@@ -190,6 +201,7 @@ esp_err_t mcpwm_timer_register_event_callbacks(mcpwm_timer_handle_t timer, const
     if (!timer->intr) {
         ESP_RETURN_ON_FALSE(timer->fsm == MCPWM_TIMER_FSM_INIT, ESP_ERR_INVALID_STATE, TAG, "timer not in init state");
         int isr_flags = MCPWM_INTR_ALLOC_FLAG;
+        isr_flags |= mcpwm_get_intr_priority_flag(group);
         ESP_RETURN_ON_ERROR(esp_intr_alloc_intrstatus(mcpwm_periph_signals.groups[group_id].irq_id, isr_flags,
                             (uint32_t)mcpwm_ll_intr_get_status_reg(hal->dev), MCPWM_LL_EVENT_TIMER_MASK(timer_id),
                             mcpwm_timer_default_isr, timer, &timer->intr), TAG, "install interrupt service for timer failed");

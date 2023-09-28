@@ -208,7 +208,6 @@ entries:
         # - Most functions are called from an ISR context, except for scheduler/task init/deinit functions
         # --------------------------------------------------------------------------------------------------------------
         if IDF_TARGET_ARCH_XTENSA = y:
-            port:vPortSetupTimer (default)
             port:xPortStartScheduler (default)
             port:vPortEndScheduler (default)
             port:pvPortMalloc (default)
@@ -220,13 +219,12 @@ entries:
                 port:vPortCleanUpCoprocArea (default)
             if FREERTOS_TLSP_DELETION_CALLBACKS = y:
                 port:vPortTLSPointersDelCb (default)
-            port:vPortCleanUpTCB (default)
+            port:vPortTCBPreDeleteHook (default)
         # --------------------------------------------------------------------------------------------------------------
         # portable/riscv/port.c
         # - Most functions are called from an ISR context, except for scheduler/task init/deinit functions
         # --------------------------------------------------------------------------------------------------------------
         if IDF_TARGET_ARCH_RISCV = y:
-            port:vPortSetupTimer (default)
             port:xPortStartScheduler (default)
             port:vPortEndScheduler (default)
             port:pvPortMalloc (default)
@@ -236,4 +234,4 @@ entries:
             port:pxPortInitialiseStack (default)
             if FREERTOS_TLSP_DELETION_CALLBACKS = y:
                 port:vPortTLSPointersDelCb (default)
-            port:vPortCleanUpTCB (default)
+            port:vPortTCBPreDeleteHook (default)

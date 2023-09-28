@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2010-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2010-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -164,6 +164,20 @@ inline static void * esp_ptr_diram_iram_to_dram(const void *p) {
 #endif
 }
 
+#if SOC_MEM_TCM_SUPPORTED
+/**
+ * @brief Check if the pointer is in TCM
+ *
+ * @param p pointer
+ *
+ * @return true: is in TCM; false: not in TCM
+ */
+__attribute__((always_inline))
+inline static bool esp_ptr_in_tcm(const void *p) {
+    return ((intptr_t)p >= SOC_TCM_LOW && (intptr_t)p < SOC_TCM_HIGH);
+}
+#endif  //#if SOC_MEM_TCM_SUPPORTED
+
 /** End of common functions to be kept in sync with bootloader_memory_utils.h **/
 /** Add app-specific functions below **/
 
@@ -256,6 +270,17 @@ inline static bool esp_ptr_internal(const void *p) {
      * additional check is required */
     r |= ((intptr_t)p >= SOC_RTC_DRAM_LOW && (intptr_t)p < SOC_RTC_DRAM_HIGH);
 #endif
+
+#if CONFIG_ESP32S3_DATA_CACHE_16KB
+    /* For ESP32-S3, when the DCACHE size is set to 16 kB, the unused 48 kB is
+     * added to the heap in 2 blocks of 32 kB (from 0x3FCF0000) and 16 kB
+     * (from 0x3C000000 (SOC_DROM_LOW) - 0x3C004000).
+     * Though this memory lies in the external memory vaddr, it is no different
+     * from the internal RAM in terms of hardware attributes and it is a part of
+     * the internal RAM when added to the heap.*/
+    r |= ((intptr_t)p >= SOC_DROM_LOW && (intptr_t)p < (SOC_DROM_LOW + 0x4000));
+#endif
+
     return r;
 }
 
@@ -277,7 +302,17 @@ bool esp_ptr_external_ram(const void *p);
  */
 __attribute__((always_inline))
 inline static bool esp_ptr_in_drom(const void *p) {
-    return ((intptr_t)p >= SOC_DROM_LOW && (intptr_t)p < SOC_DROM_HIGH);
+    int32_t drom_start_addr = SOC_DROM_LOW;
+#if CONFIG_ESP32S3_DATA_CACHE_16KB
+    /* For ESP32-S3, when the DCACHE size is set to 16 kB, the unused 48 kB is
+     * added to the heap in 2 blocks of 32 kB (from 0x3FCF0000) and 16 kB
+     * (from 0x3C000000 (SOC_DROM_LOW) - 0x3C004000).
+     * The drom_start_addr has to be moved by 0x4000 (16kB) to accomodate
+     * this addition. */
+    drom_start_addr += 0x4000;
+#endif
+
+    return ((intptr_t)p >= drom_start_addr && (intptr_t)p < SOC_DROM_HIGH);
 }
 
 /**

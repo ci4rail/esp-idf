@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -10,13 +10,15 @@
 #include "esp_lcd_types.h"
 #include "soc/soc_caps.h"
 #include "hal/lcd_types.h"
+#include "hal/i2c_types.h"
+#include "driver/i2c_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef void *esp_lcd_spi_bus_handle_t;                       /*!< Type of LCD SPI bus handle */
-typedef void *esp_lcd_i2c_bus_handle_t;                       /*!< Type of LCD I2C bus handle */
+typedef uint32_t esp_lcd_i2c_bus_handle_t;                    /*!< Type of LCD I2C bus handle */
 typedef struct esp_lcd_i80_bus_t *esp_lcd_i80_bus_handle_t;   /*!< Type of LCD intel 8080 bus handle */
 
 /**
@@ -71,7 +73,7 @@ esp_err_t esp_lcd_panel_io_rx_param(esp_lcd_panel_io_handle_t io, int lcd_cmd, v
  *       this function will wait until they are finished and the queue is empty before sending the command(s).
  *
  * @param[in] io LCD panel IO handle, which is created by other factory API like `esp_lcd_new_panel_io_spi()`
- * @param[in] lcd_cmd The specific LCD command (set to -1 if no command needed - only in SPI and I2C)
+ * @param[in] lcd_cmd The specific LCD command, set to -1 if no command needed
  * @param[in] param Buffer that holds the command specific parameters, set to NULL if no parameter is needed for the command
  * @param[in] param_size Size of `param` in memory, in bytes, set to zero if no parameter is needed for the command
  * @return
@@ -136,6 +138,7 @@ typedef struct {
     struct {
         unsigned int dc_low_on_data: 1;  /*!< If this flag is enabled, DC line = 0 means transfer data, DC line = 1 means transfer command; vice versa */
         unsigned int octal_mode: 1;      /*!< transmit with octal mode (8 data lines), this mode is used to simulate Intel 8080 timing */
+        unsigned int quad_mode: 1;       /*!< transmit with quad mode (4 data lines), this mode is useful when transmitting LCD parameters (Only use one line for command) */
         unsigned int sio_mode: 1; /*!< Read and write through a single data line (MOSI) */
         unsigned int lsb_first: 1;       /*!< transmit LSB bit first */
         unsigned int cs_high_active: 1;  /*!< CS line is high active */
@@ -171,10 +174,43 @@ typedef struct {
         unsigned int dc_low_on_data: 1;  /*!< If this flag is enabled, DC line = 0 means transfer data, DC line = 1 means transfer command; vice versa */
         unsigned int disable_control_phase: 1; /*!< If this flag is enabled, the control phase isn't used */
     } flags; /*!< Extra flags to fine-tune the I2C device */
+    uint32_t scl_speed_hz; /*!< I2C LCD SCL frequency (hz) */
 } esp_lcd_panel_io_i2c_config_t;
 
 /**
- * @brief Create LCD panel IO handle, for I2C interface
+ * @brief Create LCD panel IO handle, for I2C interface in legacy implementation
+ *
+ * @param[in] bus I2C bus handle, (in uint32_t)
+ * @param[in] io_config IO configuration, for I2C interface
+ * @param[out] ret_io Returned IO handle
+ *
+ * @note Please don't call this function in your project directly. Please call `esp_lcd_new_panel_to_i2c` instead.
+ *
+ * @return
+ *          - ESP_ERR_INVALID_ARG   if parameter is invalid
+ *          - ESP_ERR_NO_MEM        if out of memory
+ *          - ESP_OK                on success
+ */
+esp_err_t esp_lcd_new_panel_io_i2c_v1(uint32_t bus, const esp_lcd_panel_io_i2c_config_t *io_config, esp_lcd_panel_io_handle_t *ret_io);
+
+/**
+ * @brief Create LCD panel IO handle, for I2C interface in new implementation
+ *
+ * @param[in] bus I2C bus handle, (in i2c_master_dev_handle_t)
+ * @param[in] io_config IO configuration, for I2C interface
+ * @param[out] ret_io Returned IO handle
+ *
+ * @note Please don't call this function in your project directly. Please call `esp_lcd_new_panel_to_i2c` instead.
+ *
+ * @return
+ *          - ESP_ERR_INVALID_ARG   if parameter is invalid
+ *          - ESP_ERR_NO_MEM        if out of memory
+ *          - ESP_OK                on success
+ */
+esp_err_t esp_lcd_new_panel_io_i2c_v2(i2c_master_bus_handle_t bus, const esp_lcd_panel_io_i2c_config_t *io_config, esp_lcd_panel_io_handle_t *ret_io);
+
+/**
+ * @brief Create LCD panel IO handle
  *
  * @param[in] bus I2C bus handle
  * @param[in] io_config IO configuration, for I2C interface
@@ -184,7 +220,9 @@ typedef struct {
  *          - ESP_ERR_NO_MEM        if out of memory
  *          - ESP_OK                on success
  */
-esp_err_t esp_lcd_new_panel_io_i2c(esp_lcd_i2c_bus_handle_t bus, const esp_lcd_panel_io_i2c_config_t *io_config, esp_lcd_panel_io_handle_t *ret_io);
+#define esp_lcd_new_panel_io_i2c(bus, io_config, ret_io) _Generic((bus),  \
+            i2c_master_bus_handle_t : esp_lcd_new_panel_io_i2c_v2, \
+            default : esp_lcd_new_panel_io_i2c_v1) (bus, io_config, ret_io) \
 
 #if SOC_LCD_I80_SUPPORTED
 /**

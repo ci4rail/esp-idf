@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -127,9 +127,20 @@ static inline void __attribute__((always_inline)) vPortYieldFromISR( void );
 
 static inline BaseType_t __attribute__((always_inline)) xPortGetCoreID( void );
 
-// ----------------------- TCB Cleanup --------------------------
+// --------------------- TCB Cleanup -----------------------
 
-void vPortCleanUpTCB ( void *pxTCB );
+/**
+ * @brief TCB cleanup hook
+ *
+ * The portCLEAN_UP_TCB() macro is called in prvDeleteTCB() right before a
+ * deleted task's memory is freed. We map that macro to this internal function
+ * so that IDF FreeRTOS ports can inject some task pre-deletion operations.
+ *
+ * @note We can't use vPortCleanUpTCB() due to API compatibility issues. See
+ * CONFIG_FREERTOS_ENABLE_STATIC_TASK_CLEAN_UP. Todo: IDF-8097
+ */
+void vPortTCBPreDeleteHook( void *pxTCB );
+
 
 /* ----------------------------------------- FreeRTOS SMP Porting Interface --------------------------------------------
  * - Contains all the mappings of the macros required by FreeRTOS SMP
@@ -221,9 +232,9 @@ extern void vTaskExitCritical( void );
 #define portALT_GET_RUN_TIME_COUNTER_VALUE(x)       ({x = (uint32_t)esp_timer_get_time();})
 #endif
 
-// ------------------- TCB Cleanup ----------------------
+// --------------------- TCB Cleanup -----------------------
 
-#define portCLEAN_UP_TCB( pxTCB )                   vPortCleanUpTCB( pxTCB )
+#define portCLEAN_UP_TCB( pxTCB )                   vPortTCBPreDeleteHook( pxTCB )
 
 /* --------------------------------------------- Inline Implementations ------------------------------------------------
  * - Implementation of inline functions of the forward declares
@@ -352,15 +363,46 @@ static inline bool IRAM_ATTR xPortCanYield(void)
 
 void vPortSetStackWatchpoint(void *pxStackStart);
 
-#define portVALID_TCB_MEM(ptr)      (esp_ptr_internal(ptr) && esp_ptr_byte_accessible(ptr))
-#ifdef CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY
-#define portVALID_STACK_MEM(ptr)    (esp_ptr_byte_accessible(ptr))
-#else
-#define portVALID_STACK_MEM(ptr)    (esp_ptr_internal(ptr) && esp_ptr_byte_accessible(ptr))
-#endif
+// -------------------- Heap Related -----------------------
 
-#define portTcbMemoryCaps               (MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT)
-#define portStackMemoryCaps             (MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT)
+/**
+ * @brief Checks if a given piece of memory can be used to store a task's TCB
+ *
+ * - Defined in heap_idf.c
+ *
+ * @param ptr Pointer to memory
+ * @return true Memory can be used to store a TCB
+ * @return false Otherwise
+ */
+bool xPortCheckValidTCBMem(const void *ptr);
+
+/**
+ * @brief Checks if a given piece of memory can be used to store a task's stack
+ *
+ * - Defined in heap_idf.c
+ *
+ * @param ptr Pointer to memory
+ * @return true Memory can be used to store a task stack
+ * @return false Otherwise
+ */
+bool xPortcheckValidStackMem(const void *ptr);
+
+#define portVALID_TCB_MEM(ptr)      xPortCheckValidTCBMem(ptr)
+#define portVALID_STACK_MEM(ptr)    xPortcheckValidStackMem(ptr)
+
+/* ------------------------------------------------------ Misc ---------------------------------------------------------
+ * - Miscellaneous porting macros
+ * - These are not part of the FreeRTOS porting interface, but are used by other FreeRTOS dependent components
+ * ------------------------------------------------------------------------------------------------------------------ */
+
+// --------------------- App-Trace -------------------------
+
+#if CONFIG_APPTRACE_SV_ENABLE
+extern volatile BaseType_t xPortSwitchFlag;
+#define os_task_switch_is_pended(_cpu_) (xPortSwitchFlag)
+#else
+#define os_task_switch_is_pended(_cpu_) (false)
+#endif
 
 // --------------- Compatibility Includes ------------------
 /*

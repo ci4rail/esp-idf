@@ -7,10 +7,12 @@
 #include "unity.h"
 #include "unity_test_runner.h"
 #include "esp_heap_caps.h"
+#include "esp_ota_ops.h"
 
 
-// Some resources are lazy allocated (newlib locks) in the bootloader support code, the threshold is left for that case
-#define TEST_MEMORY_LEAK_THRESHOLD (-650)
+// Some resources are lazy allocated, e.g. newlib locks, GDMA channel lazy installed by crypto driver
+// the threshold is left for those cases
+#define TEST_MEMORY_LEAK_THRESHOLD (-700)
 
 static size_t before_free_8bit;
 static size_t before_free_32bit;
@@ -24,11 +26,11 @@ static void check_leak(size_t before_free, size_t after_free, const char *type)
 
 void setUp(void)
 {
+    // load the partition table before measuring the initial free heap size.
+    TEST_ASSERT_NOT_EQUAL(NULL, esp_ota_get_running_partition());
     before_free_8bit = heap_caps_get_free_size(MALLOC_CAP_8BIT);
     before_free_32bit = heap_caps_get_free_size(MALLOC_CAP_32BIT);
 }
-
-
 
 void tearDown(void)
 {

@@ -1,26 +1,10 @@
 /*
- * SPDX-FileCopyrightText: 2017-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2017-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 #ifndef _SOC_RTC_CNTL_REG_H_
 #define _SOC_RTC_CNTL_REG_H_
-
-/* The value that needs to be written to RTC_CNTL_WDT_WKEY to write-enable the wdt registers */
-#define RTC_CNTL_WDT_WKEY_VALUE 0x50D83AA1
-/* The value that needs to be written to RTC_CNTL_SWD_WPROTECT_REG to write-enable the wdt registers */
-#define RTC_CNTL_SWD_WKEY_VALUE 0x8F1D312A
-
-/* Possible values for RTC_CNTL_WDT_CPU_RESET_LENGTH and RTC_CNTL_WDT_SYS_RESET_LENGTH */
-#define RTC_WDT_RESET_LENGTH_100_NS    0
-#define RTC_WDT_RESET_LENGTH_200_NS    1
-#define RTC_WDT_RESET_LENGTH_300_NS    2
-#define RTC_WDT_RESET_LENGTH_400_NS    3
-#define RTC_WDT_RESET_LENGTH_500_NS    4
-#define RTC_WDT_RESET_LENGTH_800_NS    5
-#define RTC_WDT_RESET_LENGTH_1600_NS   6
-#define RTC_WDT_RESET_LENGTH_3200_NS   7
-
 
 #ifdef __cplusplus
 extern "C" {
@@ -1677,6 +1661,10 @@ RO CPU.*/
 #define RTC_CNTL_FIB_SEL_M  ((RTC_CNTL_FIB_SEL_V)<<(RTC_CNTL_FIB_SEL_S))
 #define RTC_CNTL_FIB_SEL_V  0x7
 #define RTC_CNTL_FIB_SEL_S  0
+
+#define RTC_CNTL_FIB_GLITCH_RST BIT(0)
+#define RTC_CNTL_FIB_BOD_RST BIT(1)
+#define RTC_CNTL_FIB_SUPER_WDT_RST BIT(2)
 
 #define RTC_CNTL_GPIO_WAKEUP_REG          (DR_REG_RTCCNTL_BASE + 0xFC)
 /* RTC_CNTL_GPIO_PIN0_WAKEUP_ENABLE :  ;bitpos:[31] ;default: 1'b0 ; */

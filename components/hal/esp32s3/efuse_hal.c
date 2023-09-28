@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -19,6 +19,7 @@
 //The wafer_major and MSB of wafer_minor fields was allocated to other purposes when block version is v1.1.
 //Luckily only chip v0.0 have this kind of block version and efuse usage.
 //This workaround fixes the issue.
+__attribute__((always_inline))
 static inline bool is_eco0(uint32_t minor_raw)
 {
     return ((minor_raw & 0x7) == 0 &&
@@ -50,6 +51,9 @@ IRAM_ATTR uint32_t efuse_hal_get_minor_chip_version(void)
 void efuse_hal_set_timing(uint32_t apb_freq_hz)
 {
     (void) apb_freq_hz;
+    efuse_ll_set_dac_num(0xFF);
+    efuse_ll_set_dac_clk_div(0x28);
+    efuse_ll_set_pwr_on_num(0x3000);
     efuse_ll_set_pwr_off_num(0x190);
 }
 

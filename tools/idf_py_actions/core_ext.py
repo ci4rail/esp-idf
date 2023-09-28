@@ -62,6 +62,13 @@ def action_extensions(base_actions: Dict, project_path: str) -> Any:
         Menuconfig target is build_target extended with the style argument for setting the value for the environment
         variable.
         """
+        if sys.platform != 'win32':
+            try:
+                import curses  # noqa: F401
+            except ImportError:
+                raise FatalError('\n'.join(
+                    ['', "menuconfig failed to import the standard Python 'curses' library.",
+                     'Please re-run the install script which might be able to fix the issue.']))
         if sys.version_info[0] < 3:
             # The subprocess lib cannot accept environment variables as "unicode".
             # This encoding step is required only in Python 2.
@@ -155,14 +162,9 @@ def action_extensions(base_actions: Dict, project_path: str) -> Any:
                 "%s is still in preview. You have to append '--preview' option after idf.py to use any preview feature."
                 % idf_target)
         args.define_cache_entry.append('IDF_TARGET=' + idf_target)
-        sdkconfig_path = os.path.join(args.project_dir, 'sdkconfig')
-        sdkconfig_old = sdkconfig_path + '.old'
-        if os.path.exists(sdkconfig_old):
-            os.remove(sdkconfig_old)
-        if os.path.exists(sdkconfig_path):
-            os.rename(sdkconfig_path, sdkconfig_old)
-        print('Set Target to: %s, new sdkconfig created. Existing sdkconfig renamed to sdkconfig.old.' % idf_target)
-        ensure_build_directory(args, ctx.info_name, True)
+        print(f'Set Target to: {idf_target}, new sdkconfig will be created.')
+        env = {'_IDF_PY_SET_TARGET_ACTION': '1'}
+        ensure_build_directory(args, ctx.info_name, True, env)
 
     def reconfigure(action: str, ctx: Context, args: PropertyDict) -> None:
         ensure_build_directory(args, ctx.info_name, True)

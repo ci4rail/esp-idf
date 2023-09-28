@@ -4,24 +4,33 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "sdkconfig.h"
 #include <sys/param.h>
+#include "sdkconfig.h"
 #include "soc/soc_caps.h"
 #include "hal/assert.h"
 #include "hal/efuse_hal.h"
 #include "hal/efuse_ll.h"
+#include "esp_attr.h"
 
 #define ESP_EFUSE_BLOCK_ERROR_BITS(error_reg, block) ((error_reg) & (0x08 << (4 * (block))))
 #define ESP_EFUSE_BLOCK_ERROR_NUM_BITS(error_reg, block) ((error_reg) & (0x07 << (4 * (block))))
 
-uint32_t efuse_hal_get_major_chip_version(void)
+IRAM_ATTR uint32_t efuse_hal_get_major_chip_version(void)
 {
+#ifdef CONFIG_ESP_REV_NEW_CHIP_TEST
+    return CONFIG_ESP_REV_MIN_FULL / 100;
+#else
     return efuse_ll_get_chip_wafer_version_major();
+#endif
 }
 
-uint32_t efuse_hal_get_minor_chip_version(void)
+IRAM_ATTR uint32_t efuse_hal_get_minor_chip_version(void)
 {
+#ifdef CONFIG_ESP_REV_NEW_CHIP_TEST
+    return CONFIG_ESP_REV_MIN_FULL % 100;
+#else
     return efuse_ll_get_chip_wafer_version_minor();
+#endif
 }
 
 /******************* eFuse control functions *************************/
@@ -29,7 +38,10 @@ uint32_t efuse_hal_get_minor_chip_version(void)
 void efuse_hal_set_timing(uint32_t apb_freq_hz)
 {
     (void) apb_freq_hz;
-    // keep the default values, no need to change
+    efuse_ll_set_dac_num(0xFF);
+    efuse_ll_set_dac_clk_div(0x28);
+    efuse_ll_set_pwr_on_num(0x3000);
+    efuse_ll_set_pwr_off_num(0x190);
 }
 
 void efuse_hal_read(void)

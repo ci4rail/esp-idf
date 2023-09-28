@@ -13,7 +13,7 @@ ESP32-DevKitC V4 入门指南
 * USB A / micro USB B 数据线
 * PC（Windows、Linux 或 Mac OS）
 
-您可以跳过介绍部分，直接前往 `应用程序开发`_ 章节。
+你可以跳过介绍部分，直接前往 `应用程序开发`_ 章节。
 
 
 .. _DevKitC-Overview:
@@ -67,7 +67,7 @@ ESP32-DevKitC V4 开发板的主要组件、接口及控制方式见下。
       - 复位按键。
     * - Boot
       - 下载按键。按下 **Boot** 键并保持，同时按一下 **EN** 键（此时不要松开 **Boot** 键）进入“固件下载”模式，通过串口下载固件。
-    * - USB-to-UART 桥接器 
+    * - USB-to-UART 桥接器
       - 单芯片 USB-UART 桥接器，可提供高达 3 Mbps 的传输速率。
     * -  Micro USB 接口。
       - USB 接口，可用作电路板的供电电源，或连接 PC 和 ESP32-WROOM-32 模组的通信接口。
@@ -77,24 +77,25 @@ ESP32-DevKitC V4 开发板的主要组件、接口及控制方式见下。
       - 板上模组的绝大部分管脚均已引出至开发板的排针。用户可以对 ESP32 进行编程，实现 PWM、ADC、DAC、I2C、I2S、SPI 等多种功能。
 
 
-
 电源选项
 --------
 
 开发板可从以下三种供电方式中任选其一：
 
 * Micro USB 供电（默认）
-* 5V / GND 管脚供电
-* 3V3 / GND 管脚供电
+* 5V/GND 管脚供电
+* 3V3/GND 管脚供电
 
 .. warning::
 
 	上述供电模式 **不可同时连接**，否则可能会损坏开发板和/或电源。
 
+
 排针
 ------------
 
 下表列出了开发板两侧排针（J1 和 J3）的名称和功能，排针名称如图 :ref:`get-started-esp32-devkitc-board-front` 中所示。
+
 
 J2
 ^^^
@@ -122,6 +123,7 @@ J2
 19    5V    P           5 V 电源
 ====  ====  ==========  ===========================================
 
+
 J3
 ^^^
 ====  ====  ==========  ===========================================
@@ -141,16 +143,17 @@ J3
 12    IO16  I/O         GPIO16 [3]_
 13    IO4   I/O         GPIO4, ADC2_CH0, TOUCH_CH0
 14    IO0   I/O         GPIO0, ADC2_CH1, TOUCH_CH1, Boot
-16    IO2   I/O         GPIO2, ADC2_CH2, TOUCH_CH2
-17    IO15  I/O         GPIO15, ADC2_CH3, TOUCH_CH3, MTDO
+15    IO2   I/O         GPIO2, ADC2_CH2, TOUCH_CH2
+16    IO15  I/O         GPIO15, ADC2_CH3, TOUCH_CH3, MTDO
 17    D1    I/O         GPIO8, D1 [2]_
 18    D0    I/O         GPIO7, D0 [2]_
 19    CLK   I/O         GPIO6, CLK [2]_
 ====  ====  ==========  ===========================================
 
 .. [1] P：电源；I：输入；O：输出。
-.. [2] 管脚 D0、D1、D2、D3、CMD 和 CLK 用于 ESP32 芯片与 SPI flash 间的内部通信，集中分布在开发板两侧靠近 USB 端口的位置。通常而言，这些管脚最好不连，否则可能影响 SPI flash / SPI RAM 的工作。
+.. [2] 管脚 D0、D1、D2、D3、CMD 和 CLK 用于 ESP32 芯片与 SPI flash 间的内部通信，集中分布在开发板两侧靠近 USB 端口的位置。通常而言，这些管脚最好不连，否则可能影响 SPI flash/SPI RAM 的工作。
 .. [3] 管脚 GPIO16 和 GPIO17 仅适用于板载 ESP32-WROOM 系列和 ESP32-SOLO-1 的开发板，板载 ESP32-WROVER 系列开发板的管脚 GPIO16 和 GPIO17 保留内部使用。
+
 
 管脚布局
 ^^^^^^^^^^^
@@ -186,7 +189,7 @@ J3
 
 ESP32-DevKitC V4 上电前，请首先确认开发板完好无损。
 
-现在，请前往 :doc:`../../get-started/index` 中的 :ref:`get-started-step-by-step` 章节，查看如何设置开发环境，并尝试将示例项目烧录至您的开发板。
+现在，请前往 :doc:`../../get-started/index` 中的 :ref:`get-started-step-by-step` 章节，查看如何设置开发环境，并尝试将示例项目烧录至你的开发板。
 
 
 开发板尺寸
@@ -208,7 +211,7 @@ ESP32-DevKitC V4 上电前，请首先确认开发板完好无损。
 * `《ESP32-WROOM-32 技术规格书》 <https://espressif.com/sites/default/files/documentation/esp32-wroom-32_datasheet_cn.pdf>`_ (PDF)
 * `《ESP32-WROOM-32D & ESP32-WROOM-32U 技术规格书》 <https://www.espressif.com/sites/default/files/documentation/esp32-wroom-32d_esp32-wroom-32u_datasheet_cn.pdf>`_ (PDF)
 * `《ESP32-WROOM-DA 技术规格书》 <https://www.espressif.com/sites/default/files/documentation/esp32-wroom-da_datasheet_cn.pdf>`_ (PDF)
-* `《ESP32-WROVER 技术规格书》 <https://espressif.com/sites/default/files/documentation/esp32_wrover_datasheet_cn.pdf>`_ (PDF)
+* `《ESP32-WROVER 技术规格书》 <https://espressif.com/sites/default/files/documentation/esp32-wrover_datasheet_cn.pdf>`_ (PDF)
 * `《ESP32-WROVER-B 技术规格书》 <https://www.espressif.com/sites/default/files/documentation/esp32-wrover-b_datasheet_cn.pdf>`_ (PDF)
 * `乐鑫产品选型工具 <https://products.espressif.com/#/product-selector?names=>`_
 

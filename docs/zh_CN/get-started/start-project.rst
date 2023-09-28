@@ -1,8 +1,6 @@
-{IDF_TARGET_CORE_NUM:default="2", esp32s2="1", esp32c3="1", esp32c2="1", esp32c6="1"}
+{IDF_TARGET_FEATURES:default="[NEEDS TO BE UPDATED]", esp32="WiFi/BT/BLE, silicon revision 1, 2 MB external flash", esp32s2="WiFi, silicon revision 0, 2 MB external flash", esp32s3="This is esp32s3 chip with 2 CPU core(s), WiFi/BLE, silicon revision 0, 2 MB external flash", esp32c2="WiFi/BLE, silicon revision 0, 2 MB embedded flash", esp32c3="WiFi/BLE, silicon revision 0, 2 MB external flash", esp32c6="WiFi/BLE, 802.15.4 (Zigbee/Thread), silicon revision v0.0, 2 MB external flash", esp32h2="BLE, 802.15.4 (Zigbee/Thread), silicon revision v0.1, 2 MB external flash"}
 
-{IDF_TARGET_FEATURES:default="[NEEDS TO BE UPDATED]", esp32="WiFi/BT/BLE, silicon revision 1, 2 MB external flash", esp32s2="WiFi, silicon revision 0, 2 MB external flash", esp32s3="This is esp32s3 chip with 2 CPU core(s), WiFi/BLE, silicon revision 0, 2 MB external flash", esp32c2="WiFi/BLE, silicon revision 0, 2 MB embedded flash", esp32c3="WiFi/BLE, silicon revision 0, 2 MB external flash", esp32c6="WiFi/BLE, 802.15.4 (Zigbee/Thread), silicon revision v0.0, 2 MB external flash"}
-
-{IDF_TARGET_HEAP_SIZE:default="[NEEDS TO BE UPDATED]", esp32="298968", esp32s2="253900", esp32s3="390684", esp32c2="203888", esp32c3="337332", esp32c6="337332"}
+{IDF_TARGET_HEAP_SIZE:default="[NEEDS TO BE UPDATED]", esp32="298968", esp32s2="253900", esp32s3="390684", esp32c2="203888", esp32c3="337332", esp32c6="473816", esp32h2="268256"}
 
 编译工程
 =========================
@@ -41,7 +39,7 @@
 烧录到设备
 =============================
 
-请运行以下命令，将刚刚生成的二进制文件烧录至您的 {IDF_TARGET_NAME} 开发板：
+请运行以下命令，将刚刚生成的二进制文件烧录至 {IDF_TARGET_NAME} 开发板：
 
 .. code-block:: bash
 
@@ -60,7 +58,7 @@
 常规操作
 ~~~~~~~~~~~~~~~~
 
-在烧录过程中，您会看到类似如下的输出日志：
+在烧录过程中，会看到类似如下的输出日志：
 
 .. only:: esp32
 
@@ -320,15 +318,56 @@
         Leaving...
         Hard resetting via RTS pin...
 
+.. only:: esp32h2
+
+    .. code-block:: none
+
+        ...
+        esptool esp32h2 -p /dev/ttyUSB0 -b 460800 --before=default_reset --after=hard_reset write_flash --flash_mode dio --flash_freq 48m --flash_size 2MB 0x0 bootloader/bootloader.bin 0x10000 hello_world.bin 0x8000 partition_table/partition-table.bin
+        esptool.py v4.6
+        Serial port /dev/ttyUSB0
+        Connecting....
+        Chip is ESP32-H2 (revision v0.1)
+        Features: BLE
+        Crystal is 32MHz
+        MAC: 60:55:f9:f7:3e:93:ff:fe
+        Uploading stub...
+        Running stub...
+        Stub running...
+        Changing baud rate to 460800
+        Changed.
+        Configuring flash size...
+        Flash will be erased from 0x00000000 to 0x00005fff...
+        Flash will be erased from 0x00010000 to 0x00034fff...
+        Flash will be erased from 0x00008000 to 0x00008fff...
+        Compressed 20880 bytes to 12788...
+        Writing at 0x00000000... (100 %)
+        Wrote 20880 bytes (12788 compressed) at 0x00000000 in 0.6 seconds (effective 297.5 kbit/s)...
+        Hash of data verified.
+        Compressed 149424 bytes to 79574...
+        Writing at 0x00010000... (20 %)
+        Writing at 0x00019959... (40 %)
+        Writing at 0x00020bb5... (60 %)
+        Writing at 0x00026d8f... (80 %)
+        Writing at 0x0002e60a... (100 %)
+        Wrote 149424 bytes (79574 compressed) at 0x00010000 in 2.1 seconds (effective 571.7 kbit/s)...
+        Hash of data verified.
+        Compressed 3072 bytes to 103...
+        Writing at 0x00008000... (100 %)
+        Wrote 3072 bytes (103 compressed) at 0x00008000 in 0.0 seconds (effective 539.7 kbit/s)...
+        Hash of data verified.
+
+        Leaving...
+        Hard resetting via RTS pin...
 
 如果一切顺利，烧录完成后，开发板将会复位，应用程序 "hello_world" 开始运行。
 
-如果您希望使用 Eclipse 或是 VS Code IDE，而非 ``idf.py``，请参考 `Eclipse Plugin <https://github.com/espressif/idf-eclipse-plugin/blob/master/README_CN.md>`_，以及 `VSCode Extension <https://github.com/espressif/vscode-esp-idf-extension/blob/master/docs/tutorial/install.md>`_。
+如果希望使用 Eclipse 或是 VS Code IDE，而非 ``idf.py``，请参考 `Eclipse Plugin <https://github.com/espressif/idf-eclipse-plugin/blob/master/README_CN.md>`_，以及 `VSCode Extension <https://github.com/espressif/vscode-esp-idf-extension/blob/master/docs/tutorial/install.md>`_。
 
 监视输出
 ===============
 
-您可以使用 ``idf.py -p PORT monitor`` 命令，监视 “hello_world” 工程的运行情况。注意，不要忘记将 PORT 替换为您的串口名称。
+可以使用 ``idf.py -p PORT monitor`` 命令，监视 “hello_world” 工程的运行情况。注意，不要忘记将 PORT 替换为自己的串口名称。
 
 运行该命令后，:doc:`IDF 监视器 <../api-guides/tools/idf-monitor>` 应用程序将启动：::
 
@@ -343,31 +382,31 @@
     ets Jun  8 2016 00:22:57
     ...
 
-此时，您就可以在启动日志和诊断日志之后，看到打印的 “Hello world!” 了。
+此时，就可以在启动日志和诊断日志之后，看到打印的 “Hello world!” 了。
 
 .. code-block:: none
 
         ...
         Hello world!
         Restarting in 10 seconds...
-        This is {IDF_TARGET_PATH_NAME} chip with {IDF_TARGET_CORE_NUM} CPU core(s), {IDF_TARGET_FEATURES}
+        This is {IDF_TARGET_PATH_NAME} chip with {IDF_TARGET_SOC_CPU_CORES_NUM} CPU core(s), {IDF_TARGET_FEATURES}
     Minimum free heap size: {IDF_TARGET_HEAP_SIZE} bytes
         Restarting in 9 seconds...
         Restarting in 8 seconds...
         Restarting in 7 seconds...
 
-您可使用快捷键 ``Ctrl+]``，退出 IDF 监视器。
+使用快捷键 ``Ctrl+]``，可退出 ESP-IDF 监视器。
 
 .. only:: esp32 or esp32c2
 
-    如果 IDF 监视器在烧录后很快发生错误，或打印信息全是乱码（如下），很有可能是因为您的开发板采用了 26 MHz 晶振，而 ESP-IDF 默认支持大多数开发板使用的 40 MHz 晶振。
+    如果 ESP-IDF 监视器在烧录后很快发生错误，或打印信息全是乱码（如下），很有可能是因为开发板采用了 26 MHz 晶振，而 ESP-IDF 默认支持大多数开发板使用的 40 MHz 晶振。
 
     .. figure:: ../../_static/get-started-garbled-output.png
         :align: center
         :alt: 乱码输出
         :figclass: align-center
 
-    此时，您可以：
+    此时，可以：
 
     1. 退出监视器。
     2. 返回 ``menuconfig``。
@@ -385,18 +424,18 @@
 
 .. note::
 
-    您也可以运行以下命令，一次性执行构建、烧录和监视过程：
+    也可以运行以下命令，一次性执行构建、烧录和监视过程：
 
     ``idf.py -p PORT flash monitor``
 
 此外，
 
-- 请前往 :doc:`IDF 监视器 <../api-guides/tools/idf-monitor>`，了解更多使用 IDF 监视器的快捷键和其他详情。
+- 请前往 :doc:`IDF 监视器 <../api-guides/tools/idf-monitor>`，了解更多使用 ESP-IDF 监视器的快捷键和其他详情。
 - 请前往 :ref:`idf.py`，查看更多 ``idf.py`` 命令和选项。
 
-**恭喜，您已完成 {IDF_TARGET_NAME} 的入门学习！**
+**恭喜完成 {IDF_TARGET_NAME} 的入门学习！**
 
-现在，您可以尝试一些其他 :idf:`examples`，或者直接开发自己的应用程序。
+现在，可以尝试一些其他 :idf:`examples`，或者直接开发自己的应用程序。
 
 .. 重要::
 
@@ -416,7 +455,7 @@
 兼容的 Python 版本
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-ESP-IDF 支持 Python 3.7 及以上版本，建议升级操作系统到最新版本从而更新 Python。也可选择从 `sources <https://www.python.org/downloads/>`_ 安装最新版 Python，或使用 Python 管理系统如 `pyenv <https://github.com/pyenv/pyenv>`_ 对版本进行升级管理。
+ESP-IDF 支持 Python 3.8 及以上版本，建议升级操作系统到最新版本从而更新 Python。也可选择从 `sources <https://www.python.org/downloads/>`_ 安装最新版 Python，或使用 Python 管理系统如 `pyenv <https://github.com/pyenv/pyenv>`_ 对版本进行升级管理。
 
 .. only:: esp32 or esp32s2 or esp32s3
 
@@ -427,11 +466,11 @@ ESP-IDF 支持 Python 3.7 及以上版本，建议升级操作系统到最新版
     上手板级支持包
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    您可以使用 `板级支持包 (BSP) <https://github.com/espressif/esp-bsp>`_，协助您在开发板上的原型开发。仅需要调用几个函数，便可以完成对特定开发板的初始化。
+    可以使用 `板级支持包 (BSP) <https://github.com/espressif/esp-bsp>`_，协助在开发板上的原型开发。仅需要调用几个函数，便可以完成对特定开发板的初始化。
 
     一般来说，BSP 支持开发板上所有硬件组件。除了管脚定义和初始化功能外，BSP 还附带如传感器、显示器、音频编解码器等外部元件的驱动程序。
 
-    BSP 通过 :doc:`IDF 组件管理器 </api-guides/tools/idf-component-manager>` 发布，您可以前往 `IDF 组件注册器 <https://components.espressif.com>`_ 进行下载。
+    BSP 通过 :doc:`IDF 组件管理器 </api-guides/tools/idf-component-manager>` 发布，可以前往 `IDF 组件注册器 <https://components.espressif.com>`_ 进行下载。
 
     .. only:: esp32
 

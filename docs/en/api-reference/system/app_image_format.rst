@@ -1,6 +1,11 @@
 App Image Format
 ================
 
+.. _app-image-structures:
+
+Application Image Structures
+----------------------------
+
 An application image consists of the following structures:
 
 1. The :cpp:type:`esp_image_header_t` structure describes the mode of SPI flash and the count of memory segments.
@@ -62,11 +67,11 @@ You can also see the information on segments in the ESP-IDF logs while your appl
 
 .. only:: esp32
 
-    For more details on the type of memory segments and their address ranges, see *{IDF_TARGET_NAME} Technical Reference Manual* > *System and Memory* > *Embedded Memory* [`PDF <{IDF_TARGET_TRM_EN_URL}#sysmem>`__].
+    For more details on the type of memory segments and their address ranges, see **{IDF_TARGET_NAME} Technical Reference Manual** > **System and Memory** > **Embedded Memory** [`PDF <{IDF_TARGET_TRM_EN_URL}#sysmem>`__].
 
 .. only:: not esp32
 
-    For more details on the type of memory segments and their address ranges, see *{IDF_TARGET_NAME} Technical Reference Manual* > *System and Memory* > *Internal Memory* [`PDF <{IDF_TARGET_TRM_EN_URL}#sysmem>`__].
+    For more details on the type of memory segments and their address ranges, see **{IDF_TARGET_NAME} Technical Reference Manual** > **System and Memory** > **Internal Memory** [`PDF <{IDF_TARGET_TRM_EN_URL}#sysmem>`__].
 
 3. The image has a single checksum byte after the last segment. This byte is written on a sixteen byte padded boundary, so the application image might need padding.
 4. If the ``hash_appended`` field from :cpp:type:`esp_image_header_t` is set then a SHA256 checksum will be appended. The value of the SHA256 hash is calculated on the range from the first byte and up to this field. The length of this field is 32 bytes.
@@ -77,7 +82,7 @@ You can also see the information on segments in the ESP-IDF logs while your appl
 
 6. If the option :ref:`CONFIG_SECURE_SIGNED_APPS_SCHEME` is set to RSA or ECDSA (V2) then the application image will have an additional signature sector of 4K size. For more details on the format of this signature sector, please refer to :ref:`signature-block-format`.
 
-.. _app_image_format_application_description:
+.. _app-image-format-application-description:
 
 Application Description
 -----------------------
@@ -85,8 +90,8 @@ Application Description
 The ``DROM`` segment of the application binary starts with the :cpp:type:`esp_app_desc_t` structure which carries specific fields describing the application:
 
  * ``magic_word`` - the magic word for the esp_app_desc structure.
- * ``secure_version`` - see :doc:`Anti-rollback</api-reference/system/ota>`.
- * ``version`` - see :doc:`App version</api-reference/system/misc_system_api>`. ``*``
+ * ``secure_version`` - see :doc:`Anti-rollback </api-reference/system/ota>`.
+ * ``version`` - see :doc:`App version </api-reference/system/misc_system_api>`. ``*``
  * ``project_name`` is filled from ``PROJECT_NAME``. ``*``
  * ``time`` and ``date`` - compile time and date.
  * ``idf_ver`` - version of ESP-IDF. ``*``
@@ -105,9 +110,10 @@ Adding a Custom Structure to an Application
 -------------------------------------------
 
 Users also have the opportunity to have similar structure with a fixed offset relative to the beginning of the image.
+
 The following pattern can be used to add a custom structure to your image:
 
-.. code-block::
+.. code-block:: c
 
 	const __attribute__((section(".rodata_custom_desc"))) esp_custom_app_desc_t custom_app_desc = { ... }
 

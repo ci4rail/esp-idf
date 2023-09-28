@@ -13,13 +13,20 @@ GPIO Summary
 
 .. only:: SOC_RTCIO_INPUT_OUTPUT_SUPPORTED
 
-    There is also separate "RTC GPIO" support, which functions when GPIOs are routed to the "RTC" low-power and analog subsystem. These pin functions can be used when:
+    .. only:: not SOC_LP_PERIPHERALS_SUPPORTED
+
+        There is also separate "RTC GPIO" support, which functions when GPIOs are routed to the "RTC" low-power and analog subsystem. These pin functions can be used when:
+    
+    .. only:: SOC_LP_PERIPHERALS_SUPPORTED
+
+        There is also separate "RTC GPIO" support, which functions when GPIOs are routed to the "RTC" low-power, analog subsystem, and Low-Power(LP) peripherals. These pin functions can be used when:
 
     .. list::
 
         - In Deep-sleep mode
-        :SOC_ULP_SUPPORTED: - The :doc:`Ultra Low Power co-processor <../../api-reference/system/ulp>` is running
-        - Analog functions such as ADC/DAC/etc are in use.
+        :SOC_ULP_SUPPORTED and not esp32c6: - The :doc:`Ultra Low Power co-processor <../../api-reference/system/ulp>` is running
+        - Analog functions such as ADC/DAC/etc are in use
+        :SOC_LP_PERIPHERALS_SUPPORTED: - LP peripherals, such as LP_UART, LP_I2C, are in use
 
 
 .. only:: SOC_GPIO_SUPPORT_PIN_GLITCH_FILTER or SOC_GPIO_FLEX_GLITCH_FILTER_NUM
@@ -39,10 +46,10 @@ GPIO Summary
 
 		{IDF_TARGET_FLEX_GLITCH_FILTER_NUM:default="8"}
 
-		{IDF_TARGET_NAME} provides {IDF_TARGET_FLEX_GLITCH_FILTER_NUM} flexible glitch filters, whose duration is configurable. We refer to this kind of filter as ``flex flitch filter``. Each of them can be applied to any input GPIO. However, applying multiple filters to the same GPIO doesn't make difference from one. You can create the filter handle by calling :cpp:func:`gpio_new_flex_glitch_filter`. All the configurations for a flexible glitch filter are listed in the :cpp:type:`gpio_flex_glitch_filter_config_t` structure.
+		{IDF_TARGET_NAME} provides {IDF_TARGET_FLEX_GLITCH_FILTER_NUM} flexible glitch filters, whose duration is configurable. We refer to this kind of filter as ``flex flitch filter``. Each of them can be applied to any input GPIO. However, applying multiple filters to the same GPIO does not make difference from one. You can create the filter handle by calling :cpp:func:`gpio_new_flex_glitch_filter`. All the configurations for a flexible glitch filter are listed in the :cpp:type:`gpio_flex_glitch_filter_config_t` structure.
 
 		- :cpp:member:`gpio_flex_glitch_filter_config_t::gpio_num` sets the GPIO that will be applied to the flex glitch filter.
-		- :cpp:member:`gpio_flex_glitch_filter_config_t::window_width_ns` and :cpp:member:`gpio_flex_glitch_filter_config_t::window_thres_ns` are the key parameters of the glitch filter. During :cpp:member:`gpio_flex_glitch_filter_config_t::window_width_ns`, any pulse whose width is shorter than :cpp:member:`gpio_flex_glitch_filter_config_t::window_thres_ns` will be discarded. Please note that, you can't set :cpp:member:`gpio_flex_glitch_filter_config_t::window_thres_ns` bigger than :cpp:member:`gpio_flex_glitch_filter_config_t::window_width_ns`.
+		- :cpp:member:`gpio_flex_glitch_filter_config_t::window_width_ns` and :cpp:member:`gpio_flex_glitch_filter_config_t::window_thres_ns` are the key parameters of the glitch filter. During :cpp:member:`gpio_flex_glitch_filter_config_t::window_width_ns`, any pulse whose width is shorter than :cpp:member:`gpio_flex_glitch_filter_config_t::window_thres_ns` will be discarded. Please note that, you can not set :cpp:member:`gpio_flex_glitch_filter_config_t::window_thres_ns` bigger than :cpp:member:`gpio_flex_glitch_filter_config_t::window_width_ns`.
 
 	.. only:: SOC_GPIO_SUPPORT_PIN_GLITCH_FILTER and SOC_GPIO_FLEX_GLITCH_FILTER_NUM
 
@@ -56,13 +63,19 @@ GPIO Summary
     GPIO Hysteresis Filter
     ----------------------
 
-    {IDF_TARGET_NAME} support the hardware hysteresis of the input pin, which can reduce the GPIO interrupt shoot by accident due to unstable sampling when the input voltage is near the critical of logic 0 and 1, especially when the input logic level conversion is slow or the voltage setup time is too long.
+    {IDF_TARGET_NAME} support the hardware hysteresis of the input pin, which can reduce the GPIO interrupt shoot by accident due to unstable sampling when the input voltage is near the criteria of logic 0 and 1, especially when the input logic level conversion is slow or the voltage setup time is too long.
 
-    Each pin can enable hysteresis function independently. By default, it controlled by eFuse and been closed, but it can also be enabled or disabled by software manually. You can select the hysteresis control mode by configuring :cpp:member:`gpio_config_t::hys_ctrl_mode`.
+    .. only:: SOC_GPIO_SUPPORT_PIN_HYS_CTRL_BY_EFUSE
 
-    .. note::
+        Each pin can enable hysteresis function independently. By default, it controlled by eFuse and been closed, but it can also be enabled or disabled by software manually. You can select the hysteresis control mode by configuring :cpp:member:`gpio_config_t::hys_ctrl_mode`. Hysteresis control mode is set along with all the other GPIO configurations in :cpp:func:`gpio_config`.
 
-        When the hysteresis function is controlled by eFuse, this feature can still be controlled independently for each pin, you need to `burn the eFuse <https://docs.espressif.com/projects/esptool/en/latest/esp32/espefuse/index.html>`_ to enable the hysteresis function on specific GPIO additionally.
+        .. note::
+
+            When the hysteresis function is controlled by eFuse, this feature can still be controlled independently for each pin, you need to `burn the eFuse <https://docs.espressif.com/projects/esptool/en/latest/esp32/espefuse/index.html>`_ to enable the hysteresis function on specific GPIO additionally.
+
+    .. only:: not SOC_GPIO_SUPPORT_PIN_HYS_CTRL_BY_EFUSE
+
+        Each pin can enable hysteresis function independently. By default, the function is not enabled. You can select the hysteresis control mode by configuring :cpp:member:`gpio_config_t::hys_ctrl_mode`. Hysteresis control mode is set along with all the other GPIO configurations in :cpp:func:`gpio_config`.
 
 
 Application Example

@@ -25,14 +25,19 @@ if(CONFIG_ESP_WIFI_ENABLED)
         "src/wifi_default_ap.c"
         "${idf_target}/esp_adapter.c")
 
-    if(CONFIG_ESP_NETIF_USES_TCPIP_WITH_BSD_API)
+    if(CONFIG_ESP_NETIF_USES_TCPIP_WITH_BSD_API AND CONFIG_LWIP_IPV4)
         list(APPEND srcs
             "src/smartconfig_ack.c")
     endif()
+
+    if(CONFIG_ESP_WIFI_NAN_ENABLE)
+        list(APPEND srcs "wifi_apps/src/nan_app.c")
+    endif()
+
 endif()
 
 idf_component_register(SRCS "${srcs}"
-                    INCLUDE_DIRS "include"
+                    INCLUDE_DIRS "include" "wifi_apps/include"
                     REQUIRES esp_event esp_phy esp_netif
                     PRIV_REQUIRES driver esptool_py esp_pm esp_timer nvs_flash
                                   wpa_supplicant hal lwip esp_coex ${extra_priv_requires}
@@ -61,5 +66,4 @@ if(CONFIG_ESP_WIFI_ENABLED)
         endforeach()
     endif()
 
-    target_compile_options(${COMPONENT_LIB} PRIVATE "-Wno-format")
 endif()

@@ -159,6 +159,7 @@ TEST_CASE("Can mmap into data address space", "[spi_flash][mmap]")
     TEST_ASSERT_EQUAL_PTR(NULL, spi_flash_phys2cache(start, SPI_FLASH_MMAP_DATA));
 }
 
+#if !CONFIG_SPI_FLASH_ROM_IMPL //flash mmap API in ROM does not support mmap into instruction address
 TEST_CASE("Can mmap into instruction address space", "[spi_flash][mmap]")
 {
     setup_mmap_tests();
@@ -205,6 +206,7 @@ TEST_CASE("Can mmap into instruction address space", "[spi_flash][mmap]")
     printf("Unmapping handle3\n");
     spi_flash_munmap(handle3);
 }
+#endif // !CONFIG_SPI_FLASH_ROM_IMPL
 
 TEST_CASE("Can mmap unordered pages into contiguous memory", "[spi_flash][mmap]")
 {
@@ -447,4 +449,20 @@ TEST_CASE("no stale data read post mmap and write partition", "[spi_flash][mmap]
 
     esp_partition_munmap(handle);
     TEST_ASSERT_EQUAL(0, memcmp(buf, read_data, sizeof(buf)));
+#if !CONFIG_SPI_FLASH_ROM_IMPL //flash mmap API in ROM does not support mmap into instruction address
+    // Repeat the test for instruction mmap part
+    setup_mmap_tests();
+    TEST_ESP_OK(esp_partition_mmap(p, 0, SPI_FLASH_MMU_PAGE_SIZE,
+                                   ESP_PARTITION_MMAP_INST, (const void **) &data, &handle) );
+    memcpy(read_data, data, sizeof(read_data));
+    TEST_ESP_OK(esp_partition_erase_range(p, 0, SPI_FLASH_MMU_PAGE_SIZE));
+    /* not using esp_partition_write here, since the partition in not marked as "encrypted"
+       in the partition table */
+    TEST_ESP_OK(spi_flash_write_maybe_encrypted(p->address + 0, buf, sizeof(buf)));
+    /* This should retrigger actual flash content read */
+    memcpy(read_data, data, sizeof(read_data));
+
+    esp_partition_munmap(handle);
+    TEST_ASSERT_EQUAL(0, memcmp(buf, read_data, sizeof(buf)));
+#endif
 }

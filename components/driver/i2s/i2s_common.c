@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -10,6 +10,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "freertos/idf_additions.h"
 
 #include "sdkconfig.h"
 
@@ -42,6 +43,7 @@
 #include "i2s_private.h"
 
 #include "clk_ctrl_os.h"
+#include "esp_clk_tree.h"
 #include "esp_intr_alloc.h"
 #include "esp_check.h"
 #include "esp_attr.h"
@@ -52,17 +54,6 @@
 /* The actual max size of DMA buffer is 4095
  * Set 4092 here to align with 4-byte, so that the position of the slot data in the buffer will be relatively fixed */
 #define I2S_DMA_BUFFER_MAX_SIZE     (4092)
-
-// If ISR handler is allowed to run whilst cache is disabled,
-// Make sure all the code and related variables used by the handler are in the SRAM
-#if CONFIG_I2S_ISR_IRAM_SAFE
-#define I2S_INTR_ALLOC_FLAGS    (ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_INTRDISABLED | ESP_INTR_FLAG_SHARED | ESP_INTR_FLAG_LOWMED)
-#define I2S_MEM_ALLOC_CAPS      (MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)
-#else
-#define I2S_INTR_ALLOC_FLAGS    (ESP_INTR_FLAG_INTRDISABLED | ESP_INTR_FLAG_SHARED | ESP_INTR_FLAG_LOWMED)
-#define I2S_MEM_ALLOC_CAPS      MALLOC_CAP_DEFAULT
-#endif //CONFIG_I2S_ISR_IRAM_SAFE
-#define I2S_DMA_ALLOC_CAPS      (MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)
 
 /**
  * @brief Global i2s platform object
@@ -257,29 +248,12 @@ static esp_err_t i2s_register_channel(i2s_controller_t *i2s_obj, i2s_dir_t dir, 
 #if CONFIG_PM_ENABLE
     new_chan->pm_lock = NULL; // Init in i2s_set_clock according to clock source
 #endif
-#if CONFIG_I2S_ISR_IRAM_SAFE
-    new_chan->msg_que_storage = (uint8_t *)heap_caps_calloc(desc_num - 1, sizeof(uint8_t *), I2S_MEM_ALLOC_CAPS);
-    ESP_GOTO_ON_FALSE(new_chan->msg_que_storage, ESP_ERR_NO_MEM, err, TAG, "No memory for message queue storage");
-    new_chan->msg_que_struct = (StaticQueue_t *)heap_caps_calloc(1, sizeof(StaticQueue_t), I2S_MEM_ALLOC_CAPS);
-    ESP_GOTO_ON_FALSE(new_chan->msg_que_struct, ESP_ERR_NO_MEM, err, TAG, "No memory for message queue struct");
-    new_chan->msg_queue =  xQueueCreateStatic(desc_num - 1, sizeof(uint8_t *), new_chan->msg_que_storage, new_chan->msg_que_struct);
+    new_chan->msg_queue = xQueueCreateWithCaps(desc_num - 1, sizeof(uint8_t *), I2S_MEM_ALLOC_CAPS);
     ESP_GOTO_ON_FALSE(new_chan->msg_queue, ESP_ERR_NO_MEM, err, TAG, "No memory for message queue");
-    new_chan->mutex_struct = (StaticSemaphore_t *)heap_caps_calloc(1, sizeof(StaticSemaphore_t), I2S_MEM_ALLOC_CAPS);
-    ESP_GOTO_ON_FALSE(new_chan->mutex_struct, ESP_ERR_NO_MEM, err, TAG, "No memory for mutex struct");
-    new_chan->mutex = xSemaphoreCreateMutexStatic(new_chan->mutex_struct);
-    ESP_GOTO_ON_FALSE(new_chan->mutex, ESP_ERR_NO_MEM, err, TAG, "No memory for mutex");
-    new_chan->binary_struct = (StaticSemaphore_t *)heap_caps_calloc(1, sizeof(StaticSemaphore_t), I2S_MEM_ALLOC_CAPS);
-    ESP_GOTO_ON_FALSE(new_chan->binary_struct, ESP_ERR_NO_MEM, err, TAG, "No memory for binary struct");
-    new_chan->binary = xSemaphoreCreateBinaryStatic(new_chan->binary_struct);
-    ESP_GOTO_ON_FALSE(new_chan->binary, ESP_ERR_NO_MEM, err, TAG, "No memory for binary");
-#else
-    new_chan->msg_queue = xQueueCreate(desc_num - 1, sizeof(uint8_t *));
-    ESP_GOTO_ON_FALSE(new_chan->msg_queue, ESP_ERR_NO_MEM, err, TAG, "No memory for message queue");
-    new_chan->mutex = xSemaphoreCreateMutex();
+    new_chan->mutex = xSemaphoreCreateMutexWithCaps(I2S_MEM_ALLOC_CAPS);
     ESP_GOTO_ON_FALSE(new_chan->mutex, ESP_ERR_NO_MEM, err, TAG, "No memory for mutex semaphore");
-    new_chan->binary = xSemaphoreCreateBinary();
+    new_chan->binary = xSemaphoreCreateBinaryWithCaps(I2S_MEM_ALLOC_CAPS);
     ESP_GOTO_ON_FALSE(new_chan->binary, ESP_ERR_NO_MEM, err, TAG, "No memory for binary semaphore");
-#endif
 
     new_chan->callbacks.on_recv = NULL;
     new_chan->callbacks.on_recv_q_ovf = NULL;
@@ -304,28 +278,14 @@ static esp_err_t i2s_register_channel(i2s_controller_t *i2s_obj, i2s_dir_t dir, 
     }
     return ret;
 err:
-#if CONFIG_I2S_ISR_IRAM_SAFE
-    if (new_chan->msg_que_storage) {
-        free(new_chan->msg_que_storage);
-    }
-    if (new_chan->msg_que_struct) {
-        free(new_chan->msg_que_struct);
-    }
-    if (new_chan->mutex_struct) {
-        free(new_chan->mutex_struct);
-    }
-    if (new_chan->binary_struct) {
-        free(new_chan->binary_struct);
-    }
-#endif
     if (new_chan->msg_queue) {
-        vQueueDelete(new_chan->msg_queue);
+        vQueueDeleteWithCaps(new_chan->msg_queue);
     }
     if (new_chan->mutex) {
-        vSemaphoreDelete(new_chan->mutex);
+        vSemaphoreDeleteWithCaps(new_chan->mutex);
     }
     if (new_chan->binary) {
-        vSemaphoreDelete(new_chan->binary);
+        vSemaphoreDeleteWithCaps(new_chan->binary);
     }
     free(new_chan);
 
@@ -434,7 +394,7 @@ esp_err_t i2s_alloc_dma_desc(i2s_chan_handle_t handle, uint32_t num, uint32_t bu
     /* Connect DMA descriptor as a circle */
     for (int i = 0; i < num; i++) {
         /* Link to the next descriptor */
-        handle->dma.desc[i]->empty = (uint32_t)((i < (num - 1)) ? (handle->dma.desc[i + 1]) : handle->dma.desc[0]);
+        STAILQ_NEXT(handle->dma.desc[i], qe) = (i < (num - 1)) ? (handle->dma.desc[i + 1]) : handle->dma.desc[0];
     }
     if (handle->dir == I2S_DIR_RX) {
         i2s_ll_rx_set_eof_num(handle->controller->hal.dev, bufsize);
@@ -476,48 +436,25 @@ static uint32_t i2s_set_get_apll_freq(uint32_t mclk_freq_hz)
 }
 #endif
 
-// [clk_tree] TODO: replace the following switch table by clk_tree API
 uint32_t i2s_get_source_clk_freq(i2s_clock_src_t clk_src, uint32_t mclk_freq_hz)
 {
-    switch (clk_src)
-    {
+    uint32_t clk_freq = 0;
 #if SOC_I2S_SUPPORTS_APLL
-    case I2S_CLK_SRC_APLL:
+    if (clk_src == I2S_CLK_SRC_APLL) {
         return i2s_set_get_apll_freq(mclk_freq_hz);
-#endif
-#if SOC_I2S_SUPPORTS_XTAL
-    case I2S_CLK_SRC_XTAL:
-        (void)mclk_freq_hz;
-        return esp_clk_xtal_freq();
-#endif
-#if SOC_I2S_SUPPORTS_PLL_F160M
-    case I2S_CLK_SRC_PLL_160M:
-        (void)mclk_freq_hz;
-        return I2S_LL_PLL_F160M_CLK_FREQ;
-#endif
-#if SOC_I2S_SUPPORTS_PLL_F96M
-    case I2S_CLK_SRC_PLL_96M:
-        (void)mclk_freq_hz;
-        return I2S_LL_PLL_F96M_CLK_FREQ;
-#endif
-#if SOC_I2S_SUPPORTS_PLL_F64M
-    case I2S_CLK_SRC_PLL_64M:
-        (void)mclk_freq_hz;
-        return I2S_LL_PLL_F64M_CLK_FREQ;
-#endif
-    default:
-        // Invalid clock source
-        return 0;
     }
+#endif
+    esp_clk_tree_src_get_freq_hz(clk_src, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &clk_freq);
+    return clk_freq;
 }
 
 #if SOC_GDMA_SUPPORTED
 static bool IRAM_ATTR i2s_dma_rx_callback(gdma_channel_handle_t dma_chan, gdma_event_data_t *event_data, void *user_data)
 {
     i2s_chan_handle_t handle = (i2s_chan_handle_t)user_data;
-    portBASE_TYPE need_yield1 = 0;
-    portBASE_TYPE need_yield2 = 0;
-    portBASE_TYPE user_need_yield = 0;
+    BaseType_t need_yield1 = 0;
+    BaseType_t need_yield2 = 0;
+    BaseType_t user_need_yield = 0;
     lldesc_t *finish_desc;
     uint32_t dummy;
 
@@ -544,9 +481,9 @@ static bool IRAM_ATTR i2s_dma_rx_callback(gdma_channel_handle_t dma_chan, gdma_e
 static bool IRAM_ATTR i2s_dma_tx_callback(gdma_channel_handle_t dma_chan, gdma_event_data_t *event_data, void *user_data)
 {
     i2s_chan_handle_t handle = (i2s_chan_handle_t)user_data;
-    portBASE_TYPE need_yield1 = 0;
-    portBASE_TYPE need_yield2 = 0;
-    portBASE_TYPE user_need_yield = 0;
+    BaseType_t need_yield1 = 0;
+    BaseType_t need_yield2 = 0;
+    BaseType_t user_need_yield = 0;
     lldesc_t *finish_desc;
     uint32_t dummy;
 
@@ -578,9 +515,9 @@ static bool IRAM_ATTR i2s_dma_tx_callback(gdma_channel_handle_t dma_chan, gdma_e
 
 static void IRAM_ATTR i2s_dma_rx_callback(void *arg)
 {
-    portBASE_TYPE need_yield1 = 0;
-    portBASE_TYPE need_yield2 = 0;
-    portBASE_TYPE user_need_yield = 0;
+    BaseType_t need_yield1 = 0;
+    BaseType_t need_yield2 = 0;
+    BaseType_t user_need_yield = 0;
     lldesc_t *finish_desc = NULL;
     i2s_event_data_t evt;
     i2s_chan_handle_t handle = (i2s_chan_handle_t)arg;
@@ -616,9 +553,9 @@ static void IRAM_ATTR i2s_dma_rx_callback(void *arg)
 
 static void IRAM_ATTR i2s_dma_tx_callback(void *arg)
 {
-    portBASE_TYPE need_yield1 = 0;
-    portBASE_TYPE need_yield2 = 0;
-    portBASE_TYPE user_need_yield = 0;
+    BaseType_t need_yield1 = 0;
+    BaseType_t need_yield2 = 0;
+    BaseType_t user_need_yield = 0;
     lldesc_t *finish_desc = NULL;
     i2s_event_data_t evt;
     i2s_chan_handle_t handle = (i2s_chan_handle_t)arg;
@@ -752,7 +689,7 @@ void i2s_gpio_loopback_set(gpio_num_t gpio, uint32_t out_sig_idx, uint32_t in_si
     }
 }
 
-esp_err_t i2s_check_set_mclk(i2s_port_t id, gpio_num_t gpio_num, bool is_apll, bool is_invert)
+esp_err_t i2s_check_set_mclk(i2s_port_t id, gpio_num_t gpio_num, i2s_clock_src_t clk_src, bool is_invert)
 {
     if (gpio_num == I2S_GPIO_UNUSED) {
         return ESP_OK;
@@ -762,6 +699,7 @@ esp_err_t i2s_check_set_mclk(i2s_port_t id, gpio_num_t gpio_num, bool is_apll, b
                         ESP_ERR_INVALID_ARG, TAG,
                         "ESP32 only support to set GPIO0/GPIO1/GPIO3 as mclk signal, error GPIO number:%d", gpio_num);
     bool is_i2s0 = id == I2S_NUM_0;
+    bool is_apll = clk_src == I2S_CLK_SRC_APLL;
     if (gpio_num == GPIO_NUM_0) {
         gpio_hal_iomux_func_sel(PERIPHS_IO_MUX_GPIO0_U, FUNC_GPIO0_CLK_OUT1);
         gpio_ll_iomux_pin_ctrl(is_apll ? 0xFFF6 : (is_i2s0 ? 0xFFF0 : 0xFFFF));
@@ -774,9 +712,16 @@ esp_err_t i2s_check_set_mclk(i2s_port_t id, gpio_num_t gpio_num, bool is_apll, b
     }
 #else
     ESP_RETURN_ON_FALSE(GPIO_IS_VALID_GPIO(gpio_num), ESP_ERR_INVALID_ARG, TAG, "mck_io_num invalid");
-    i2s_gpio_check_and_set(gpio_num, i2s_periph_signal[id].mck_out_sig, false, is_invert);
-#endif
-    ESP_LOGD(TAG, "MCLK is pinned to GPIO%d on I2S%d", id, gpio_num);
+#if SOC_I2S_HW_VERSION_2
+    if (clk_src == I2S_CLK_SRC_EXTERNAL) {
+        i2s_gpio_check_and_set(gpio_num, i2s_periph_signal[id].mck_in_sig, true, is_invert);
+    } else
+#endif  // SOC_I2S_HW_VERSION_2
+    {
+        i2s_gpio_check_and_set(gpio_num, i2s_periph_signal[id].mck_out_sig, false, is_invert);
+    }
+#endif  // CONFIG_IDF_TARGET_ESP32
+    ESP_LOGD(TAG, "MCLK is pinned to GPIO%d on I2S%d", gpio_num, id);
     return ESP_OK;
 }
 
@@ -906,28 +851,14 @@ esp_err_t i2s_del_channel(i2s_chan_handle_t handle)
     if (handle->dma.desc) {
         i2s_free_dma_desc(handle);
     }
-#if CONFIG_I2S_ISR_IRAM_SAFE
-    if (handle->msg_que_storage) {
-        free(handle->msg_que_storage);
-    }
-    if (handle->msg_que_struct) {
-        free(handle->msg_que_struct);
-    }
-    if (handle->mutex) {
-        free(handle->mutex_struct);
-    }
-    if (handle->binary_struct) {
-        free(handle->binary_struct);
-    }
-#endif
     if (handle->msg_queue) {
-        vQueueDelete(handle->msg_queue);
+        vQueueDeleteWithCaps(handle->msg_queue);
     }
     if (handle->mutex) {
-        vSemaphoreDelete(handle->mutex);
+        vSemaphoreDeleteWithCaps(handle->mutex);
     }
     if (handle->binary) {
-        vSemaphoreDelete(handle->binary);
+        vSemaphoreDeleteWithCaps(handle->binary);
     }
 #if SOC_I2S_HW_VERSION_1
     i2s_obj->chan_occupancy = 0;
@@ -1041,11 +972,13 @@ esp_err_t i2s_channel_disable(i2s_chan_handle_t handle)
     ESP_GOTO_ON_FALSE(handle->state > I2S_CHAN_STATE_READY, ESP_ERR_INVALID_STATE, err, TAG, "the channel has not been enabled yet");
     /* Update the state to force quit the current reading/writing operation */
     handle->state = I2S_CHAN_STATE_READY;
+    /* Waiting for reading/wrinting operation quit
+     * It should be acquired before assigning the pointer to NULL,
+     * otherwise may cause NULL pointer panic while reading/writing threads haven't release the lock */
+    xSemaphoreTake(handle->binary, portMAX_DELAY);
     /* Reset the descriptor pointer */
     handle->dma.curr_ptr = NULL;
     handle->dma.rw_pos = 0;
-    /* Waiting for reading/wrinting operation quit */
-    xSemaphoreTake(handle->binary, portMAX_DELAY);
     handle->stop(handle);
 #if CONFIG_PM_ENABLE
     esp_pm_lock_release(handle->pm_lock);
@@ -1086,11 +1019,8 @@ esp_err_t i2s_channel_preload_data(i2s_chan_handle_t tx_handle, const void *src,
         if (bytes_can_load == 0) {
             break;
         }
-        /* Add spinlock in case memcpy be interrupted */
-        portENTER_CRITICAL_SAFE(&g_i2s.spinlock);
         /* Load the data from the last loaded position */
         memcpy((uint8_t *)(desc_ptr->buf + tx_handle->dma.rw_pos), data_ptr, bytes_can_load);
-        portEXIT_CRITICAL_SAFE(&g_i2s.spinlock);
         data_ptr += bytes_can_load;             // Move forward the data pointer
         total_loaded_bytes += bytes_can_load;   // Add to the total loaded bytes
         remain_bytes -= bytes_can_load;         // Update the remaining bytes to be loaded
@@ -1100,8 +1030,8 @@ esp_err_t i2s_channel_preload_data(i2s_chan_handle_t tx_handle, const void *src,
             /* If the next descriptor is not the first descriptor, keep load to the first descriptor
              * otherwise all descriptor has been loaded, break directly, the dma buffer position
              * will remain at the end of the last dma buffer */
-            if (desc_ptr->empty != (uint32_t)tx_handle->dma.desc[0]) {
-                desc_ptr = (lldesc_t *)desc_ptr->empty;
+            if (STAILQ_NEXT(desc_ptr, qe) != tx_handle->dma.desc[0]) {
+                desc_ptr = STAILQ_NEXT(desc_ptr, qe);
                 tx_handle->dma.curr_ptr =  (void *)desc_ptr;
                 tx_handle->dma.rw_pos = 0;
             } else {
@@ -1146,10 +1076,7 @@ esp_err_t i2s_channel_write(i2s_chan_handle_t handle, const void *src, size_t si
         if (bytes_can_write > size) {
             bytes_can_write = size;
         }
-        /* Add spinlock in case memcpy be interrupted */
-        portENTER_CRITICAL_SAFE(&g_i2s.spinlock);
         memcpy(data_ptr, src_byte, bytes_can_write);
-        portEXIT_CRITICAL_SAFE(&g_i2s.spinlock);
         size -= bytes_can_write;
         src_byte += bytes_can_write;
         handle->dma.rw_pos += bytes_can_write;
@@ -1191,10 +1118,7 @@ esp_err_t i2s_channel_read(i2s_chan_handle_t handle, void *dest, size_t size, si
         if (bytes_can_read > (int)size) {
             bytes_can_read = size;
         }
-        /* Add spinlock in case memcpy be interrupted */
-        portENTER_CRITICAL_SAFE(&g_i2s.spinlock);
         memcpy(dest_byte, data_ptr, bytes_can_read);
-        portEXIT_CRITICAL_SAFE(&g_i2s.spinlock);
         size -= bytes_can_read;
         dest_byte += bytes_can_read;
         handle->dma.rw_pos += bytes_can_read;

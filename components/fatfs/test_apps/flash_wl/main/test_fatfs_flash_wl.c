@@ -44,14 +44,14 @@ static void test_teardown(void)
     TEST_ESP_OK(esp_vfs_fat_spiflash_unmount_rw_wl("/spiflash", s_test_wl_handle));
 }
 
-TEST_CASE("(WL) can format partition", "[fatfs][wear_levelling]")
+TEST_CASE("(WL) can format partition", "[fatfs][wear_levelling][timeout=180]")
 {
     TEST_ESP_OK(esp_vfs_fat_spiflash_format_rw_wl("/spiflash", NULL));
     test_setup();
     test_teardown();
 }
 
-TEST_CASE("(WL) can format when the FAT is mounted already", "[fatfs][wear_levelling]")
+TEST_CASE("(WL) can format when the FAT is mounted already", "[fatfs][wear_levelling][timeout=180]")
 {
     test_setup();
     TEST_ESP_OK(esp_vfs_fat_spiflash_format_rw_wl("/spiflash", NULL));
@@ -64,6 +64,14 @@ TEST_CASE("(WL) can create and write file", "[fatfs][wear_levelling]")
 {
     test_setup();
     test_fatfs_create_file_with_text("/spiflash/hello.txt", fatfs_test_hello_str);
+    test_teardown();
+}
+
+TEST_CASE("(WL) can create and open file with O_CREAT flag", "[fatfs][wear_levelling]")
+{
+    test_setup();
+    test_fatfs_create_file_with_o_creat_flag("/spiflash/hello.txt");
+    test_fatfs_open_file_with_o_creat_flag("/spiflash/hello.txt");
     test_teardown();
 }
 

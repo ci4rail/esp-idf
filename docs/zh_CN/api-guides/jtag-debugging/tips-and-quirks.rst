@@ -1,10 +1,7 @@
 注意事项和补充内容
 ------------------
-:link_to_translation:`en:[English]`
 
-.. See SOC_CPU_BREAKPOINTS_NUM, SOC_CPU_WATCHPOINTS_NUM in soc_caps.h
-{IDF_TARGET_CPU_BREAKPOINT_NUM:default="Not updated", esp32="2", esp32s2="2", esp32s3="2", esp32c3="8", esp32c2="2", "esp32c6"="4", "esp32h2"="8"}
-{IDF_TARGET_CPU_WATCHPOINT_NUM:default="Not updated", esp32="2", esp32s2="2", esp32s3="2", esp32c3="8", esp32c2="2", "esp32c6"="4", "esp32h2"="8"}
+:link_to_translation:`en:[English]`
 
 本节提供了本指南中各部分提到的一些注意事项和补充内容。
 
@@ -13,7 +10,7 @@
 可用的断点和观察点
 ^^^^^^^^^^^^^^^^^^
 
-{IDF_TARGET_NAME} 调试器支持 {IDF_TARGET_CPU_BREAKPOINT_NUM} 个硬件断点和 64 个软件断点。硬件断点是由 {IDF_TARGET_NAME} 芯片内部的逻辑电路实现的，能够设置在代码的任何位置：flash 或者 IRAM 的代码区域。除此以外，OpenOCD 实现了两种软件断点：flash 断点（最多 32 个）和 IRAM 断点（最多 32 个）。目前 GDB 无法在 flash 中设置软件断点，因此除非解决此限制，否则这些断点只能由 OpenOCD 模拟为硬件断点（详细信息可以参阅 :ref:`下面 <jtag-debugging-tip-where-breakpoints>`）。{IDF_TARGET_NAME} 还支持 {IDF_TARGET_CPU_WATCHPOINT_NUM} 个观察点，所以可以观察 {IDF_TARGET_CPU_WATCHPOINT_NUM} 个变量的变化或者通过 GDB 命令 ``watch myVariable`` 来读取变量的值。请注意 menuconfig 中的 :ref:`CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK` 选项会使用最后一个观察点，如果你想在 OpenOCD 或者 GDB 中再次尝试使用这个观察点，可能不会得到预期的结果。详情请查看 menuconfig 中的帮助文档。
+{IDF_TARGET_NAME} 调试器支持 {IDF_TARGET_SOC_CPU_BREAKPOINTS_NUM} 个硬件断点和 64 个软件断点。硬件断点是由 {IDF_TARGET_NAME} 芯片内部的逻辑电路实现的，能够设置在代码的任何位置：flash 或者 IRAM 的代码区域。除此以外，OpenOCD 实现了两种软件断点：flash 断点（最多 32 个）和 IRAM 断点（最多 32 个）。目前 GDB 无法在 flash 中设置软件断点，因此除非解决此限制，否则这些断点只能由 OpenOCD 模拟为硬件断点（详细信息可以参阅 :ref:`下面 <jtag-debugging-tip-where-breakpoints>`）。{IDF_TARGET_NAME} 还支持 {IDF_TARGET_SOC_CPU_WATCHPOINTS_NUM} 个观察点，所以可以观察 {IDF_TARGET_SOC_CPU_WATCHPOINTS_NUM} 个变量的变化或者通过 GDB 命令 ``watch myVariable`` 来读取变量的值。请注意 menuconfig 中的 :ref:`CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK` 选项会使用最后一个观察点，如果你想在 OpenOCD 或者 GDB 中再次尝试使用这个观察点，可能不会得到预期的结果。详情请查看 menuconfig 中的帮助文档。
 
 
 .. _jtag-debugging-tip-where-breakpoints:
@@ -52,7 +49,7 @@ flash 映射 vs 软件 flash 断点
 “next” 命令无法跳过子程序的原因
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-当使用 ``next`` 命令单步执行代码时， GDB 会在子程序的前面设置一个断点（两个中可用的一个），这样就可以跳过进入子程序内部的细节。如果这两个断点已经用在代码的其它位置，那么 ``next`` 命令将不起作用。在这种情况下，请删掉一个断点以使其中一个变得可用。当两个断点都已经被使用时，``next`` 命令会像 ``step`` 命令一样工作，调试器就会进入子程序内部。
+当使用 ``next`` 命令单步执行代码时，GDB 会在子程序的前面设置一个断点（两个中可用的一个），这样就可以跳过进入子程序内部的细节。如果这两个断点已经用在代码的其它位置，那么 ``next`` 命令将不起作用。在这种情况下，请删掉一个断点以使其中一个变得可用。当两个断点都已经被使用时，``next`` 命令会像 ``step`` 命令一样工作，调试器就会进入子程序内部。
 
 
 .. _jtag-debugging-tip-code-options:
@@ -116,7 +113,7 @@ GDB 具有 FreeRTOS 支持的 Python 扩展模块。在系统要求满足的情�
 
 * ``set remote hardware-watchpoint-limit 2`` — 限制 GDB 仅使用 {IDF_TARGET_NAME} 支持的两个硬件观察点。更多详细信息，请查阅 `GDB 配置远程目标 <https://sourceware.org/gdb/onlinedocs/gdb/Remote-Configuration.html>`_ 。
 * ``mon reset halt`` — 复位芯片并使 CPU 停止运行。
-* ``flushregs`` — monitor (``mon``) 命令无法通知 GDB 目标状态已经更改，GDB 会假设在 ``mon reset halt`` 之前所有的任务堆栈仍然有效。实际上，复位后目标状态将发生变化。执行 ``flushregs`` 是一种强制 GDB 从目标获取最新状态的方法。
+* ``maintenance flush register-cache`` — monitor (``mon``) 命令无法通知 GDB 目标状态已经更改，GDB 会假设在 ``mon reset halt`` 之前所有的任务堆栈仍然有效。实际上，复位后目标状态将发生变化。执行 ``maintenance flush register-cache`` 是一种强制 GDB 从目标获取最新状态的方法。
 * ``thb app_main`` — 在 ``app_main`` 处插入一个临时的硬件断点，如果有需要，可以将其替换为其他函数名。
 * ``c`` — 恢复程序运行，它将会在 ``app_main`` 的断点处停止运行。
 

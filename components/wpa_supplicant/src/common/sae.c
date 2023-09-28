@@ -141,7 +141,7 @@ static int sae_test_pwd_seed_ecc(struct sae_data *sae, const u8 *pwd_seed,
 	int cmp_prime;
 	unsigned int in_range;
 
-	wpa_hexdump_key(MSG_DEBUG, "SAE: pwd-seed", pwd_seed, SHA256_MAC_LEN);
+	wpa_hexdump_key(MSG_MSGDUMP, "SAE: pwd-seed", pwd_seed, SHA256_MAC_LEN);
 
 	/* pwd-value = KDF-z(pwd-seed, "SAE Hunting and Pecking", p) */
 	bits = crypto_ec_prime_len_bits(sae->tmp->ec);
@@ -150,7 +150,7 @@ static int sae_test_pwd_seed_ecc(struct sae_data *sae, const u8 *pwd_seed,
 		return ESP_FAIL;
 	if (bits % 8)
 		buf_shift_right(pwd_value, sae->tmp->prime_len, 8 - bits % 8);
-	wpa_hexdump_key(MSG_DEBUG, "SAE: pwd-value",
+	wpa_hexdump_key(MSG_MSGDUMP, "SAE: pwd-value",
 			pwd_value, sae->tmp->prime_len);
 
 	cmp_prime = const_time_memcmp(pwd_value, prime, sae->tmp->prime_len);
@@ -348,7 +348,7 @@ static int sae_derive_pwe_ecc(struct sae_data *sae, const u8 *addr1,
 			break;
 		}
 
-		wpa_printf(MSG_DEBUG, "SAE: counter = %03u", counter);
+		wpa_printf(MSG_MSGDUMP, "SAE: counter = %03u", counter);
 		const_time_select_bin(found, stub_password, password,
 				      password_len, tmp_password);
 		if (hmac_sha256_vector(addrs, sizeof(addrs), 2,
@@ -375,7 +375,7 @@ static int sae_derive_pwe_ecc(struct sae_data *sae, const u8 *addr1,
 		 * (with res converted to 0/0xff) handles this in constant time.
 		 */
 		found |= res * 0xff;
-		wpa_printf(MSG_DEBUG, "SAE: pwd-seed result %d found=0x%02x",
+		wpa_printf(MSG_MSGDUMP, "SAE: pwd-seed result %d found=0x%02x",
 			   res, found);
 	}
 
@@ -2212,10 +2212,10 @@ int sae_write_confirm(struct sae_data *sae, struct wpabuf *buf)
 		return ESP_FAIL;
 
 	/* Send-Confirm */
-	if (sae->send_confirm < 0xffff)
-		sae->send_confirm++;
 	sc = wpabuf_put(buf, 0);
 	wpabuf_put_le16(buf, sae->send_confirm);
+	if (sae->send_confirm < 0xffff)
+		sae->send_confirm++;
 
 	if (sae->tmp->ec) {
 		if (sae_cn_confirm_ecc(sae, sc, sae->tmp->own_commit_scalar,

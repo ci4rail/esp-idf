@@ -111,7 +111,6 @@ typedef struct {
 
 typedef struct {
     void *handle;
-    void *storage;
 } btdm_queue_item_t;
 
 /* OSI function */
@@ -221,6 +220,7 @@ extern void bredr_sco_datapath_set(uint8_t data_path);
 extern void btdm_controller_scan_duplicate_list_clear(void);
 /* Shutdown */
 extern void esp_bt_controller_shutdown(void);
+extern void sdk_config_set_bt_pll_track_enable(bool enable);
 
 extern char _bss_start_btdm;
 extern char _bss_end_btdm;
@@ -555,17 +555,8 @@ static void *semphr_create_wrapper(uint32_t max, uint32_t init)
 
     void *handle = NULL;
 
-#if !CONFIG_SPIRAM_USE_MALLOC
+    /* IDF FreeRTOS guarantees that all dynamic memory allocation goes to internal RAM. */
     handle = (void *)xSemaphoreCreateCounting(max, init);
-#else
-    StaticQueue_t *queue_buffer = NULL;
-
-    queue_buffer = heap_caps_malloc(sizeof(StaticQueue_t), MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT);
-    assert(queue_buffer);
-    semphr->storage = queue_buffer;
-
-    handle = (void *)xSemaphoreCreateCountingStatic(max, init, queue_buffer);
-#endif
     assert(handle);
 
 #if CONFIG_BTDM_CTRL_HLI
@@ -601,11 +592,6 @@ static void semphr_delete_wrapper(void *semphr)
     if (handle) {
         vSemaphoreDelete(handle);
     }
-#ifdef CONFIG_SPIRAM_USE_MALLOC
-    if (semphr_item->storage) {
-        free(semphr_item->storage);
-    }
-#endif
 
     free(semphr);
 }
@@ -691,18 +677,9 @@ static void *queue_create_wrapper(uint32_t queue_len, uint32_t item_size)
     queue = (btdm_queue_item_t*)heap_caps_malloc(sizeof(btdm_queue_item_t), MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT);
     assert(queue);
 
-#if CONFIG_SPIRAM_USE_MALLOC
-
-    queue->storage = heap_caps_calloc(1, sizeof(StaticQueue_t) + (queue_len*item_size), MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT);
-    assert(queue->storage);
-
-    queue->handle = xQueueCreateStatic( queue_len, item_size, ((uint8_t*)(queue->storage)) + sizeof(StaticQueue_t), (StaticQueue_t*)(queue->storage));
-    assert(queue->handle);
-
-#else
+    /* IDF FreeRTOS guarantees that all dynamic memory allocation goes to internal RAM. */
     queue->handle = xQueueCreate( queue_len, item_size);
     assert(queue->handle);
-#endif
 
     return queue;
 }
@@ -714,13 +691,6 @@ static void queue_delete_wrapper(void *queue)
         if(queue_item->handle){
             vQueueDelete(queue_item->handle);
         }
-
-#if CONFIG_SPIRAM_USE_MALLOC
-        if (queue_item->storage) {
-            free(queue_item->storage);
-        }
-#endif
-
         free(queue_item);
     }
 }
@@ -895,7 +865,11 @@ static void *malloc_internal_wrapper(size_t size)
 
 static int32_t IRAM_ATTR read_mac_wrapper(uint8_t mac[6])
 {
-    return esp_read_mac(mac, ESP_MAC_BT);
+    int ret = esp_read_mac(mac, ESP_MAC_BT);
+    ESP_LOGI(BTDM_LOG_TAG, "Bluetooth MAC: %02x:%02x:%02x:%02x:%02x:%02x",
+               mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+    return ret;
 }
 
 static void IRAM_ATTR srand_wrapper(unsigned int seed)
@@ -1703,6 +1677,8 @@ esp_err_t esp_bt_controller_enable(esp_bt_mode_t mode)
     if (btdm_controller_get_sleep_mode() == BTDM_MODEM_SLEEP_MODE_ORIG) {
         btdm_controller_enable_sleep(true);
     }
+
+    sdk_config_set_bt_pll_track_enable(true);
 
     // inititalize bluetooth baseband
     btdm_check_and_init_bb();

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2020-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2020-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -11,12 +11,15 @@
 #include "hal/gdma_types.h"
 #include "soc/gdma_struct.h"
 #include "soc/gdma_reg.h"
+#include "soc/system_struct.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #define GDMA_LL_GET_HW(id) (((id) == 0) ? (&GDMA) : NULL)
+
+#define GDMA_LL_CHANNEL_MAX_PRIORITY 5 // supported priority levels: [0,5]
 
 #define GDMA_LL_RX_EVENT_MASK       (0x06A7)
 #define GDMA_LL_TX_EVENT_MASK       (0x1958)
@@ -39,11 +42,44 @@ extern "C" {
 #define GDMA_LL_EVENT_RX_SUC_EOF    (1<<1)
 #define GDMA_LL_EVENT_RX_DONE       (1<<0)
 
+#define GDMA_LL_AHB_GROUP_START_ID         0 // AHB GDMA group ID starts from 0
+#define GDMA_LL_AHB_NUM_GROUPS             1 // Number of AHB GDMA groups
+#define GDMA_LL_AHB_PAIRS_PER_GROUP        3 // Number of GDMA pairs in each AHB group
+#define GDMA_LL_AHB_TX_RX_SHARE_INTERRUPT  1  // TX and RX channel in the same pair will share the same interrupt source number
+
 ///////////////////////////////////// Common /////////////////////////////////////////
+
 /**
- * @brief Enable DMA clock gating
+ * @brief Enable the bus clock for the DMA module
  */
-static inline void gdma_ll_enable_clock(gdma_dev_t *dev, bool enable)
+static inline void gdma_ll_enable_bus_clock(int group_id, bool enable)
+{
+    (void)group_id;
+    SYSTEM.perip_clk_en1.reg_dma_clk_en = enable;
+}
+
+/// use a macro to wrap the function, force the caller to use it in a critical section
+/// the critical section needs to declare the __DECLARE_RCC_ATOMIC_ENV variable in advance
+#define gdma_ll_enable_bus_clock(...) (void)__DECLARE_RCC_ATOMIC_ENV; gdma_ll_enable_bus_clock(__VA_ARGS__)
+
+/**
+ * @brief Reset the DMA module
+ */
+static inline void gdma_ll_reset_register(int group_id)
+{
+    (void)group_id;
+    SYSTEM.perip_rst_en1.reg_dma_rst = 1;
+    SYSTEM.perip_rst_en1.reg_dma_rst = 0;
+}
+
+/// use a macro to wrap the function, force the caller to use it in a critical section
+/// the critical section needs to declare the __DECLARE_RCC_ATOMIC_ENV variable in advance
+#define gdma_ll_reset_register(...) (void)__DECLARE_RCC_ATOMIC_ENV; gdma_ll_reset_register(__VA_ARGS__)
+
+/**
+ * @brief Force enable register clock
+ */
+static inline void gdma_ll_force_enable_reg_clock(gdma_dev_t *dev, bool enable)
 {
     dev->misc_conf.clk_en = enable;
 }
@@ -228,10 +264,10 @@ static inline uint32_t gdma_ll_rx_get_error_eof_desc_addr(gdma_dev_t *dev, uint3
 }
 
 /**
- * @brief Get current RX descriptor's address
+ * @brief Get the pre-fetched RX descriptor's address
  */
 __attribute__((always_inline))
-static inline uint32_t gdma_ll_rx_get_current_desc_addr(gdma_dev_t *dev, uint32_t channel)
+static inline uint32_t gdma_ll_rx_get_prefetched_desc_addr(gdma_dev_t *dev, uint32_t channel)
 {
     return dev->channel[channel].in.in_dscr;
 }
@@ -441,10 +477,10 @@ static inline uint32_t gdma_ll_tx_get_eof_desc_addr(gdma_dev_t *dev, uint32_t ch
 }
 
 /**
- * @brief Get current TX descriptor's address
+ * @brief Get the pre-fetched TX descriptor's address
  */
 __attribute__((always_inline))
-static inline uint32_t gdma_ll_tx_get_current_desc_addr(gdma_dev_t *dev, uint32_t channel)
+static inline uint32_t gdma_ll_tx_get_prefetched_desc_addr(gdma_dev_t *dev, uint32_t channel)
 {
     return dev->channel[channel].out.out_dscr;
 }

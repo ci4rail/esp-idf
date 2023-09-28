@@ -10,7 +10,6 @@
 #include <assert.h>
 #include <stdlib.h>
 #include "sdkconfig.h"
-#include "esp32h2/rom/ets_sys.h"
 #include "esp32h2/rom/rtc.h"
 #include "soc/rtc.h"
 #include "esp_private/rtc_clk.h"
@@ -21,6 +20,12 @@
 #include "soc/io_mux_reg.h"
 #include "soc/lp_aon_reg.h"
 #include "soc/lp_clkrst_reg.h"
+
+#ifdef BOOTLOADER_BUILD
+#include "hal/modem_lpcon_ll.h"
+#else
+#include "esp_private/esp_modem_clock.h"
+#endif
 
 static const char *TAG = "rtc_clk";
 
@@ -155,11 +160,25 @@ static void rtc_clk_bbpll_enable(void)
     clk_ll_bbpll_enable();
 }
 
+static void rtc_clk_enable_i2c_ana_master_clock(bool enable)
+{
+#ifdef BOOTLOADER_BUILD
+    modem_lpcon_ll_enable_i2c_master_clock(&MODEM_LPCON, enable);
+#else
+    if (enable) {
+        modem_clock_module_enable(PERIPH_ANA_I2C_MASTER_MODULE);
+    } else {
+        modem_clock_module_disable(PERIPH_ANA_I2C_MASTER_MODULE);
+    }
+#endif
+}
+
 static void rtc_clk_bbpll_configure(rtc_xtal_freq_t xtal_freq, int pll_freq)
 {
     /* Digital part */
     clk_ll_bbpll_set_freq_mhz(pll_freq);
     /* Analog part */
+    rtc_clk_enable_i2c_ana_master_clock(true);
     /* BBPLL CALIBRATION START */
     regi2c_ctrl_ll_bbpll_calibration_start();
     clk_ll_bbpll_set_config(pll_freq, xtal_freq);
@@ -167,7 +186,7 @@ static void rtc_clk_bbpll_configure(rtc_xtal_freq_t xtal_freq, int pll_freq)
     while(!regi2c_ctrl_ll_bbpll_calibration_is_done());
     /* BBPLL CALIBRATION STOP */
     regi2c_ctrl_ll_bbpll_calibration_stop();
-
+    rtc_clk_enable_i2c_ana_master_clock(false);
     s_cur_pll_freq = pll_freq;
 }
 
@@ -183,7 +202,7 @@ static void rtc_clk_cpu_freq_to_xtal(int cpu_freq, int div)
     clk_ll_ahb_set_divider(div);
     clk_ll_cpu_set_src(SOC_CPU_CLK_SRC_XTAL);
     clk_ll_bus_update();
-    ets_update_cpu_frequency(cpu_freq);
+    esp_rom_set_cpu_ticks_per_us(cpu_freq);
 }
 
 static void rtc_clk_cpu_freq_to_8m(void)
@@ -193,7 +212,7 @@ static void rtc_clk_cpu_freq_to_8m(void)
     clk_ll_ahb_set_divider(1);
     clk_ll_cpu_set_src(SOC_CPU_CLK_SRC_RC_FAST);
     clk_ll_bus_update();
-    ets_update_cpu_frequency(8);
+    esp_rom_set_cpu_ticks_per_us(8);
 }
 
 /**
@@ -212,7 +231,7 @@ static void rtc_clk_cpu_freq_to_pll_mhz(int cpu_freq_mhz)
     clk_ll_ahb_set_divider(ahb_divider);
     clk_ll_cpu_set_src(SOC_CPU_CLK_SRC_PLL);
     clk_ll_bus_update();
-    ets_update_cpu_frequency(cpu_freq_mhz);
+    esp_rom_set_cpu_ticks_per_us(cpu_freq_mhz);
 }
 
 /**
@@ -229,7 +248,7 @@ static void rtc_clk_cpu_freq_to_flash_pll(uint32_t cpu_freq_mhz, uint32_t cpu_di
     clk_ll_ahb_set_divider(ahb_divider);
     clk_ll_cpu_set_src(SOC_CPU_CLK_SRC_FLASH_PLL);
     clk_ll_bus_update();
-    ets_update_cpu_frequency(cpu_freq_mhz);
+    esp_rom_set_cpu_ticks_per_us(cpu_freq_mhz);
 }
 
 bool rtc_clk_cpu_freq_mhz_to_config(uint32_t freq_mhz, rtc_cpu_freq_config_t *out_config)

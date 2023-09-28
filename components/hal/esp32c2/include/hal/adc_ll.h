@@ -33,7 +33,6 @@ extern "C" {
                     Oneshot
 ---------------------------------------------------------------*/
 #define ADC_LL_DATA_INVERT_DEFAULT(PERIPH_NUM)         (0)
-#define ADC_LL_SAR_CLK_DIV_DEFAULT(PERIPH_NUM)         ((PERIPH_NUM==0)? 2 : 1)
 
 /*---------------------------------------------------------------
                     DMA
@@ -248,42 +247,6 @@ static inline void adc_ll_digi_filter_enable(adc_digi_iir_filter_t idx, adc_unit
 }
 
 /**
- * Set monitor mode of adc digital controller.
- *
- * @note If the channel info is not supported, the monitor function will not be enabled.
- * @param adc_n ADC unit.
- * @param is_larger true:  If ADC_OUT >  threshold, Generates monitor interrupt.
- *                  false: If ADC_OUT <  threshold, Generates monitor interrupt.
- */
-static inline void adc_ll_digi_monitor_set_mode(adc_digi_monitor_idx_t idx, adc_digi_monitor_t *cfg)
-{
-    if (idx == ADC_DIGI_MONITOR_IDX0) {
-        APB_SARADC.saradc_thres0_ctrl.saradc_thres0_channel = (cfg->adc_unit << 3) | (cfg->channel & 0x7);
-        APB_SARADC.saradc_thres0_ctrl.saradc_thres0_high = cfg->h_threshold;
-        APB_SARADC.saradc_thres0_ctrl.saradc_thres0_low = cfg->l_threshold;
-    } else { // ADC_DIGI_MONITOR_IDX1
-        APB_SARADC.saradc_thres1_ctrl.saradc_thres1_channel = (cfg->adc_unit << 3) | (cfg->channel & 0x7);
-        APB_SARADC.saradc_thres1_ctrl.saradc_thres1_high = cfg->h_threshold;
-        APB_SARADC.saradc_thres1_ctrl.saradc_thres1_low = cfg->l_threshold;
-    }
-}
-
-/**
- * Enable/disable monitor of adc digital controller.
- *
- * @note If the channel info is not supported, the monitor function will not be enabled.
- * @param adc_n ADC unit.
- */
-static inline void adc_ll_digi_monitor_disable(adc_digi_monitor_idx_t idx)
-{
-    if (idx == ADC_DIGI_MONITOR_IDX0) {
-        APB_SARADC.saradc_thres0_ctrl.saradc_thres0_channel = 0xF;
-    } else { // ADC_DIGI_MONITOR_IDX1
-        APB_SARADC.saradc_thres1_ctrl.saradc_thres1_channel = 0xF;
-    }
-}
-
-/**
  * Reset adc digital controller.
  */
 static inline void adc_ll_digi_reset(void)
@@ -327,6 +290,7 @@ static inline uint32_t adc_ll_pwdet_get_cct(void)
  *
  * @param manage Set ADC power status.
  */
+__attribute__((always_inline))
 static inline void adc_ll_digi_set_power_manage(adc_ll_power_t manage)
 {
     /* Bit1  0:Fsm  1: SW mode
@@ -580,7 +544,7 @@ static inline adc_atten_t adc_ll_get_atten(adc_unit_t adc_n, adc_channel_t chann
 {
     (void)adc_n;
     (void)channel;
-    return APB_SARADC.saradc_onetime_sample.saradc_saradc_onetime_atten;
+    return (adc_atten_t)(APB_SARADC.saradc_onetime_sample.saradc_saradc_onetime_atten);
 }
 
 #ifdef __cplusplus

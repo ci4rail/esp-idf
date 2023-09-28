@@ -23,12 +23,14 @@ Unlike many operating systems using POSIX Threads, ESP-IDF is a real-time operat
 
 By default, all POSIX Threads have the same RTOS priority, but it is possible to change this by calling a :ref:`custom API <esp-pthread>`.
 
-Standard features
+Standard Features
 -----------------
 
 The following standard APIs are implemented in ESP-IDF.
 
 Refer to standard POSIX Threads documentation, or pthread.h, for details about the standard arguments and behaviour of each function. Differences or limitations compared to the standard APIs are noted below.
+
+.. _posix_thread_api:
 
 Thread APIs
 ^^^^^^^^^^^
@@ -49,7 +51,7 @@ Thread Attributes
 
 * ``pthread_attr_init()``
 * ``pthread_attr_destroy()``
-  - This function doesn't need to free any resources and instead resets the ``attr`` structure to defaults (implementation is same as ``pthread_attr_init()``).
+  - This function does not need to free any resources and instead resets the ``attr`` structure to defaults (implementation is same as ``pthread_attr_init()``).
 * ``pthread_attr_getstacksize()`` / ``pthread_attr_setstacksize()``
 * ``pthread_attr_getdetachstate()`` / ``pthread_attr_setdetachstate()``
 
@@ -60,7 +62,9 @@ Once
 
 Static initializer constant ``PTHREAD_ONCE_INIT`` is supported.
 
-.. note:: This function can be called from tasks created using either pthread or FreeRTOS APIs
+.. note:: 
+  
+  This function can be called from tasks created using either pthread or FreeRTOS APIs
 
 Mutexes
 ^^^^^^^
@@ -79,7 +83,9 @@ POSIX Mutexes are implemented as FreeRTOS Mutex Semaphores (normal type for "fas
 
 Static initializer constant ``PTHREAD_MUTEX_INITIALIZER`` is supported, but the non-standard static initializer constants for other mutex types are not supported.
 
-.. note:: These functions can be called from tasks created using either pthread or FreeRTOS APIs
+.. note:: 
+  
+  These functions can be called from tasks created using either pthread or FreeRTOS APIs
 
 Condition Variables
 ^^^^^^^^^^^^^^^^^^^
@@ -96,21 +102,52 @@ Static initializer constant ``PTHREAD_COND_INITIALIZER`` is supported.
 
 * The resolution of ``pthread_cond_timedwait()`` timeouts is the RTOS tick period (see :ref:`CONFIG_FREERTOS_HZ`). Timeouts may be delayed up to one tick period after the requested timeout.
 
-.. note:: These functions can be called from tasks created using either pthread or FreeRTOS APIs
+.. note:: 
+  
+  These functions can be called from tasks created using either pthread or FreeRTOS APIs
+
+Semaphores
+^^^^^^^^^^
+
+In ESP-IDF, POSIX **unnamed** semaphores are implemented. The accessible API is described below. It implements `semaphores as specified in the POSIX standard <https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/semaphore.h.html>`_, unless specified otherwise.
+
+* `sem_init() <https://pubs.opengroup.org/onlinepubs/9699919799/functions/sem_init.html>`_
+* `sem_destroy() <https://pubs.opengroup.org/onlinepubs/9699919799/functions/sem_destroy.html>`_
+
+  - ``pshared`` is ignored. Semaphores can always be shared between FreeRTOS tasks.
+
+* `sem_post() <https://pubs.opengroup.org/onlinepubs/9699919799/functions/sem_post.html>`_
+
+  - If the semaphore has a value of ``SEM_VALUE_MAX`` already, ``-1`` is returned and ``errno`` is set to ``EAGAIN``.
+
+* `sem_wait() <https://pubs.opengroup.org/onlinepubs/9699919799/functions/sem_wait.html>`_
+* `sem_trywait() <https://pubs.opengroup.org/onlinepubs/9699919799/functions/sem_trywait.html>`_
+* `sem_timedwait() <https://pubs.opengroup.org/onlinepubs/9699919799/functions/sem_timedwait.html>`_
+
+  - The time value passed by abstime will be rounded up to the next FreeRTOS tick. 
+  - The actual timeout happens after the tick the time was rounded to and before the following tick.
+  - It is possible, though unlikely, that the task is preempted directly after the timeout calculation, delaying the timeout of the following blocking operating system call by the duration of the preemption.
+
+* `sem_getvalue() <https://pubs.opengroup.org/onlinepubs/9699919799/functions/sem_getvalue.html>`_
 
 Read/Write Locks
-^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^
+The following API functions of the POSIX reader-writer locks specification are implemented:
 
-* ``pthread_rwlock_init()``
+* `pthread_rwlock_init() <https://pubs.opengroup.org/onlinepubs/9699919799/functions/pthread_rwlock_init.html>`_
+
   - The ``attr`` argument is not implemented and is ignored.
-* ``pthread_rwlock_destroy()``
-* ``pthread_rwlock_rdlock()``
-* ``pthread_rwlock_wrlock()``
-* ``pthread_rwlock_unlock()``
 
-Static initializer constant ``PTHREAD_RWLOCK_INITIALIZER`` is supported.
+* `pthread_rwlock_destroy() <https://pubs.opengroup.org/onlinepubs/9699919799/functions/pthread_rwlock_destroy.html>`_
+* `pthread_rwlock_rdlock() <https://pubs.opengroup.org/onlinepubs/9699919799/functions/pthread_rwlock_rdlock.html>`_
+* `pthread_rwlock_tryrdlock() <https://pubs.opengroup.org/onlinepubs/9699919799/functions/pthread_rwlock_tryrdlock.html>`_
+* `pthread_rwlock_wrlock() <https://pubs.opengroup.org/onlinepubs/9699919799/functions/pthread_rwlock_wrlock.html>`_
+* `pthread_rwlock_trywrlock() <https://pubs.opengroup.org/onlinepubs/9699919799/functions/pthread_rwlock_trywrlock.html>`_
+* `pthread_rwlock_unlock() <https://pubs.opengroup.org/onlinepubs/9699919799/functions/pthread_rwlock_unlock.html>`_
 
-.. note:: These functions can be called from tasks created using either pthread or FreeRTOS APIs
+The static initializer constant ``PTHREAD_RWLOCK_INITIALIZER`` is supported.
+
+.. note:: These functions can be called from tasks created using either pthread or FreeRTOS APIs.
 
 Thread-Specific Data
 ^^^^^^^^^^^^^^^^^^^^
@@ -120,9 +157,13 @@ Thread-Specific Data
 * ``pthread_key_delete()``
 * ``pthread_setspecific()`` / ``pthread_getspecific()``
 
-.. note:: These functions can be called from tasks created using either pthread or FreeRTOS APIs. When calling these functions from tasks created using FreeRTOS APIs, :ref:`CONFIG_FREERTOS_TLSP_DELETION_CALLBACKS` config option must be enabled to ensure the thread-specific data is cleaned up before the task is deleted.
+.. note:: 
+  
+  These functions can be called from tasks created using either pthread or FreeRTOS APIs. When calling these functions from tasks created using FreeRTOS APIs, :ref:`CONFIG_FREERTOS_TLSP_DELETION_CALLBACKS` config option must be enabled to ensure the thread-specific data is cleaned up before the task is deleted.
 
-.. note:: There are other options for thread local storage in ESP-IDF, including options with higher performance. See :doc:`/api-guides/thread-local-storage`.
+.. note:: 
+  
+  There are other options for thread local storage in ESP-IDF, including options with higher performance. See :doc:`/api-guides/thread-local-storage`.
 
 Not Implemented
 ---------------
@@ -139,7 +180,7 @@ Other POSIX Threads functions (not listed here) are not implemented and will pro
 ESP-IDF Extensions
 ------------------
 
-The API :cpp:func:`esp_pthread_set_cfg` defined in the ``esp_pthreads.h`` header offers custom extensions to control how subsequent calls to ``pthread_create()`` will behave. Currently, the following configuration can be set:
+The API :cpp:func:`esp_pthread_set_cfg` defined in the ``esp_pthreads.h`` header offers custom extensions to control how subsequent calls to ``pthread_create()`` behaves. Currently, the following configuration can be set:
 
 .. list::
   - Default stack size of new threads, if not specified when calling ``pthread_create()`` (overrides :ref:`CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT`).
@@ -160,4 +201,3 @@ API Reference
 -------------
 
 .. include-build-file:: inc/esp_pthread.inc
-

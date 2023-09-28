@@ -62,6 +62,11 @@
 #define BTA_AV_RECONFIG_RETRY       6
 #endif
 
+/* avdt_handle to send abort command for AVDTP BQB test */
+#if A2D_SRC_BQB_INCLUDED
+static uint8_t s_avdt_bqb_handle;
+#endif /* CONFIG_BT_BQB_ENABLED */
+
 static void bta_av_st_rc_timer(tBTA_AV_SCB *p_scb, tBTA_AV_DATA *p_data);
 
 /* state machine states */
@@ -414,6 +419,11 @@ static void bta_av_proc_stream_evt(UINT8 handle, BD_ADDR bd_addr, UINT8 event, t
     tBTA_AV_SCB         *p_scb = bta_av_cb.p_scb[index];
     int                 xx;
 
+    if (event == AVDT_DELAY_REPORT_CFM_EVT) {
+        APPL_TRACE_DEBUG("%s: AVDT_DELAY_REPORT_CFM_EVT", __func__);
+        return;
+    }
+
     if (p_data) {
         if (event == AVDT_SECURITY_IND_EVT) {
             sec_len = (p_data->security_ind.len < BTA_AV_SECURITY_MAX_LEN) ?
@@ -500,9 +510,6 @@ static void bta_av_proc_stream_evt(UINT8 handle, BD_ADDR bd_addr, UINT8 event, t
             case AVDT_DISCONNECT_IND_EVT:
                 p_msg->hdr.offset = p_data->hdr.err_param;
                 break;
-            case AVDT_DELAY_REPORT_CFM_EVT:
-                APPL_TRACE_DEBUG("%s: AVDT_DELAY_REPORT_CFM_EVT", __func__);
-                return;
             default:
                 break;
             }
@@ -731,8 +738,7 @@ static void bta_av_adjust_seps_idx(tBTA_AV_SCB *p_scb, UINT8 avdt_handle)
     for (xx = 0; xx < BTA_AV_MAX_SEPS; xx++) {
         APPL_TRACE_DEBUG("av_handle: %d codec_type: %d",
                          p_scb->seps[xx].av_handle, p_scb->seps[xx].codec_type);
-        if ((p_scb->seps[xx].av_handle && p_scb->codec_type == p_scb->seps[xx].codec_type)
-                && (p_scb->seps[xx].av_handle == avdt_handle)) {
+        if ((p_scb->seps[xx].av_handle) && (p_scb->seps[xx].av_handle == avdt_handle)) {
             p_scb->sep_idx      = xx;
             p_scb->avdt_handle  = p_scb->seps[xx].av_handle;
             break;
@@ -1025,6 +1031,7 @@ void bta_av_cleanup(tBTA_AV_SCB *p_scb, tBTA_AV_DATA *p_data)
     p_scb->wait = 0;
     p_scb->num_disc_snks = 0;
     p_scb->disc_rsn = 0;
+    p_scb->avdt_handle = 0;
     bta_sys_stop_timer(&p_scb->timer);
     if (p_scb->deregistring) {
         /* remove stream */
@@ -1297,11 +1304,11 @@ void bta_av_setconfig_rsp (tBTA_AV_SCB *p_scb, tBTA_AV_DATA *p_data)
 
         if (p_scb->codec_type == BTA_AV_CODEC_SBC || num > 1) {
             /* if SBC is used by the SNK as INT, discover req is not sent in bta_av_config_ind.
-                       * call disc_res now */
+                       * call cfg_res now */
             /* this is called in A2DP SRC path only, In case of SINK we don't need it  */
             if (local_sep == AVDT_TSEP_SRC) {
-                p_scb->p_cos->disc_res(p_scb->hndl, num, num, 0, p_scb->peer_addr,
-                                       UUID_SERVCLASS_AUDIO_SOURCE);
+                p_scb->p_cos->cfg_res(p_scb->hndl, num, num, 0, p_scb->peer_addr,
+                                      UUID_SERVCLASS_AUDIO_SOURCE);
             }
         } else {
             /* we do not know the peer device and it is using non-SBC codec
@@ -1413,6 +1420,10 @@ void bta_av_str_opened (tBTA_AV_SCB *p_scb, tBTA_AV_DATA *p_data)
         }
     }
 
+#if A2D_SRC_BQB_INCLUDED
+    s_avdt_bqb_handle = p_scb->avdt_handle;
+#endif /* A2D_SRC_BQB_INCLUDED */
+
 #if 0 /* TODO: implement the property enable/disable */
     // This code is used to pass PTS TC for AVDTP ABORT
     char value[PROPERTY_VALUE_MAX] = {0};
@@ -1423,6 +1434,22 @@ void bta_av_str_opened (tBTA_AV_SCB *p_scb, tBTA_AV_DATA *p_data)
     }
 #endif /* #if 0*/
 }
+
+/*******************************************************************************
+**
+** Function         avdt_bqb_abort
+**
+** Description      Send AVDT abort request for BQB test
+**
+** Returns          void
+**
+*******************************************************************************/
+#if A2D_SRC_BQB_INCLUDED
+void avdt_bqb_abort(void)
+{
+    AVDT_AbortReq(s_avdt_bqb_handle);
+}
+#endif /* A2D_SRC_BQB_INCLUDED */
 
 /*******************************************************************************
 **
@@ -2018,7 +2045,7 @@ void bta_av_str_stopped (tBTA_AV_SCB *p_scb, tBTA_AV_DATA *p_data)
     BT_HDR  *p_buf;
     UINT8 policy = HCI_ENABLE_SNIFF_MODE;
 
-    APPL_TRACE_ERROR("bta_av_str_stopped:audio_open_cnt=%d, p_data %p",
+    APPL_TRACE_DEBUG("bta_av_str_stopped:audio_open_cnt=%d, p_data %p",
                      bta_av_cb.audio_open_cnt, p_data);
 
     bta_sys_idle(TSEP_TO_SYS_ID(p_scb->seps[p_scb->sep_idx].tsep), bta_av_cb.audio_open_cnt, p_scb->peer_addr);
@@ -2069,7 +2096,7 @@ void bta_av_str_stopped (tBTA_AV_SCB *p_scb, tBTA_AV_DATA *p_data)
     } else {
         suspend_rsp.status = BTA_AV_SUCCESS;
         suspend_rsp.initiator = TRUE;
-        APPL_TRACE_EVENT("bta_av_str_stopped status %d", suspend_rsp.status);
+        APPL_TRACE_WARNING("bta_av_str_stopped status %d", suspend_rsp.status);
 
         /* send STOP_EVT event only if not in reconfiguring state */
         if (p_scb->state != BTA_AV_RCFG_SST) {

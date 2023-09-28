@@ -256,7 +256,7 @@ simple_ble_gap_event(struct ble_gap_event *event, void *arg)
         return 0;
 
     case BLE_GAP_EVENT_MTU:
-        ESP_LOGI(TAG, "mtu update event; conn_handle=%d cid=%d mtu=%d\n",
+        ESP_LOGI(TAG, "mtu update event; conn_handle=%d cid=%d mtu=%d",
                  event->mtu.conn_handle,
                  event->mtu.channel_id,
                  event->mtu.value);
@@ -323,8 +323,8 @@ gatt_svr_chr_access(uint16_t conn_handle, uint16_t attr_handle,
         rc = simple_ble_gatts_get_attr_value(attr_handle, &temp_outlen,
                                              &temp_outbuf);
         if (rc != 0) {
-            ESP_LOGE(TAG, "Failed to read characteristic with attr_handle = %d", attr_handle);
-            return rc;
+            ESP_LOGE(TAG, "Characteristic with attr_handle = %d is not added to the list", attr_handle);
+            return 0;
         }
 
         rc = os_mbuf_append(ctxt->om, temp_outbuf, temp_outlen);
@@ -453,7 +453,7 @@ gatt_svr_init(const simple_ble_cfg_t *config)
 static void
 simple_ble_on_reset(int reason)
 {
-    ESP_LOGE(TAG, "Resetting state; reason=%d\n", reason);
+    ESP_LOGE(TAG, "Resetting state; reason=%d", reason);
 }
 
 static void
@@ -470,7 +470,7 @@ simple_ble_on_sync(void)
     /* Figure out address to use while advertising (no privacy for now) */
     rc = ble_hs_id_infer_auto(0, &own_addr_type);
     if (rc != 0) {
-        ESP_LOGE(TAG, "error determining address type; rc=%d\n", rc);
+        ESP_LOGE(TAG, "error determining address type; rc=%d", rc);
         return;
     }
 
@@ -582,6 +582,15 @@ static void transport_simple_ble_connect(struct ble_gap_event *event, void *arg)
 {
     esp_err_t ret;
     ESP_LOGD(TAG, "Inside BLE connect w/ conn_id - %d", event->connect.conn_handle);
+
+#ifdef CONFIG_WIFI_PROV_KEEP_BLE_ON_AFTER_PROV
+    /* Ignore BLE events received after protocomm layer is stopped */
+    if (protoble_internal == NULL) {
+        ESP_LOGI(TAG,"Protocomm layer has already stopped");
+        return;
+    }
+#endif
+
     if (protoble_internal->pc_ble->sec &&
             protoble_internal->pc_ble->sec->new_transport_session) {
         ret =
@@ -990,6 +999,7 @@ esp_err_t protocomm_ble_stop(protocomm_t *pc)
         if (ret == 0) {
             nimble_port_deinit();
         }
+        free_gatt_ble_misc_memory(ble_cfg_p);
 #else
 #ifdef CONFIG_WIFI_PROV_DISCONNECT_AFTER_PROV
 	/* Keep BT stack on, but terminate the connection after provisioning */

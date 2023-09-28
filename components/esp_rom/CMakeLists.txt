@@ -23,7 +23,11 @@ else()
 
     # Override regi2c implementation in ROM
     if(CONFIG_ESP_ROM_HAS_REGI2C_BUG OR CONFIG_ESP_ROM_WITHOUT_REGI2C)
-        list(APPEND sources "patches/esp_rom_regi2c_${target}.c")
+        if(target STREQUAL "esp32c6")
+            list(APPEND sources "patches/esp_rom_hp_regi2c_${target}.c")
+        else()
+            list(APPEND sources "patches/esp_rom_regi2c_${target}.c")
+        endif()
     endif()
 
     if(CONFIG_HEAP_TLSF_USE_ROM_IMPL AND CONFIG_ESP_ROM_TLSF_CHECK_PATCH)
@@ -46,20 +50,20 @@ if(CONFIG_HAL_WDT_USE_ROM_IMPL)
     list(APPEND sources "patches/esp_rom_wdt.c")
 endif()
 
+if(CONFIG_ESP_ROM_HAS_FLASH_COUNT_PAGES_BUG OR CONFIG_ESP_ROM_HAS_CACHE_WRITEBACK_BUG)
+    list(APPEND sources "patches/esp_rom_cache_esp32s2_esp32s3.c")
+endif()
+
+if(CONFIG_ESP_ROM_HAS_CACHE_WRITEBACK_BUG)
+    list(APPEND sources "patches/esp_rom_cache_writeback_esp32s3.S")
+endif()
+
 idf_component_register(SRCS ${sources}
                        INCLUDE_DIRS ${include_dirs}
                        PRIV_REQUIRES ${private_required_comp}
                        LDFRAGMENTS linker.lf)
 
-if(target STREQUAL "esp32h4")
-    if(CONFIG_IDF_TARGET_ESP32H4_BETA_VERSION_1)
-        set(ld_folder "ld/rev1")
-    elseif(CONFIG_IDF_TARGET_ESP32H4_BETA_VERSION_2)
-        set(ld_folder "ld/rev2")
-    endif()
-else()
-    set(ld_folder "ld")
-endif()
+set(ld_folder "ld")
 
 # Append a target linker script at the target-specific path,
 # only the 'name' part is different for each script
@@ -108,9 +112,6 @@ if(BOOTLOADER_BUILD)
     elseif(target STREQUAL "esp32c3")
         rom_linker_script("newlib")
 
-    elseif(target STREQUAL "esp32h4")
-        rom_linker_script("newlib")
-
     elseif(target STREQUAL "esp32c2")
         rom_linker_script("newlib")
         rom_linker_script("mbedtls")
@@ -129,6 +130,13 @@ if(BOOTLOADER_BUILD)
         if(CONFIG_HAL_WDT_USE_ROM_IMPL)
             rom_linker_script("wdt")
         endif()
+
+    elseif(target STREQUAL "esp32p4")
+        rom_linker_script("newlib")
+        if(CONFIG_HAL_WDT_USE_ROM_IMPL)
+            rom_linker_script("wdt")
+        endif()
+        rom_linker_script("version")
     endif()
 
 else() # Regular app build
@@ -215,16 +223,6 @@ else() # Regular app build
             rom_linker_script("eco3")
         endif()
 
-    elseif(target STREQUAL "esp32h4")
-        rom_linker_script("newlib")
-        rom_linker_script("version")
-
-        if(CONFIG_NEWLIB_NANO_FORMAT AND time_t_size EQUAL 4)
-            # nano formatting functions in ROM are built for 32-bit time_t,
-            # only link them if the toolchain is also using 32-bit time_t and nano formatting was requested.
-            rom_linker_script("newlib-nano")
-        endif()
-
     elseif(target STREQUAL "esp32c2")
         rom_linker_script("newlib")
         rom_linker_script("version")
@@ -275,6 +273,21 @@ else() # Regular app build
             rom_linker_script("newlib-nano")
         endif()
 
+    elseif(target STREQUAL "esp32p4")
+        rom_linker_script("newlib")
+        rom_linker_script("version")
+
+        # esp32p4 rom doesn't have esp_flash driver
+
+        if(CONFIG_HAL_WDT_USE_ROM_IMPL)
+            rom_linker_script("wdt")
+        endif()
+
+        if(CONFIG_NEWLIB_NANO_FORMAT)
+            # nano formatting functions in ROM are also built for 64-bit time_t.
+            rom_linker_script("newlib-nano")
+        endif()
+
     endif()
 
     if(CONFIG_HEAP_TLSF_USE_ROM_IMPL)
@@ -295,5 +308,5 @@ else() # Regular app build
 endif()
 
 if(target STREQUAL "esp32s2")
-    target_sources(${COMPONENT_LIB} PRIVATE "esp32s2/usb_descriptors.c")
+    target_sources(${COMPONENT_LIB} PRIVATE "esp32s2/usb_patches.c")
 endif()

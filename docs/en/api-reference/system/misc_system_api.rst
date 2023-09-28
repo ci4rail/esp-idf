@@ -1,5 +1,6 @@
 Miscellaneous System APIs
 =========================
+
 :link_to_translation:`zh_CN:[中文]`
 
 {IDF_TARGET_BASE_MAC_BLOCK: default="BLK1", esp32="BLK0"}
@@ -36,7 +37,7 @@ These APIs allow querying and customizing MAC addresses for different supported 
 
 To fetch the MAC address for a specific network interface (e.g., Wi-Fi, Bluetooth, Ethernet), call the function :cpp:func:`esp_read_mac`.
 
-In ESP-IDF, the MAC addresses for the various network interfaces are calculated from a single *base MAC address*. By default, the Espressif base MAC address is used. This base MAC address is pre-programmed into the {IDF_TARGET_NAME} eFuse in the factory during production.
+In ESP-IDF, the MAC addresses for the various network interfaces are calculated from a single **base MAC address**. By default, the Espressif base MAC address is used. This base MAC address is pre-programmed into the {IDF_TARGET_NAME} eFuse in the factory during production.
 
 .. only:: not esp32s2
 
@@ -89,7 +90,9 @@ In ESP-IDF, the MAC addresses for the various network interfaces are calculated 
 
 .. only:: not SOC_EMAC_SUPPORTED
 
-    .. note:: Although {IDF_TARGET_NAME} has no integrated Ethernet MAC, it is still possible to calculate an Ethernet MAC address. However, this MAC address can only be used with an external ethernet interface such as an SPI-Ethernet device. See :doc:`/api-reference/network/esp_eth`.
+    .. note:: 
+      
+      Although {IDF_TARGET_NAME} has no integrated Ethernet MAC, it is still possible to calculate an Ethernet MAC address. However, this MAC address can only be used with an external ethernet interface such as an SPI-Ethernet device. See :doc:`/api-reference/network/esp_eth`.
 
 Custom Interface MAC
 ^^^^^^^^^^^^^^^^^^^^
@@ -111,7 +114,7 @@ The custom base MAC addresses should be allocated such that derived MAC addresse
 Custom MAC Address in eFuse
 @@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-When reading custom MAC addresses from eFuse, ESP-IDF provides a helper function :cpp:func:`esp__mac_get_custom`. Users can also use :cpp:func:`esp_read_mac` with the ``ESP_MAC_EFUSE_CUSTOM`` argument. This loads the MAC address from eFuse BLK3. The :cpp:func:`esp__mac_get_custom` function assumes that the custom base MAC address is stored in the following format:
+When reading custom MAC addresses from eFuse, ESP-IDF provides a helper function :cpp:func:`esp_efuse_mac_get_custom`. Users can also use :cpp:func:`esp_read_mac` with the ``ESP_MAC_EFUSE_CUSTOM`` argument. This loads the MAC address from eFuse BLK3. The :cpp:func:`esp_efuse_mac_get_custom` function assumes that the custom base MAC address is stored in the following format:
 
 .. only:: esp32
 
@@ -169,8 +172,8 @@ Once custom eFuse MAC address has been obtained (using :cpp:func:`esp_efuse_mac_
 
 .. _local-mac-addresses:
 
-Local vs Universal MAC Addresses
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Local Versus Universal MAC Addresses
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 {IDF_TARGET_NAME} comes pre-programmed with enough valid Espressif universally administered MAC addresses for all internal interfaces. The table above shows how to calculate and derive the MAC address for a specific interface according to the base MAC address.
 

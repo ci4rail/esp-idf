@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2019-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2019-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -19,6 +19,10 @@
 #include <errno.h>
 #include "esp_log.h"
 #include "esp_check.h"
+
+#ifdef CONFIG_MBEDTLS_HARDWARE_ECDSA_SIGN
+#include "ecdsa/ecdsa_alt.h"
+#endif
 
 #ifdef CONFIG_MBEDTLS_CERTIFICATE_BUNDLE
 #include "esp_crt_bundle.h"
@@ -72,6 +76,15 @@ esp_err_t esp_create_mbedtls_handle(const char *hostname, size_t hostlen, const 
     assert(tls != NULL);
     int ret;
     esp_err_t esp_ret = ESP_FAIL;
+
+#ifdef CONFIG_MBEDTLS_SSL_PROTO_TLS1_3
+    psa_status_t status = psa_crypto_init();
+    if (status != PSA_SUCCESS) {
+        ESP_LOGE(TAG, "Failed to initialize PSA crypto, returned %d", (int) status);
+        return esp_ret;
+    }
+#endif // CONFIG_MBEDTLS_SSL_PROTO_TLS1_3
+
     tls->server_fd.fd = tls->sockfd;
     mbedtls_ssl_init(&tls->ssl);
     mbedtls_ctr_drbg_init(&tls->ctr_drbg);
@@ -203,7 +216,7 @@ int esp_mbedtls_handshake(esp_tls_t *tls, const esp_tls_cfg_t *cfg)
             mbedtls_print_error_msg(ret);
             ESP_INT_EVENT_TRACKER_CAPTURE(tls->error_handle, ESP_TLS_ERR_TYPE_MBEDTLS, -ret);
             ESP_INT_EVENT_TRACKER_CAPTURE(tls->error_handle, ESP_TLS_ERR_TYPE_ESP, ESP_ERR_MBEDTLS_SSL_HANDSHAKE_FAILED);
-            if (cfg->cacert_buf != NULL || cfg->use_global_ca_store == true) {
+            if (cfg->crt_bundle_attach != NULL || cfg->cacert_buf != NULL || cfg->use_global_ca_store == true) {
                 /* This is to check whether handshake failed due to invalid certificate*/
                 esp_mbedtls_verify_certificate(tls);
             }
@@ -220,6 +233,16 @@ ssize_t esp_mbedtls_read(esp_tls_t *tls, char *data, size_t datalen)
 {
 
     ssize_t ret = mbedtls_ssl_read(&tls->ssl, (unsigned char *)data, datalen);
+#if CONFIG_MBEDTLS_SSL_PROTO_TLS1_3 && CONFIG_MBEDTLS_CLIENT_SSL_SESSION_TICKETS
+    // If a post-handshake message is received, connection state is changed to `MBEDTLS_SSL_TLS1_3_NEW_SESSION_TICKET`
+    // Call mbedtls_ssl_read() till state is `MBEDTLS_SSL_TLS1_3_NEW_SESSION_TICKET` or return code is `MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET`
+    // to process session tickets in TLS 1.3 connection
+    while (ret == MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET || tls->ssl.MBEDTLS_PRIVATE(state) == MBEDTLS_SSL_TLS1_3_NEW_SESSION_TICKET) {
+        ESP_LOGD(TAG, "got session ticket in TLS 1.3 connection, retry read");
+        ret = mbedtls_ssl_read(&tls->ssl, (unsigned char *)data, datalen);
+    }
+#endif // CONFIG_MBEDTLS_SSL_PROTO_TLS1_3 && CONFIG_MBEDTLS_CLIENT_SSL_SESSION_TICKETS
+
     if (ret < 0) {
         if (ret == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY) {
             return 0;
@@ -286,7 +309,7 @@ void esp_mbedtls_verify_certificate(esp_tls_t *tls)
     if ((flags = mbedtls_ssl_get_verify_result(&tls->ssl)) != 0) {
         ESP_LOGI(TAG, "Failed to verify peer certificate!");
         ESP_INT_EVENT_TRACKER_CAPTURE(tls->error_handle, ESP_TLS_ERR_TYPE_MBEDTLS_CERT_FLAGS, flags);
-#if (CONFIG_LOG_DEFAULT_LEVEL > CONFIG_LOG_DEFAULT_LEVEL_DEBUG)
+#if (CONFIG_LOG_DEFAULT_LEVEL_DEBUG || CONFIG_LOG_DEFAULT_LEVEL_VERBOSE)
         char buf[100];
         bzero(buf, sizeof(buf));
         mbedtls_x509_crt_verify_info(buf, sizeof(buf), "  ! ", flags);
@@ -382,6 +405,19 @@ static esp_err_t set_pki_context(esp_tls_t *tls, const esp_tls_pki_t *pki)
             ret = esp_mbedtls_init_pk_ctx_for_ds(pki);
             if (ret != ESP_OK) {
                 ESP_LOGE(TAG, "Failed to initialize pk context for esp_ds");
+                return ret;
+            }
+        } else
+#endif
+#ifdef CONFIG_MBEDTLS_HARDWARE_ECDSA_SIGN
+        if (tls->use_ecdsa_peripheral) {
+            esp_ecdsa_pk_conf_t conf = {
+                .grp_id = MBEDTLS_ECP_DP_SECP256R1,
+                .efuse_block = tls->ecdsa_efuse_blk,
+            };
+            ret = esp_ecdsa_set_pk_context(pki->pk_key, &conf);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to initialize pk context for ecdsa peripheral with the key stored in efuse block %d", tls->ecdsa_efuse_blk);
                 return ret;
             }
         } else
@@ -561,6 +597,29 @@ esp_err_t set_server_config(esp_tls_cfg_server_t *cfg, esp_tls_t *tls)
         ESP_LOGE(TAG, "Please enable secure element support for ESP-TLS in menuconfig");
         return ESP_FAIL;
 #endif /* CONFIG_ESP_TLS_USE_SECURE_ELEMENT */
+    }  else if (cfg->use_ecdsa_peripheral) {
+#ifdef CONFIG_MBEDTLS_HARDWARE_ECDSA_SIGN
+        tls->use_ecdsa_peripheral = cfg->use_ecdsa_peripheral;
+        tls->ecdsa_efuse_blk = cfg->ecdsa_key_efuse_blk;
+        esp_tls_pki_t pki = {
+            .public_cert = &tls->servercert,
+            .pk_key = &tls->serverkey,
+            .publiccert_pem_buf = cfg->servercert_buf,
+            .publiccert_pem_bytes = cfg->servercert_bytes,
+            .privkey_pem_buf = NULL,
+            .privkey_pem_bytes = 0,
+            .privkey_password = NULL,
+            .privkey_password_len = 0,
+        };
+        esp_err_t esp_ret = set_pki_context(tls, &pki);
+        if (esp_ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to set client pki context");
+            return esp_ret;
+        }
+#else
+        ESP_LOGE(TAG, "Please enable the support for signing using ECDSA peripheral in menuconfig.");
+        return ESP_FAIL;
+#endif
     } else if (cfg->servercert_buf != NULL && cfg->serverkey_buf != NULL) {
         esp_tls_pki_t pki = {
             .public_cert = &tls->servercert,
@@ -768,6 +827,39 @@ esp_err_t set_client_config(const char *hostname, size_t hostlen, esp_tls_cfg_t 
         ESP_LOGE(TAG, "Please enable the DS peripheral support for the ESP-TLS in menuconfig. (only supported for the ESP32-S2 chip)");
         return ESP_FAIL;
 #endif
+    } else if (cfg->use_ecdsa_peripheral) {
+#ifdef CONFIG_MBEDTLS_HARDWARE_ECDSA_SIGN
+        tls->use_ecdsa_peripheral = cfg->use_ecdsa_peripheral;
+        tls->ecdsa_efuse_blk = cfg->ecdsa_key_efuse_blk;
+        esp_tls_pki_t pki = {
+            .public_cert = &tls->clientcert,
+            .pk_key = &tls->clientkey,
+            .publiccert_pem_buf = cfg->clientcert_buf,
+            .publiccert_pem_bytes = cfg->clientcert_bytes,
+            .privkey_pem_buf = NULL,
+            .privkey_pem_bytes = 0,
+            .privkey_password = NULL,
+            .privkey_password_len = 0,
+        };
+        esp_err_t esp_ret = set_pki_context(tls, &pki);
+        if (esp_ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to set client pki context");
+            return esp_ret;
+        }
+        static const int ecdsa_peripheral_supported_ciphersuites[] = {
+            MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+#if CONFIG_MBEDTLS_SSL_PROTO_TLS1_3
+            MBEDTLS_TLS1_3_AES_128_GCM_SHA256,
+#endif
+            0
+        };
+
+        ESP_LOGD(TAG, "Set the ciphersuites list");
+        mbedtls_ssl_conf_ciphersuites(&tls->conf, ecdsa_peripheral_supported_ciphersuites);
+#else
+        ESP_LOGE(TAG, "Please enable the support for signing using ECDSA peripheral in menuconfig.");
+        return ESP_FAIL;
+#endif
     } else if (cfg->clientcert_pem_buf != NULL && cfg->clientkey_pem_buf != NULL) {
         esp_tls_pki_t pki = {
             .public_cert = &tls->clientcert,
@@ -787,6 +879,11 @@ esp_err_t set_client_config(const char *hostname, size_t hostlen, esp_tls_cfg_t 
     } else if (cfg->clientcert_buf != NULL || cfg->clientkey_buf != NULL) {
         ESP_LOGE(TAG, "You have to provide both clientcert_buf and clientkey_buf for mutual authentication");
         return ESP_ERR_INVALID_STATE;
+    }
+
+    if (cfg->ciphersuites_list != NULL && cfg->ciphersuites_list[0] != 0) {
+        ESP_LOGD(TAG, "Set the ciphersuites list");
+        mbedtls_ssl_conf_ciphersuites(&tls->conf, cfg->ciphersuites_list);
     }
     return ESP_OK;
 }
@@ -895,6 +992,11 @@ void esp_mbedtls_free_global_ca_store(void)
     }
 }
 
+const int *esp_mbedtls_get_ciphersuites_list(void)
+{
+    return mbedtls_ssl_list_ciphersuites();
+}
+
 #ifdef CONFIG_ESP_TLS_USE_SECURE_ELEMENT
 static esp_err_t esp_init_atecc608a(uint8_t i2c_addr)
 {
@@ -947,8 +1049,9 @@ static esp_err_t esp_set_atecc608a_pki_context(esp_tls_t *tls, const void *pki)
     }
     mbedtls_x509_crt_init(&tls->clientcert);
 
-    if(cfg->clientcert_buf != NULL) {
-        ret = mbedtls_x509_crt_parse(&tls->clientcert, (const unsigned char*)((esp_tls_pki_t *)pki->publiccert_pem_buf), (esp_tls_pki_t *)pki->publiccert_pem_bytes);
+    esp_tls_pki_t *pki_l = (esp_tls_pki_t *) pki;
+    if (pki_l->publiccert_pem_buf != NULL) {
+        ret = mbedtls_x509_crt_parse(&tls->clientcert, pki_l->publiccert_pem_buf, pki_l->publiccert_pem_bytes);
         if (ret < 0) {
             ESP_LOGE(TAG, "mbedtls_x509_crt_parse of client cert returned -0x%04X", -ret);
             mbedtls_print_error_msg(ret);

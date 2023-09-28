@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -16,7 +16,7 @@
  * If this file is changed the script will automatically run the script
  * and generate the kconfig variables as part of the pre-commit hooks.
  *
- * It can also be ran manually with `./tools/gen_soc_caps_kconfig/gen_soc_caps_kconfig.py 'components/soc/esp32c3/include/soc/'`
+ * It can also be ran manually with `./tools/gen_soc_caps_kconfig/gen_soc_caps_kconfig.py -d 'components/soc/esp32c2/include/soc/'`
  *
  * For more information see `tools/gen_soc_caps_kconfig/README.md`
  *
@@ -29,6 +29,7 @@
 #define SOC_DEDICATED_GPIO_SUPPORTED    1
 #define SOC_UART_SUPPORTED              1
 #define SOC_GDMA_SUPPORTED              1
+#define SOC_AHB_GDMA_SUPPORTED          1
 #define SOC_GPTIMER_SUPPORTED           1
 #define SOC_BT_SUPPORTED                1
 #define SOC_WIFI_SUPPORTED              1
@@ -36,6 +37,7 @@
 #define SOC_SUPPORTS_SECURE_DL_MODE     1
 #define SOC_EFUSE_KEY_PURPOSE_FIELD     0
 #define SOC_EFUSE_CONSISTS_OF_ONE_KEY_BLOCK 1
+#define SOC_EFUSE_SUPPORTED             1
 #define SOC_TEMP_SENSOR_SUPPORTED       1
 #define SOC_LEDC_SUPPORTED              1
 #define SOC_I2C_SUPPORTED               1
@@ -46,6 +48,8 @@
 #define SOC_SECURE_BOOT_SUPPORTED       1
 #define SOC_SYSTIMER_SUPPORTED          1
 #define SOC_BOD_SUPPORTED               1
+#define SOC_CLK_TREE_SUPPORTED          1
+#define SOC_ASSIST_DEBUG_SUPPORTED      1
 
 /*-------------------------- XTAL CAPS ---------------------------------------*/
 #define SOC_XTAL_SUPPORT_26M            1
@@ -81,6 +85,9 @@
 #define SOC_ADC_CALIBRATION_V1_SUPPORTED        (1) /*!< support HW offset calibration version 1*/
 #define SOC_ADC_SELF_HW_CALI_SUPPORTED          (1) /*!< support HW offset self calibration */
 
+/*!< ADC power control is shared by PWDET, TempSensor */
+#define SOC_ADC_SHARED_POWER                    1
+
 /*-------------------------- BROWNOUT CAPS -----------------------------------*/
 #define SOC_BROWNOUT_RESET_SUPPORTED 1
 
@@ -98,10 +105,13 @@
 
 #define SOC_CPU_IDRAM_SPLIT_USING_PMP   1
 
+/*-------------------------- ECC CAPS --------------------------*/
+#define SOC_ECC_SUPPORT_POINT_VERIFY_QUIRK  1  // C2 ECC peripheral has a bug in ECC point verification, if value of K is zero the verification fails
+
 /*-------------------------- GDMA CAPS -------------------------------------*/
-#define SOC_GDMA_GROUPS                 (1U) // Number of GDMA groups
-#define SOC_GDMA_PAIRS_PER_GROUP        (1U) // Number of GDMA pairs in each group
-#define SOC_GDMA_TX_RX_SHARE_INTERRUPT  (1)  // TX and RX channel in the same pair will share the same interrupt source number
+#define SOC_AHB_GDMA_VERSION            1U
+#define SOC_GDMA_NUM_GROUPS_MAX         1U
+#define SOC_GDMA_PAIRS_PER_GROUP_MAX    1U
 
 /*-------------------------- GPIO CAPS ---------------------------------------*/
 // ESP32-C2 has 1 GPIO peripheral
@@ -134,12 +144,14 @@
 #define SOC_I2C_NUM                 (1U)
 
 #define SOC_I2C_FIFO_LEN            (16) /*!< I2C hardware FIFO depth */
+#define SOC_I2C_CMD_REG_NUM         (8)  /*!< Number of I2C command registers */
 
 // FSM_RST only resets the FSM, not using it. So SOC_I2C_SUPPORT_HW_FSM_RST not defined.
 #define SOC_I2C_SUPPORT_HW_CLR_BUS  (1)
 
 #define SOC_I2C_SUPPORT_XTAL        (1)
 #define SOC_I2C_SUPPORT_RTC         (1)
+#define SOC_I2C_SUPPORT_10BIT_ADDR  (1)
 
 /*-------------------------- LEDC CAPS ---------------------------------------*/
 #define SOC_LEDC_SUPPORT_PLL_DIV_CLOCK  (1)
@@ -147,7 +159,6 @@
 #define SOC_LEDC_CHANNEL_NUM            (6)
 #define SOC_LEDC_TIMER_BIT_WIDTH        (14)
 #define SOC_LEDC_SUPPORT_FADE_STOP      (1)
-#define SOC_LEDC_GAMMA_FADE_RANGE_MAX   (1U) // The target does not support gamma curve fading
 
 /*-------------------------- MMU CAPS ----------------------------------------*/
 #define SOC_MMU_PAGE_SIZE_CONFIGURABLE          (1)
@@ -179,9 +190,11 @@
 
 /*--------------------------- SHA CAPS ---------------------------------------*/
 
+/* Due to very limited availability of the DMA channels, DMA support for the SHA peripheral is disabled */
+// #define SOC_SHA_SUPPORT_DMA             (1)
+
 /* The SHA engine is able to resume hashing from a user */
 #define SOC_SHA_SUPPORT_RESUME          (1)
-
 
 /* Supported HW algorithms */
 #define SOC_SHA_SUPPORT_SHA1            (1)
@@ -243,6 +256,9 @@
 #define SOC_TIMER_GROUP_SUPPORT_XTAL      (1)
 #define SOC_TIMER_GROUP_TOTAL_TIMERS      (1U)
 
+/*--------------------------- WATCHDOG CAPS ---------------------------------------*/
+#define SOC_MWDT_SUPPORT_XTAL              (1)
+
 /*-------------------------- eFuse CAPS----------------------------*/
 #define SOC_EFUSE_DIS_DOWNLOAD_ICACHE 1
 #define SOC_EFUSE_DIS_PAD_JTAG 1
@@ -262,6 +278,7 @@
 /*-------------------------- UART CAPS ---------------------------------------*/
 // ESP32-C2 has 2 UARTs
 #define SOC_UART_NUM                (2)
+#define SOC_UART_HP_NUM             (2)
 #define SOC_UART_FIFO_LEN           (128)      /*!< The UART hardware FIFO length */
 #define SOC_UART_BITRATE_MAX        (5000000)  /*!< Max bit rate supported by UART */
 #define SOC_UART_SUPPORT_WAKEUP_INT (1)         /*!< Support UART wakeup interrupt */
@@ -275,8 +292,9 @@
 /*-------------------------- COEXISTENCE HARDWARE PTI CAPS -------------------------------*/
 #define SOC_COEX_HW_PTI                 (1)
 
-/*-------------------------- HARDWARE ADVANCED EXTERNAL COEXISTENCE CAPS -------------------*/
-#define SOC_EXTERNAL_COEX_ADVANCE       (1)
+/*-------------------------- EXTERNAL COEXISTENCE CAPS -------------------------------------*/
+#define SOC_EXTERNAL_COEX_ADVANCE              (1) /*!< HARDWARE ADVANCED EXTERNAL COEXISTENCE CAPS */
+#define SOC_EXTERNAL_COEX_LEADER_TX_LINE       (0) /*!< EXTERNAL COEXISTENCE TX LINE CAPS */
 
 /*--------------- PHY REGISTER AND MEMORY SIZE CAPS --------------------------*/
 #define SOC_PHY_DIG_REGS_MEM_SIZE       (21*4)
@@ -287,9 +305,6 @@
 /*-------------------------- Power Management CAPS ----------------------------*/
 #define SOC_PM_SUPPORT_WIFI_WAKEUP      (1)
 #define SOC_PM_SUPPORT_BT_WAKEUP        (1)
-#define SOC_PM_SUPPORT_CPU_PD           (0)
-#define SOC_PM_SUPPORT_WIFI_PD          (0)
-#define SOC_PM_SUPPORT_BT_PD            (0)
 #define SOC_PM_SUPPORT_RC_FAST_PD       (1)
 #define SOC_PM_SUPPORT_VDDSDIO_PD       (1)
 
@@ -301,14 +316,17 @@
 #define SOC_CLK_OSC_SLOW_SUPPORTED                (1)     /*!< ESP32C2 only supports to connect an external oscillator, not a crystal */
 
 /*------------------------------------ WI-FI CAPS ------------------------------------*/
-#define SOC_WIFI_HW_TSF                 (1)    /*!< Support hardware TSF */
-#define SOC_WIFI_FTM_SUPPORT            (0)    /*!< FTM is not supported */
-#define SOC_WIFI_GCMP_SUPPORT           (0)    /*!< GCMP is not supported(GCMP128 and GCMP256) */
-#define SOC_WIFI_WAPI_SUPPORT           (0)    /*!< WAPI is not supported */
-#define SOC_WIFI_CSI_SUPPORT            (0)    /*!< CSI is not supported */
-#define SOC_WIFI_MESH_SUPPORT           (0)    /*!< WIFI MESH is not supported */
+#define SOC_WIFI_HW_TSF                           (1)    /*!< Support hardware TSF */
+#define SOC_WIFI_FTM_SUPPORT                      (1)    /*!< Support FTM */
+#define SOC_WIFI_SUPPORT_VARIABLE_BEACON_WINDOW   (1)    /*!< Support delta early time for rf phy on/off */
 
 /*---------------------------------- Bluetooth CAPS ----------------------------------*/
 #define SOC_BLE_SUPPORTED               (1)    /*!< Support Bluetooth Low Energy hardware */
 #define SOC_BLE_MESH_SUPPORTED          (0)    /*!< Support BLE MESH */
 #define SOC_ESP_NIMBLE_CONTROLLER       (1)    /*!< Support BLE EMBEDDED controller V1 */
+#define SOC_BLE_50_SUPPORTED            (1)    /*!< Support Bluetooth 5.0 */
+#define SOC_BLE_DEVICE_PRIVACY_SUPPORTED (1)   /*!< Support BLE device privacy mode */
+#define SOC_BLUFI_SUPPORTED             (1)    /*!< Support BLUFI */
+
+/*------------------------------------- PHY CAPS -------------------------------------*/
+#define SOC_PHY_IMPROVE_RX_11B              (1)

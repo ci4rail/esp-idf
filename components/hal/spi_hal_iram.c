@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -12,7 +12,7 @@
 #include "soc/soc_caps.h"
 
 //This GDMA related part will be introduced by GDMA dedicated APIs in the future. Here we temporarily use macros.
-#if SOC_GDMA_SUPPORTED
+#if SOC_AHB_GDMA_VERSION == 1
 #include "soc/gdma_struct.h"
 #include "hal/gdma_ll.h"
 
@@ -186,7 +186,8 @@ void spi_hal_prepare_data(spi_hal_context_t *hal, const spi_hal_dev_config_t *de
 
 void spi_hal_user_start(const spi_hal_context_t *hal)
 {
-    spi_ll_master_user_start(hal->hw);
+    spi_ll_apply_config(hal->hw);
+    spi_ll_user_start(hal->hw);
 }
 
 bool spi_hal_usr_is_done(const spi_hal_context_t *hal)

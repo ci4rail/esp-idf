@@ -1,8 +1,6 @@
-{IDF_TARGET_CORE_NUM:default="2", esp32s2="1", esp32c3="1", esp32c2="1", esp32c6="1"}
+{IDF_TARGET_FEATURES:default="[NEEDS TO BE UPDATED]", esp32="WiFi/BT/BLE, silicon revision 1, 2 MB external flash", esp32s2="WiFi, silicon revision 0, 2 MB external flash", esp32s3="This is esp32s3 chip with 2 CPU core(s), WiFi/BLE, silicon revision 0, 2 MB external flash", esp32c2="WiFi/BLE, silicon revision 0, 2 MB embedded flash", esp32c3="WiFi/BLE, silicon revision 0, 2 MB external flash", esp32c6="WiFi/BLE, 802.15.4 (Zigbee/Thread), silicon revision v0.0, 2 MB external flash", esp32h2="BLE, 802.15.4 (Zigbee/Thread), silicon revision v0.1, 2 MB external flash"}
 
-{IDF_TARGET_FEATURES:default="[NEEDS TO BE UPDATED]", esp32="WiFi/BT/BLE, silicon revision 1, 2 MB external flash", esp32s2="WiFi, silicon revision 0, 2 MB external flash", esp32s3="This is esp32s3 chip with 2 CPU core(s), WiFi/BLE, silicon revision 0, 2 MB external flash", esp32c2="WiFi/BLE, silicon revision 0, 2 MB embedded flash", esp32c3="WiFi/BLE, silicon revision 0, 2 MB external flash", esp32c6="WiFi/BLE, 802.15.4 (Zigbee/Thread), silicon revision v0.0, 2 MB external flash"}
-
-{IDF_TARGET_HEAP_SIZE:default="[NEEDS TO BE UPDATED]", esp32="298968", esp32s2="253900", esp32s3="390684", esp32c2="203888", esp32c3="337332", esp32c6="337332"}
+{IDF_TARGET_HEAP_SIZE:default="[NEEDS TO BE UPDATED]", esp32="298968", esp32s2="253900", esp32s3="390684", esp32c2="203888", esp32c3="337332", esp32c6="473816", esp32h2="268256"}
 
 Build the Project
 =================
@@ -13,7 +11,7 @@ Build the project by running:
 
     idf.py build
 
-This command will compile the application and all ESP-IDF components, then it will generate the bootloader, partition table, and application binaries.
+This command compiles the application and all ESP-IDF components, then it generates the bootloader, partition table, and application binaries.
 
 .. code-block:: none
 
@@ -35,7 +33,7 @@ This command will compile the application and all ESP-IDF components, then it wi
     ../../../components/esptool_py/esptool/esptool.py -p (PORT) -b 921600 write_flash --flash_mode dio --flash_size detect --flash_freq 40m 0x10000 build/hello_world.bin  build 0x1000 build/bootloader/bootloader.bin 0x8000 build/partition_table/partition-table.bin
     or run 'idf.py -p PORT flash'
 
-If there are no errors, the build will finish by generating the firmware binary .bin files.
+If there are no errors, the build finishes by generating the firmware binary .bin files.
 
 
 Flash onto the Device
@@ -320,10 +318,51 @@ When flashing, you will see the output log similar to the following:
         Leaving...
         Hard resetting via RTS pin...
 
+.. only:: esp32h2
 
-If there are no issues by the end of the flash process, the board will reboot and start up the “hello_world” application.
+    .. code-block:: none
 
-If you'd like to use the Eclipse or VS Code IDE instead of running ``idf.py``, check out `Eclipse Plugin <https://github.com/espressif/idf-eclipse-plugin/blob/master/README.md>`_, `VSCode Extension <https://github.com/espressif/vscode-esp-idf-extension/blob/master/docs/tutorial/install.md>`_.
+        ...
+        esptool esp32h2 -p /dev/ttyUSB0 -b 460800 --before=default_reset --after=hard_reset write_flash --flash_mode dio --flash_freq 48m --flash_size 2MB 0x0 bootloader/bootloader.bin 0x10000 hello_world.bin 0x8000 partition_table/partition-table.bin
+        esptool.py v4.6
+        Serial port /dev/ttyUSB0
+        Connecting....
+        Chip is ESP32-H2 (revision v0.1)
+        Features: BLE
+        Crystal is 32MHz
+        MAC: 60:55:f9:f7:3e:93:ff:fe
+        Uploading stub...
+        Running stub...
+        Stub running...
+        Changing baud rate to 460800
+        Changed.
+        Configuring flash size...
+        Flash will be erased from 0x00000000 to 0x00005fff...
+        Flash will be erased from 0x00010000 to 0x00034fff...
+        Flash will be erased from 0x00008000 to 0x00008fff...
+        Compressed 20880 bytes to 12788...
+        Writing at 0x00000000... (100 %)
+        Wrote 20880 bytes (12788 compressed) at 0x00000000 in 0.6 seconds (effective 297.5 kbit/s)...
+        Hash of data verified.
+        Compressed 149424 bytes to 79574...
+        Writing at 0x00010000... (20 %)
+        Writing at 0x00019959... (40 %)
+        Writing at 0x00020bb5... (60 %)
+        Writing at 0x00026d8f... (80 %)
+        Writing at 0x0002e60a... (100 %)
+        Wrote 149424 bytes (79574 compressed) at 0x00010000 in 2.1 seconds (effective 571.7 kbit/s)...
+        Hash of data verified.
+        Compressed 3072 bytes to 103...
+        Writing at 0x00008000... (100 %)
+        Wrote 3072 bytes (103 compressed) at 0x00008000 in 0.0 seconds (effective 539.7 kbit/s)...
+        Hash of data verified.
+
+        Leaving...
+        Hard resetting via RTS pin...
+
+If there are no issues by the end of the flash process, the board will reboot and start up the "hello_world" application.
+
+If you would like to use the Eclipse or VS Code IDE instead of running ``idf.py``, check out `Eclipse Plugin <https://github.com/espressif/idf-eclipse-plugin/blob/master/README.md>`_, `VSCode Extension <https://github.com/espressif/vscode-esp-idf-extension/blob/master/docs/tutorial/install.md>`_.
 
 Monitor the Output
 ==================
@@ -350,7 +389,7 @@ After startup and diagnostic logs scroll up, you should see "Hello world!" print
         ...
         Hello world!
         Restarting in 10 seconds...
-        This is {IDF_TARGET_PATH_NAME} chip with {IDF_TARGET_CORE_NUM} CPU core(s), {IDF_TARGET_FEATURES}
+        This is {IDF_TARGET_PATH_NAME} chip with {IDF_TARGET_SOC_CPU_CORES_NUM} CPU core(s), {IDF_TARGET_FEATURES}
     Minimum free heap size: {IDF_TARGET_HEAP_SIZE} bytes
         Restarting in 9 seconds...
         Restarting in 8 seconds...
@@ -394,7 +433,7 @@ See also:
 - :doc:`IDF Monitor <../api-guides/tools/idf-monitor>` for handy shortcuts and more details on using IDF monitor.
 - :ref:`idf.py` for a full reference of ``idf.py`` commands and options.
 
-**That's all that you need to get started with {IDF_TARGET_NAME}!**
+**That is all that you need to get started with {IDF_TARGET_NAME}!**
 
 Now you are ready to try some other :idf:`examples`, or go straight to developing your own applications.
 
@@ -408,15 +447,15 @@ Now you are ready to try some other :idf:`examples`, or go straight to developin
 Additional Tips
 ===============
 
-Permission issues /dev/ttyUSB0
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Permission Issues ``/dev/ttyUSB0``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-With some Linux distributions, you may get the ``Failed to open port /dev/ttyUSB0`` error message when flashing the {IDF_TARGET_NAME}. :ref:`This can be solved by adding the current user to the dialout group<linux-dialout-group>`.
+With some Linux distributions, you may get the ``Failed to open port /dev/ttyUSB0`` error message when flashing the {IDF_TARGET_NAME}. :ref:`This can be solved by adding the current user to the dialout group <linux-dialout-group>`.
 
-Python compatibility
+Python Compatibility
 ~~~~~~~~~~~~~~~~~~~~
 
-ESP-IDF supports Python 3.7 or newer. It is recommended to upgrade your operating system to a recent version satisfying this requirement. Other options include the installation of Python from `sources <https://www.python.org/downloads/>`_ or the use of a Python version management system such as `pyenv <https://github.com/pyenv/pyenv>`_.
+ESP-IDF supports Python 3.8 or newer. It is recommended to upgrade your operating system to a recent version satisfying this requirement. Other options include the installation of Python from `sources <https://www.python.org/downloads/>`_ or the use of a Python version management system such as `pyenv <https://github.com/pyenv/pyenv>`_.
 
 .. only:: esp32 or esp32s2 or esp32s3
 
@@ -435,7 +474,7 @@ ESP-IDF supports Python 3.7 or newer. It is recommended to upgrade your operatin
 
     .. only:: esp32
 
-        **Here's an example of how to add ESP-WROVER-KIT BSP to your project:**
+        **Here is an example of how to add ESP-WROVER-KIT BSP to your project:**
 
         .. code-block:: bash
 
@@ -443,7 +482,7 @@ ESP-IDF supports Python 3.7 or newer. It is recommended to upgrade your operatin
 
     .. only:: esp32s2
 
-        **Here's an example of how to add ESP32-S2-Kaluga-Kit BSP to your project:**
+        **Here is an example of how to add ESP32-S2-Kaluga-Kit BSP to your project:**
 
         .. code-block:: bash
 
@@ -451,7 +490,7 @@ ESP-IDF supports Python 3.7 or newer. It is recommended to upgrade your operatin
 
     .. only:: esp32s3
 
-        **Here's an example of how to add ESP-BOX BSP to your project:**
+        **Here is an example of how to add ESP-BOX BSP to your project:**
 
         .. code-block:: bash
 

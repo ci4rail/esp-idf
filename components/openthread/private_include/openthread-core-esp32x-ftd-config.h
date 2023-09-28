@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -32,7 +32,7 @@
  * When defined to 1, the platform MUST implement the otPlatFlash* APIs instead of the otPlatSettings* APIs.
  *
  */
-#define OPENTHREAD_CONFIG_PLATFORM_FLASH_API_ENABLE 1
+#define OPENTHREAD_CONFIG_PLATFORM_FLASH_API_ENABLE 0
 
 /**
  * @def OPENTHREAD_CONFIG_LOG_OUTPUT
@@ -121,6 +121,16 @@
  */
 #ifndef OPENTHREAD_CONFIG_BORDER_AGENT_ENABLE
 #define OPENTHREAD_CONFIG_BORDER_AGENT_ENABLE 1
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_BORDER_AGENT_ID_ENABLE
+ *
+ * Define to 1 to enable Border Agent ID support.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_BORDER_AGENT_ID_ENABLE
+#define OPENTHREAD_CONFIG_BORDER_AGENT_ID_ENABLE 1
 #endif
 
 /**
@@ -213,6 +223,9 @@
 #define OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE 1
 #endif
 
+#endif // CONFIG_OPENTHREAD_BORDER_ROUTER
+
+#if !CONFIG_OPENTHREAD_RADIO_NATIVE
 /**
  * @def OPENTHREAD_SPINEL_CONFIG_RCP_RESTORATION_MAX_COUNT
  *
@@ -221,10 +234,22 @@
  *
  */
 #ifndef OPENTHREAD_SPINEL_CONFIG_RCP_RESTORATION_MAX_COUNT
-#define OPENTHREAD_SPINEL_CONFIG_RCP_RESTORATION_MAX_COUNT 1
+#define OPENTHREAD_SPINEL_CONFIG_RCP_RESTORATION_MAX_COUNT 3
 #endif
 
-#endif // CONFIG_OPENTHREAD_BORDER_ROUTER
+/**
+ * @def OPENTHREAD_POSIX_CONFIG_RCP_TIME_SYNC_INTERVAL
+ *
+ * This setting configures the interval (in units of microseconds) for host-rcp
+ * time sync. The host will recalculate the time offset between host and RCP
+ * every interval.
+ *
+ */
+#ifndef OPENTHREAD_POSIX_CONFIG_RCP_TIME_SYNC_INTERVAL
+#define OPENTHREAD_POSIX_CONFIG_RCP_TIME_SYNC_INTERVAL (60 * 1000 * 1000)
+#endif
+
+#endif
 
 /**
  * @def OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
@@ -233,16 +258,6 @@
  *
  */
 #define OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE 1
-
-/**
- * @def OPENTHREAD_CONFIG_CHILD_SUPERVISION_ENABLE
- *
- * Define to 1 to enable Child Supervision support.
- *
- */
-#ifndef OPENTHREAD_CONFIG_CHILD_SUPERVISION_ENABLE
-#define OPENTHREAD_CONFIG_CHILD_SUPERVISION_ENABLE 1
-#endif
 
 /**
  * @def OPENTHREAD_CONFIG_DHCP6_CLIENT_ENABLE
@@ -262,16 +277,6 @@
  */
 #ifndef OPENTHREAD_CONFIG_DHCP6_SERVER_ENABLE
 #define OPENTHREAD_CONFIG_DHCP6_SERVER_ENABLE 1
-#endif
-
-/**
- * @def OPENTHREAD_CONFIG_DNS_CLIENT_ENABLE
- *
- * Define to 1 to enable DNS Client support.
- *
- */
-#ifndef OPENTHREAD_CONFIG_DNS_CLIENT_ENABLE
-#define OPENTHREAD_CONFIG_DNS_CLIENT_ENABLE 1
 #endif
 
 /**
@@ -376,6 +381,7 @@
  */
 #define OPENTHREAD_CONFIG_PING_SENDER_ENABLE 1
 
+#if CONFIG_OPENTHREAD_DUA_ENABLE
 /**
  * @def OPENTHREAD_CONFIG_DUA_ENABLE
  *
@@ -383,8 +389,9 @@
  *
  */
 #ifndef OPENTHREAD_CONFIG_DUA_ENABLE
-#define OPENTHREAD_CONFIG_DUA_ENABLE 0
+#define OPENTHREAD_CONFIG_DUA_ENABLE 1
 #endif
+#endif //CONFIG_OPENTHREAD_DUA_ENABLE
 
 /**
  * @def OPENTHREAD_CONFIG_MLR_ENABLE
@@ -413,6 +420,10 @@
 #define OPENTHREAD_CONFIG_COMMISSIONER_ENABLE 1
 #endif
 
+#if CONFIG_OPENTHREAD_MACFILTER_ENABLE
+#define OPENTHREAD_CONFIG_MAC_FILTER_ENABLE 1
+#endif
+
 #if CONFIG_OPENTHREAD_JOINER
 #define OPENTHREAD_CONFIG_JOINER_ENABLE 1
 #endif
@@ -429,6 +440,100 @@
 #ifndef OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE
 #define OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE 1
 #endif
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_DNS_CLIENT_ENABLE
+ *
+ * Define to 1 to enable DNS Client support.
+ *
+ */
+#define OPENTHREAD_CONFIG_DNS_CLIENT_ENABLE CONFIG_OPENTHREAD_DNS_CLIENT
+
+#if CONFIG_OPENTHREAD_CSL_ENABLE
+
+/**
+ * @def OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
+ *
+ * Define as 1 to support Thread 1.2 CSL feature.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
+#define OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE 1
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_MAC_CSL_DEBUG_ENABLE
+ *
+ * Define as 1 to enable support Thread 1.2 CSL debug.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MAC_CSL_DEBUG_ENABLE
+#define OPENTHREAD_CONFIG_MAC_CSL_DEBUG_ENABLE CONFIG_OPENTHREAD_CSL_DEBUG_ENABLE
+#endif
+
+#endif // CONFIG_OPENTHREAD_CSL_ENABLE
+
+/**
+ * @def OPENTHREAD_CONFIG_MAC_CSL_REQUEST_AHEAD_US
+ *
+ * Define as 1 to set the ahead time for CSL transmit timing.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MAC_CSL_REQUEST_AHEAD_US
+#define OPENTHREAD_CONFIG_MAC_CSL_REQUEST_AHEAD_US 20000
+#endif
+
+#if CONFIG_OPENTHREAD_LINK_METRICS
+
+/**
+ * @def OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
+ *
+ * Define as 1 to support Thread 1.2 Link Metrics Subject feature.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
+#define OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE 1
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE
+ *
+ * Define as 1 to support Thread 1.2 Link Metrics feature.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE
+#define OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE 1
+#endif
+#endif //CONFIG_OPENTHREAD_LINK_METRICS
+
+/**
+ * @def OPENTHREAD_CONFIG_OPERATIONAL_DATASET_AUTO_INIT
+ *
+ * Define as 1 to enable support for locally initializing an Active Operational Dataset.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_OPERATIONAL_DATASET_AUTO_INIT
+#define OPENTHREAD_CONFIG_OPERATIONAL_DATASET_AUTO_INIT 1
+#endif
+
+
+/**
+ *
+ * Define as 1 to enable support for allocating message pool buffer in PSRAM
+ *
+ */
+#if CONFIG_OPENTHREAD_PLATFORM_MSGPOOL_MANAGEMENT
+
+/**
+ * @def OPENTHREAD_CONFIG_PLATFORM_MESSAGE_MANAGEMENT
+ *
+ * The message pool is managed by platform defined logic when this flag is set.
+ * This feature would typically be used when operating in a multi-threaded system
+ * and multiple threads need to access the message pool.
+ *
+ */
+#define OPENTHREAD_CONFIG_PLATFORM_MESSAGE_MANAGEMENT 1
 #endif
 
 #define OPENTHREAD_FTD 1

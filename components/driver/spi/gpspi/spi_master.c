@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -111,9 +111,10 @@ We have two bits to control the interrupt:
 */
 
 #include <string.h>
+#include <sys/param.h>
 #include "esp_private/spi_common_internal.h"
 #include "driver/spi_master.h"
-#include "clk_tree.h"
+#include "esp_clk_tree.h"
 #include "clk_ctrl_os.h"
 #include "esp_log.h"
 #include "esp_check.h"
@@ -123,8 +124,8 @@ We have two bits to control the interrupt:
 #include "soc/soc_memory_layout.h"
 #include "driver/gpio.h"
 #include "hal/spi_hal.h"
+#include "hal/spi_ll.h"
 #include "esp_heap_caps.h"
-
 
 typedef struct spi_device_t spi_device_t;
 
@@ -231,13 +232,13 @@ static esp_err_t spi_master_init_driver(spi_host_device_t host_id)
     // interrupts are not allowed on SPI1 bus
     if (host_id != SPI1_HOST) {
 #if (SOC_CPU_CORES_NUM > 1) && (!CONFIG_FREERTOS_UNICORE)
-        if(bus_attr->bus_cfg.isr_cpu_id > INTR_CPU_ID_AUTO) {
-            SPI_CHECK(bus_attr->bus_cfg.isr_cpu_id <= INTR_CPU_ID_1, "invalid core id", ESP_ERR_INVALID_ARG);
+        if (bus_attr->bus_cfg.isr_cpu_id > ESP_INTR_CPU_AFFINITY_AUTO) {
+            SPI_CHECK(bus_attr->bus_cfg.isr_cpu_id <= ESP_INTR_CPU_AFFINITY_1, "invalid core id", ESP_ERR_INVALID_ARG);
             spi_ipc_param_t ipc_arg = {
                 .spi_host = host,
                 .err = &err,
             };
-            esp_ipc_call_blocking(INTR_CPU_CONVERT_ID(bus_attr->bus_cfg.isr_cpu_id), ipc_isr_reg_to_core, (void *) &ipc_arg);
+            esp_ipc_call_blocking(ESP_INTR_CPU_AFFINITY_TO_CORE_ID(bus_attr->bus_cfg.isr_cpu_id), ipc_isr_reg_to_core, (void *) &ipc_arg);
         } else
 #endif
         {
@@ -363,7 +364,7 @@ esp_err_t spi_bus_add_device(spi_host_device_t host_id, const spi_device_interfa
     if (dev_config->clock_source) {
         clk_src = dev_config->clock_source;
     }
-    clk_tree_src_get_freq_hz(clk_src, CLK_TREE_SRC_FREQ_PRECISION_APPROX, &clock_source_hz);
+    esp_clk_tree_src_get_freq_hz(clk_src, ESP_CLK_TREE_SRC_FREQ_PRECISION_APPROX, &clock_source_hz);
     SPI_CHECK((dev_config->clock_speed_hz > 0) && (dev_config->clock_speed_hz <= clock_source_hz), "invalid sclk speed", ESP_ERR_INVALID_ARG);
 #ifdef CONFIG_IDF_TARGET_ESP32
     //The hardware looks like it would support this, but actually setting cs_ena_pretrans when transferring in full
@@ -724,10 +725,11 @@ static void SPI_MASTER_ISR_ATTR spi_intr(void *arg)
             // We stay in the ISR to deal with those transactions of desired device, otherwise nothing will be done, check whether we need to resume some other tasks, or just quit the ISR
             resume_task = spi_bus_lock_bg_check_dev_acq(lock, &desired_dev);
         }
-        // sanity check
-        assert(desired_dev);
 
         if (!resume_task) {
+            // sanity check
+            assert(desired_dev);
+
             bool dev_has_req = spi_bus_lock_bg_check_dev_req(desired_dev);
             if (dev_has_req) {
                 device_to_send = host->device[spi_bus_lock_get_dev_id(desired_dev)];
@@ -802,6 +804,14 @@ static SPI_MASTER_ISR_ATTR esp_err_t check_trans_valid(spi_device_handle_t handl
     }
     //Dummy phase is not available when both data out and in are enabled, regardless of FD or HD mode.
     SPI_CHECK(!tx_enabled || !rx_enabled || !dummy_enabled || !extra_dummy_enabled, "Dummy phase is not available when both data out and in are enabled", ESP_ERR_INVALID_ARG);
+
+    if (bus_attr->dma_enabled) {
+        SPI_CHECK(trans_desc->length <= SPI_LL_DMA_MAX_BIT_LEN, "txdata transfer > hardware max supported len", ESP_ERR_INVALID_ARG);
+        SPI_CHECK(trans_desc->rxlength <= SPI_LL_DMA_MAX_BIT_LEN, "rxdata transfer > hardware max supported len", ESP_ERR_INVALID_ARG);
+    } else {
+        SPI_CHECK(trans_desc->length <= SPI_LL_CPU_MAX_BIT_LEN, "txdata transfer > hardware max supported len", ESP_ERR_INVALID_ARG);
+        SPI_CHECK(trans_desc->rxlength <= SPI_LL_CPU_MAX_BIT_LEN, "rxdata transfer > hardware max supported len", ESP_ERR_INVALID_ARG);
+    }
 
     return ESP_OK;
 }
@@ -1032,10 +1042,14 @@ esp_err_t SPI_MASTER_ISR_ATTR spi_device_polling_start(spi_device_handle_t handl
     if (ret!=ESP_OK) return ret;
     SPI_CHECK(!spi_bus_device_is_polling(handle), "Cannot send polling transaction while the previous polling transaction is not terminated.", ESP_ERR_INVALID_STATE );
 
+    spi_host_t *host = handle->host;
+    spi_trans_priv_t priv_polling_trans;
+    ret = setup_priv_desc(trans_desc, &priv_polling_trans, (host->bus_attr->dma_enabled));
+    if (ret!=ESP_OK) return ret;
+
     /* If device_acquiring_lock is set to handle, it means that the user has already
      * acquired the bus thanks to the function `spi_device_acquire_bus()`.
      * In that case, we don't need to take the lock again. */
-    spi_host_t *host = handle->host;
     if (host->device_acquiring_lock != handle) {
         /* The user cannot ask for the CS to keep active has the bus is not locked/acquired. */
         if ((trans_desc->flags & SPI_TRANS_CS_KEEP_ACTIVE) != 0) {
@@ -1046,13 +1060,15 @@ esp_err_t SPI_MASTER_ISR_ATTR spi_device_polling_start(spi_device_handle_t handl
     } else {
         ret = spi_bus_lock_wait_bg_done(handle->dev_lock, ticks_to_wait);
     }
-    if (ret != ESP_OK) return ret;
-
-    ret = setup_priv_desc(trans_desc, &host->cur_trans_buf, (host->bus_attr->dma_enabled));
-    if (ret!=ESP_OK) return ret;
+    if (ret != ESP_OK) {
+        uninstall_priv_desc(&priv_polling_trans);
+        ESP_LOGE(SPI_TAG, "polling can't get buslock");
+        return ret;
+    }
 
     //Polling, no interrupt is used.
     host->polling = true;
+    host->cur_trans_buf = priv_polling_trans;
 
     ESP_LOGV(SPI_TAG, "polling trans");
     spi_new_trans(handle, &host->cur_trans_buf);
@@ -1101,4 +1117,21 @@ esp_err_t SPI_MASTER_ISR_ATTR spi_device_polling_transmit(spi_device_handle_t ha
     if (ret != ESP_OK) return ret;
 
     return spi_device_polling_end(handle, portMAX_DELAY);
+}
+
+esp_err_t spi_bus_get_max_transaction_len(spi_host_device_t host_id, size_t *max_bytes)
+{
+    SPI_CHECK(is_valid_host(host_id), "invalid host", ESP_ERR_INVALID_ARG);
+    if (bus_driver_ctx[host_id] == NULL || max_bytes == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    spi_host_t *host = bus_driver_ctx[host_id];
+    if (host->bus_attr->dma_enabled) {
+        *max_bytes = MIN(host->bus_attr->max_transfer_sz, (SPI_LL_DMA_MAX_BIT_LEN / 8));
+    } else {
+        *max_bytes = MIN(host->bus_attr->max_transfer_sz, (SPI_LL_CPU_MAX_BIT_LEN / 8));
+    }
+
+    return ESP_OK;
 }

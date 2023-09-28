@@ -26,8 +26,10 @@ extern "C" {
 
 #define ENTRY(n)    (BIT(n))
 
+#define REGDMA_PHY_LINK(_pri)               ((0x00 << 8) | _pri)
 #define REGDMA_PCR_LINK(_pri)               ((0x01 << 8) | _pri)
 #define REGDMA_MODEMSYSCON_LINK(_pri)       ((0x02 << 8) | _pri)
+#define REGDMA_MODEMLPCON_LINK(_pri)        ((0x03 << 8) | _pri)
 
 #define REGDMA_INTMTX_LINK(_pri)            ((0x0d << 8) | _pri)
 #define REGDMA_HPSYS_LINK(_pri)             ((0x0e << 8) | _pri)
@@ -38,6 +40,10 @@ extern "C" {
 #define REGDMA_IOMUX_LINK(_pri)             ((0x12 << 8) | _pri)
 #define REGDMA_SPIMEM_LINK(_pri)            ((0x13 << 8) | _pri)
 #define REGDMA_SYSTIMER_LINK(_pri)          ((0x14 << 8) | _pri)
+#define REGDMA_BLE_MAC_LINK(_pri)           ((0x15 << 8) | _pri)
+#define REGDMA_MODEM_BT_BB_LINK(_pri)       ((0x16 << 8) | _pri)
+#define REGDMA_MODEM_IEEE802154_LINK(_pri)  ((0x17 << 8) | _pri)
+#define REGDMA_MODEM_FE_LINK(_pri)          ((0xFF << 8) | _pri)
 
 typedef enum {
     REGDMA_LINK_PRI_0 = 0,

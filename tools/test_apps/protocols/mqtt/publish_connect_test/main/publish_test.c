@@ -19,7 +19,7 @@
 #include "mqtt_client.h"
 #include "sdkconfig.h"
 
-static const char *TAG = "PUBLISH_TEST";
+static const char *TAG = "publish_test";
 
 static EventGroupHandle_t mqtt_event_group;
 const static int CONNECTED_BIT = BIT0;
@@ -204,7 +204,7 @@ void publish_test(const char *line)
     }
 
     sscanf(line, "%s %s %d %d %d %d", transport, pattern, &repeat, &expected_published, &qos_test, &enqueue);
-    ESP_LOGI(TAG, "PATTERN:%s REPEATED:%d PUBLISHED:%d\n", pattern, repeat, expected_published);
+    ESP_LOGI(TAG, "PATTERN:%s REPEATED:%d PUBLISHED:%d", pattern, repeat, expected_published);
     pattern_setup(pattern, repeat);
     xEventGroupClearBits(mqtt_event_group, CONNECTED_BIT);
     configure_client(transport);

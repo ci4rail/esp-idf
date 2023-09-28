@@ -84,8 +84,10 @@
 typedef UINT8   tBTM_BLE_SEC_REQ_ACT;
 
 #define BLE_STATIC_PRIVATE_MSB_MASK          0x3f
-#define BLE_RESOLVE_ADDR_MSB                 0x40   /*  most significant bit, bit7, bit6 is 01 to be resolvable random */
+#define BLE_NON_RESOLVE_ADDR_MSB             0x00   /* most significant bit, bit7, bit6 is 00 to be non-resolvable random */
+#define BLE_RESOLVE_ADDR_MSB                 0x40   /* most significant bit, bit7, bit6 is 01 to be resolvable random */
 #define BLE_RESOLVE_ADDR_MASK                0xc0   /* bit 6, and bit7 */
+#define BTM_BLE_IS_NON_RESLVE_BDA(x)        ((x[0] & BLE_RESOLVE_ADDR_MASK) == BLE_NON_RESOLVE_ADDR_MSB)
 #define BTM_BLE_IS_RESOLVE_BDA(x)           ((x[0] & BLE_RESOLVE_ADDR_MASK) == BLE_RESOLVE_ADDR_MSB)
 
 /* LE scan activity bit mask, continue with LE inquiry bits */
@@ -107,13 +109,9 @@ typedef UINT8   tBTM_BLE_SEC_REQ_ACT;
 #define BTM_VSC_CHIP_CAPABILITY_M_VERSION 95
 
 typedef enum {
-    BTM_BLE_IDLE,
-    BTM_BLE_SCANNING,
-    BTM_BLE_SCAN_PENDING,
-    BTM_BLE_STOP_SCAN,
-    BTM_BLE_ADVERTISING,
-    BTM_BLE_ADV_PENDING,
-    BTM_BLE_STOP_ADV,
+    BTM_BLE_IDLE = 0,
+    BTM_BLE_SCANNING = 1,
+    BTM_BLE_ADVERTISING = 2,
 }tBTM_BLE_GAP_STATE;
 
 typedef struct {
@@ -180,7 +178,7 @@ typedef struct {
 
     TIMER_LIST_ENT inq_timer_ent;
     BOOLEAN scan_rsp;
-    tBTM_BLE_GAP_STATE state; /* Current state that the inquiry process is in */
+    tBTM_BLE_GAP_STATE state; /* Current state that the adv or scan process is in */
     INT8 tx_power;
 } tBTM_BLE_INQ_CB;
 
@@ -351,7 +349,7 @@ typedef struct {
     tBTM_BLE_SEL_CBACK *p_select_cback;
     /* white list information */
     UINT8 white_list_avail_size;
-    tBTM_ADD_WHITELIST_CBACK *add_wl_cb;
+    tBTM_UPDATE_WHITELIST_CBACK *update_wl_cb;
     tBTM_BLE_WL_STATE wl_state;
 
     fixed_queue_t *conn_pending_q;
@@ -446,10 +444,10 @@ void btm_ble_update_sec_key_size(BD_ADDR bd_addr, UINT8 enc_key_size);
 UINT8 btm_ble_read_sec_key_size(BD_ADDR bd_addr);
 
 /* white list function */
-BOOLEAN btm_update_dev_to_white_list(BOOLEAN to_add, BD_ADDR bd_addr, tBLE_ADDR_TYPE addr_type, tBTM_ADD_WHITELIST_CBACK *add_wl_cb);
+BOOLEAN btm_update_dev_to_white_list(BOOLEAN to_add, BD_ADDR bd_addr, tBLE_ADDR_TYPE addr_type, tBTM_UPDATE_WHITELIST_CBACK *update_wl_cb);
 void btm_update_scanner_filter_policy(tBTM_BLE_SFP scan_policy);
 void btm_update_adv_filter_policy(tBTM_BLE_AFP adv_policy);
-void btm_ble_clear_white_list (void);
+void btm_ble_clear_white_list (tBTM_UPDATE_WHITELIST_CBACK *update_wl_cb);
 void btm_read_white_list_size_complete(UINT8 *p, UINT16 evt_len);
 void btm_ble_add_2_white_list_complete(UINT8 status);
 void btm_ble_remove_from_white_list_complete(UINT8 *p, UINT16 evt_len);
@@ -486,6 +484,7 @@ BOOLEAN btm_random_pseudo_to_identity_addr(BD_ADDR random_pseudo, UINT8 *p_stati
 void btm_ble_refresh_peer_resolvable_private_addr(BD_ADDR pseudo_bda, BD_ADDR rra, UINT8 rra_type);
 void btm_ble_refresh_local_resolvable_private_addr(BD_ADDR pseudo_addr, BD_ADDR local_rpa);
 void btm_ble_read_resolving_list_entry_complete(UINT8 *p, UINT16 evt_len) ;
+void btm_ble_set_addr_resolution_enable_complete(UINT8 *p, UINT16 evt_len) ;
 void btm_ble_remove_resolving_list_entry_complete(UINT8 *p, UINT16 evt_len);
 void btm_ble_add_resolving_list_entry_complete(UINT8 *p, UINT16 evt_len);
 void btm_ble_clear_resolving_list_complete(UINT8 *p, UINT16 evt_len);
@@ -535,6 +534,10 @@ void btm_ble_periodic_adv_report_evt(tBTM_PERIOD_ADV_REPORT *params);
 void btm_ble_periodic_adv_sync_lost_evt(tBTM_BLE_PERIOD_ADV_SYNC_LOST *params);
 void btm_ble_periodic_adv_sync_establish_evt(tBTM_BLE_PERIOD_ADV_SYNC_ESTAB *params);
 #endif // #if (BLE_50_FEATURE_SUPPORT == TRUE)
+
+#if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
+void btm_ble_periodic_adv_sync_trans_recv_evt(tBTM_BLE_PERIOD_ADV_SYNC_TRANS_RECV *params);
+#endif // #if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
 
 /*
 #ifdef __cplusplus

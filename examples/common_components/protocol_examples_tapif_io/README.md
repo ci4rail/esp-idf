@@ -7,9 +7,11 @@ It could be used to route lwip traffic to host side network, typically when work
 
 ### Usage of the API
 
-1) Add the path to this component to the `EXTRA_COMPONENT_DIRS` in your project makefile
-```cmake
-list(APPEND EXTRA_COMPONENT_DIRS "$ENV{IDF_PATH}/examples/common_components/tapif_io")
+1) Add the path to this component to as a dependency to the `main` component of your project using the following idf_component.yml file:
+```yaml
+dependencies:
+  tapif_io:
+    path: ${IDF_PATH}/examples/common_components/tapif_io
 ```
 2) Include lwip and linux side of the configuration
 ```cpp
@@ -110,6 +112,8 @@ sudo iptables -A FORWARD -i tap0 -o eth0 -j ACCEPT
 It's also possible to configure the lwip interface to use DHCP client (common setup for most default network interfaces, such as Ethernet or WiFi station)
 and set up a DHCP server on the host machine to assign the IP address dynamically.
 
+This component sets up a DHCP client if `CONFIG_EXAMPLE_CONNECT_WAIT_FOR_IP` is enabled and waits for assigning an IP address. See below the description of DHCP client workflow for tap interface:
+
 1) **Configure and set the `esp-netif` up**
 
 * Same as in [API usage](#Usage-of-the-API), but update the base esp-netif config `3c)` to enable DHCP client
@@ -125,14 +129,17 @@ and set up a DHCP server on the host machine to assign the IP address dynamicall
     esp_netif_action_connected(tap_netif, 0, 0, 0);
 ```
 * Wait for the IP address to be assigned.
-This could be implemented as a wait loop below, as the esp-event currently doesn't support IP events on Linux target.
+This could be implemented using an event handler
 ```cpp
+    esp_netif_inherent_config_t base_cfg = {
+        ...
+       .get_ip_event = TAP0_GOT_IP,
+       ...
+    };
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, TAP0_GOT_IP, event_handler, NULL));
+    // wait for the IP event (e.g. using signalling semaphores from the handler)
+    // ...
     esp_netif_ip_info_t ip_info = {};
-    while (ip_info.ip.addr == 0) {
-        ESP_LOGI("tap-init", "No IP assigned, waiting...");
-        usleep(1000000);
-        esp_netif_get_ip_info(tap_netif, &ip_info);
-    }
     ESP_LOGI("tap-init", "Assigned IP address:"IPSTR ",", IP2STR(&ip_info.ip));
 ```
 

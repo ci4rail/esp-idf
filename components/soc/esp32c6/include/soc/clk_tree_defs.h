@@ -121,6 +121,9 @@ typedef enum {
     SOC_MOD_CLK_XTAL32K,                       /*!< XTAL32K_CLK comes from the external 32kHz crystal, passing a clock gating to the peripherals */
     SOC_MOD_CLK_RC_FAST,                       /*!< RC_FAST_CLK comes from the internal 20MHz rc oscillator, passing a clock gating to the peripherals */
     SOC_MOD_CLK_XTAL,                          /*!< XTAL_CLK comes from the external 40MHz crystal */
+    // For LP peripherals
+    SOC_MOD_CLK_XTAL_D2,                       /*!< XTAL_D2_CLK comes from the external 40MHz crystal, passing a div of 2 to the LP peripherals */
+
     SOC_MOD_CLK_INVALID,                       /*!< Indication of the end of the available module clock sources */
 } soc_module_clk_t;
 
@@ -218,11 +221,20 @@ typedef enum {
  * @brief Type of UART clock source, reserved for the legacy UART driver
  */
 typedef enum {
-    UART_SCLK_PLL_F80M = SOC_MOD_CLK_PLL_F80M,           /*!< UART source clock is PLL_F80M */
+    UART_SCLK_PLL_F80M = SOC_MOD_CLK_PLL_F80M,          /*!< UART source clock is PLL_F80M */
     UART_SCLK_RTC = SOC_MOD_CLK_RC_FAST,                /*!< UART source clock is RC_FAST */
     UART_SCLK_XTAL = SOC_MOD_CLK_XTAL,                  /*!< UART source clock is XTAL */
     UART_SCLK_DEFAULT = SOC_MOD_CLK_PLL_F80M,           /*!< UART source clock default choice is PLL_F80M */
 } soc_periph_uart_clk_src_legacy_t;
+
+/**
+ * @brief Type of LP_UART clock source
+ */
+typedef enum {
+    LP_UART_SCLK_LP_FAST = SOC_MOD_CLK_RTC_FAST,        /*!< LP_UART source clock is LP(RTC)_FAST */
+    LP_UART_SCLK_XTAL_D2 = SOC_MOD_CLK_XTAL_D2,         /*!< LP_UART source clock is XTAL_D2 */
+    LP_UART_SCLK_DEFAULT = SOC_MOD_CLK_RTC_FAST,        /*!< LP_UART source clock default choice is LP(RTC)_FAST */
+} soc_periph_lp_uart_clk_src_t;
 
 //////////////////////////////////////////////////MCPWM/////////////////////////////////////////////////////////////////
 
@@ -254,12 +266,26 @@ typedef enum {
     MCPWM_CAPTURE_CLK_SRC_DEFAULT = SOC_MOD_CLK_PLL_F160M, /*!< Select PLL_F160M as the default clock choice */
 } soc_periph_mcpwm_capture_clk_src_t;
 
+/**
+ * @brief Array initializer for all supported clock sources of MCPWM Carrier
+ */
+#define SOC_MCPWM_CARRIER_CLKS {SOC_MOD_CLK_PLL_F160M, SOC_MOD_CLK_XTAL}
+
+/**
+ * @brief Type of MCPWM carrier clock source
+ */
+typedef enum {
+    MCPWM_CARRIER_CLK_SRC_PLL160M = SOC_MOD_CLK_PLL_F160M, /*!< Select PLL_F160M as the source clock */
+    MCPWM_CARRIER_CLK_SRC_XTAL = SOC_MOD_CLK_XTAL,         /*!< Select XTAL as the source clock */
+    MCPWM_CARRIER_CLK_SRC_DEFAULT = SOC_MOD_CLK_PLL_F160M, /*!< Select PLL_F160M as the default clock choice */
+} soc_periph_mcpwm_carrier_clk_src_t;
+
 ///////////////////////////////////////////////////// I2S //////////////////////////////////////////////////////////////
 
 /**
  * @brief Array initializer for all supported clock sources of I2S
  */
-#define SOC_I2S_CLKS {SOC_MOD_CLK_PLL_F160M, SOC_MOD_CLK_XTAL}
+#define SOC_I2S_CLKS {SOC_MOD_CLK_PLL_F160M, SOC_MOD_CLK_XTAL, I2S_CLK_SRC_EXTERNAL}
 
 /**
  * @brief I2S clock source enum
@@ -268,6 +294,7 @@ typedef enum {
     I2S_CLK_SRC_DEFAULT = SOC_MOD_CLK_PLL_F160M,                /*!< Select PLL_F160M as the default source clock  */
     I2S_CLK_SRC_PLL_160M = SOC_MOD_CLK_PLL_F160M,               /*!< Select PLL_F160M as the source clock */
     I2S_CLK_SRC_XTAL = SOC_MOD_CLK_XTAL,                        /*!< Select XTAL as the source clock */
+    I2S_CLK_SRC_EXTERNAL = -1,                                  /*!< Select external clock as source clock */
 } soc_periph_i2s_clk_src_t;
 
 /////////////////////////////////////////////////I2C////////////////////////////////////////////////////////////////////
@@ -286,6 +313,21 @@ typedef enum {
     I2C_CLK_SRC_DEFAULT = SOC_MOD_CLK_XTAL,                     /*!< Select XTAL as the default source clock */
 } soc_periph_i2c_clk_src_t;
 
+///////////////////////////////////////////////LP_I2C///////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Array initializer for all supported clock sources of LP_I2C
+ */
+#define SOC_LP_I2C_CLKS {SOC_MOD_CLK_RTC_FAST, SOC_MOD_CLK_XTAL_D2}
+
+/**
+ * @brief Type of LP_I2C clock source.
+ */
+typedef enum {
+    LP_I2C_SCLK_LP_FAST = SOC_MOD_CLK_RTC_FAST,                 /*!< LP_I2C source clock is RTC_FAST */
+    LP_I2C_SCLK_XTAL_D2 = SOC_MOD_CLK_XTAL_D2,                  /*!< LP_I2C source clock is XTAL_D2 */
+    LP_I2C_SCLK_DEFAULT = SOC_MOD_CLK_RTC_FAST,                 /*!< LP_I2C source clock default choice is RTC_FAST */
+} soc_periph_lp_i2c_clk_src_t;
 
 /////////////////////////////////////////////////SPI////////////////////////////////////////////////////////////////////
 
@@ -383,7 +425,7 @@ typedef enum {
     MWDT_CLK_SRC_XTAL = SOC_MOD_CLK_XTAL,           /*!< Select XTAL as the source clock */
     MWDT_CLK_SRC_PLL_F80M = SOC_MOD_CLK_PLL_F80M,   /*!< Select PLL fixed 80 MHz as the source clock */
     MWDT_CLK_SRC_RC_FAST = SOC_MOD_CLK_RC_FAST,     /*!< Select RTC fast as the source clock */
-    MWDT_CLK_SRC_DEFAULT = SOC_MOD_CLK_PLL_F80M,    /*!< Select PLL fixed 80 MHz as the default clock choice */
+    MWDT_CLK_SRC_DEFAULT = SOC_MOD_CLK_XTAL,        /*!< Select PLL fixed 80 MHz as the default clock choice */
 } soc_periph_mwdt_clk_src_t;
 
 //////////////////////////////////////////////////LEDC/////////////////////////////////////////////////////////////////
@@ -404,6 +446,22 @@ typedef enum {
 
     LEDC_USE_RTC8M_CLK __attribute__((deprecated("please use 'LEDC_USE_RC_FAST_CLK' instead"))) = LEDC_USE_RC_FAST_CLK,   /*!< Alias of 'LEDC_USE_RC_FAST_CLK' */
 } soc_periph_ledc_clk_src_legacy_t;
+
+//////////////////////////////////////////////////PARLIO////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Array initializer for all supported clock sources of PARLIO
+ */
+#define SOC_PARLIO_CLKS {SOC_MOD_CLK_XTAL, SOC_MOD_CLK_PLL_F240M}
+
+/**
+ * @brief PARLIO clock source
+ */
+typedef enum {
+    PARLIO_CLK_SRC_XTAL = SOC_MOD_CLK_XTAL,           /*!< Select XTAL as the source clock */
+    PARLIO_CLK_SRC_PLL_F240M = SOC_MOD_CLK_PLL_F240M, /*!< Select PLL_F240M as the source clock */
+    PARLIO_CLK_SRC_DEFAULT = SOC_MOD_CLK_PLL_F240M,   /*!< Select PLL_F240M as the default clock choice */
+} soc_periph_parlio_clk_src_t;
 
 #ifdef __cplusplus
 }

@@ -3,7 +3,7 @@
 */
 
 /*
- * SPDX-FileCopyrightText: 2013-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2013-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,6 +14,7 @@
 #include "esp_attr.h"
 #include "esp_err.h"
 #include "esp_types.h"
+#include "esp_bit_defs.h"
 #include "esp_log.h"
 #include "../esp_psram_impl.h"
 #include "esp32s2/rom/spi_flash.h"
@@ -22,6 +23,7 @@
 #include "esp_rom_efuse.h"
 #include "soc/spi_reg.h"
 #include "soc/io_mux_reg.h"
+#include "esp_private/esp_gpio_reserve.h"
 
 static const char* TAG = "quad_psram";
 
@@ -90,6 +92,10 @@ static const char* TAG = "quad_psram";
 #define _SPI_80M_CLK_DIV            1
 #define _SPI_40M_CLK_DIV            2
 #define _SPI_20M_CLK_DIV            4
+
+typedef enum {
+    PSRAM_VADDR_MODE_NORMAL = 0,
+} psram_vaddr_mode_t;
 
 typedef enum {
     PSRAM_CLK_MODE_NORM = 0,  /*!< Normal SPI mode */
@@ -377,6 +383,16 @@ static void IRAM_ATTR psram_gpio_config(psram_cache_speed_t mode)
     }
     esp_rom_spiflash_select_qio_pins(psram_io.psram_spiwp_sd3_io, spiconfig);
     s_psram_cs_io = psram_io.psram_cs_io;
+
+    // Preserve psram pins
+    esp_gpio_reserve_pins(BIT64(psram_io.flash_clk_io)        |
+                          BIT64(psram_io.flash_cs_io)         |
+                          BIT64(psram_io.psram_clk_io)        |
+                          BIT64(psram_io.psram_cs_io)         |
+                          BIT64(psram_io.psram_spiq_sd0_io)   |
+                          BIT64(psram_io.psram_spid_sd1_io)   |
+                          BIT64(psram_io.psram_spihd_sd2_io)  |
+                          BIT64(psram_io.psram_spiwp_sd3_io)  );
 }
 
 //used in UT only
@@ -398,8 +414,9 @@ static void psram_set_clk_mode(int spi_num, psram_clk_mode_t clk_mode)
  * Psram mode init will overwrite original flash speed mode, so that it is possible to change psram and flash speed after OTA.
  * Flash read mode(QIO/QOUT/DIO/DOUT) will not be changed in app bin. It is decided by bootloader, OTA can not change this mode.
  */
-esp_err_t IRAM_ATTR esp_psram_impl_enable(psram_vaddr_mode_t vaddrmode)   //psram init
+esp_err_t IRAM_ATTR esp_psram_impl_enable(void)   //psram init
 {
+    psram_vaddr_mode_t vaddrmode = PSRAM_VADDR_MODE_NORMAL;
     psram_cache_speed_t mode = PSRAM_SPEED;
     assert(mode < PSRAM_CACHE_MAX && "we don't support any other mode for now.");
     // GPIO related settings

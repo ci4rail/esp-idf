@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2019-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2019-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -12,7 +12,9 @@
 #include "freertos/semphr.h"
 #include "freertos/timers.h"
 #include "driver/rtc_io.h"
+#include "driver/lp_io.h"
 #include "hal/rtc_io_hal.h"
+#include "soc/rtc_io_periph.h"
 #include "soc/soc_caps.h"
 
 static const char __attribute__((__unused__)) *RTCIO_TAG = "RTCIO";
@@ -21,16 +23,29 @@ extern portMUX_TYPE rtc_spinlock; //TODO: Will be placed in the appropriate posi
 #define RTCIO_ENTER_CRITICAL()  portENTER_CRITICAL(&rtc_spinlock)
 #define RTCIO_EXIT_CRITICAL()  portEXIT_CRITICAL(&rtc_spinlock)
 
-#if SOC_RTCIO_INPUT_OUTPUT_SUPPORTED
+bool rtc_gpio_is_valid_gpio(gpio_num_t gpio_num)
+{
+#if SOC_RTCIO_PIN_COUNT > 0
+    return (gpio_num < GPIO_PIN_COUNT && rtc_io_num_map[gpio_num] >= 0);
+#else
+    return false;
+#endif
+}
 
+#if SOC_RTCIO_PIN_COUNT > 0
 /*---------------------------------------------------------------
                         RTC IO
 ---------------------------------------------------------------*/
+int rtc_io_number_get(gpio_num_t gpio_num)
+{
+    return rtc_io_num_map[gpio_num];
+}
+
 esp_err_t rtc_gpio_init(gpio_num_t gpio_num)
 {
     ESP_RETURN_ON_FALSE(rtc_gpio_is_valid_gpio(gpio_num), ESP_ERR_INVALID_ARG, RTCIO_TAG, "RTCIO number error");
     RTCIO_ENTER_CRITICAL();
-    rtcio_hal_function_select(rtc_io_number_get(gpio_num), RTCIO_FUNC_RTC);
+    rtcio_hal_function_select(rtc_io_number_get(gpio_num), RTCIO_LL_FUNC_RTC);
     RTCIO_EXIT_CRITICAL();
 
     return ESP_OK;
@@ -41,12 +56,13 @@ esp_err_t rtc_gpio_deinit(gpio_num_t gpio_num)
     ESP_RETURN_ON_FALSE(rtc_gpio_is_valid_gpio(gpio_num), ESP_ERR_INVALID_ARG, RTCIO_TAG, "RTCIO number error");
     RTCIO_ENTER_CRITICAL();
     // Select Gpio as Digital Gpio
-    rtcio_hal_function_select(rtc_io_number_get(gpio_num), RTCIO_FUNC_DIGITAL);
+    rtcio_hal_function_select(rtc_io_number_get(gpio_num), RTCIO_LL_FUNC_DIGITAL);
     RTCIO_EXIT_CRITICAL();
 
     return ESP_OK;
 }
 
+#if SOC_RTCIO_INPUT_OUTPUT_SUPPORTED
 esp_err_t rtc_gpio_set_level(gpio_num_t gpio_num, uint32_t level)
 {
     ESP_RETURN_ON_FALSE(rtc_gpio_is_valid_gpio(gpio_num), ESP_ERR_INVALID_ARG, RTCIO_TAG, "RTCIO number error");
@@ -145,6 +161,32 @@ esp_err_t rtc_gpio_pulldown_dis(gpio_num_t gpio_num)
     return ESP_OK;
 }
 
+esp_err_t rtc_gpio_iomux_func_sel(gpio_num_t gpio_num, int func)
+{
+    ESP_RETURN_ON_FALSE(rtc_gpio_is_valid_gpio(gpio_num), ESP_ERR_INVALID_ARG, RTCIO_TAG, "RTCIO number error");
+    RTCIO_ENTER_CRITICAL();
+    rtcio_hal_iomux_func_sel(rtc_io_number_get(gpio_num), func);
+    RTCIO_EXIT_CRITICAL();
+
+    return ESP_OK;
+}
+
+#if SOC_LP_GPIO_MATRIX_SUPPORTED
+esp_err_t lp_gpio_connect_in_signal(gpio_num_t gpio_num, uint32_t signal_idx, bool inv)
+{
+    ESP_RETURN_ON_FALSE(rtc_gpio_is_valid_gpio(gpio_num), ESP_ERR_INVALID_ARG, RTCIO_TAG, "LP_IO number error");
+    rtcio_hal_matrix_in(rtc_io_number_get(gpio_num), signal_idx, inv);
+    return ESP_OK;
+}
+
+esp_err_t lp_gpio_connect_out_signal(gpio_num_t gpio_num, uint32_t signal_idx, bool out_inv, bool oen_inv)
+{
+    ESP_RETURN_ON_FALSE(rtc_gpio_is_valid_gpio(gpio_num), ESP_ERR_INVALID_ARG, RTCIO_TAG, "LP_IO number error");
+    rtcio_hal_matrix_out(rtc_io_number_get(gpio_num), signal_idx, out_inv, oen_inv);
+    return ESP_OK;
+}
+#endif // SOC_LP_GPIO_MATRIX_SUPPORTED
+
 #endif // SOC_RTCIO_INPUT_OUTPUT_SUPPORTED
 
 #if SOC_RTCIO_HOLD_SUPPORTED
@@ -167,16 +209,6 @@ esp_err_t rtc_gpio_hold_dis(gpio_num_t gpio_num)
     return ESP_OK;
 }
 
-esp_err_t rtc_gpio_isolate(gpio_num_t gpio_num)
-{
-    ESP_RETURN_ON_FALSE(rtc_gpio_is_valid_gpio(gpio_num), ESP_ERR_INVALID_ARG, RTCIO_TAG, "RTCIO number error");
-    RTCIO_ENTER_CRITICAL();
-    rtcio_hal_isolate(rtc_io_number_get(gpio_num));
-    RTCIO_EXIT_CRITICAL();
-
-    return ESP_OK;
-}
-
 esp_err_t rtc_gpio_force_hold_en_all(void)
 {
     RTCIO_ENTER_CRITICAL();
@@ -195,6 +227,18 @@ esp_err_t rtc_gpio_force_hold_dis_all(void)
     return ESP_OK;
 }
 #endif // SOC_RTCIO_HOLD_SUPPORTED
+
+#if SOC_RTCIO_HOLD_SUPPORTED && SOC_RTCIO_INPUT_OUTPUT_SUPPORTED
+esp_err_t rtc_gpio_isolate(gpio_num_t gpio_num)
+{
+    ESP_RETURN_ON_FALSE(rtc_gpio_is_valid_gpio(gpio_num), ESP_ERR_INVALID_ARG, RTCIO_TAG, "RTCIO number error");
+    RTCIO_ENTER_CRITICAL();
+    rtcio_hal_isolate(rtc_io_number_get(gpio_num));
+    RTCIO_EXIT_CRITICAL();
+
+    return ESP_OK;
+}
+#endif // SOC_RTCIO_HOLD_SUPPORTED && SOC_RTCIO_INPUT_OUTPUT_SUPPORTED
 
 #if SOC_RTCIO_WAKE_SUPPORTED
 
@@ -221,19 +265,4 @@ esp_err_t rtc_gpio_wakeup_disable(gpio_num_t gpio_num)
 
 #endif // SOC_RTCIO_WAKE_SUPPORTED
 
-bool rtc_gpio_is_valid_gpio(gpio_num_t gpio_num)
-{
-#if SOC_RTCIO_INPUT_OUTPUT_SUPPORTED
-    return (gpio_num < GPIO_PIN_COUNT && rtc_io_num_map[gpio_num] >= 0);
-#else
-    return false;
-#endif
-}
-
-#if SOC_RTCIO_INPUT_OUTPUT_SUPPORTED
-int rtc_io_number_get(gpio_num_t gpio_num)
-{
-    return rtc_io_num_map[gpio_num];
-}
-
-#endif // SOC_RTCIO_INPUT_OUTPUT_SUPPORTED
+#endif // SOC_RTCIO_PIN_COUNT > 0

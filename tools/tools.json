@@ -93,7 +93,7 @@
         "esp32c2",
         "esp32c6",
         "esp32h2",
-        "esp32h4"
+        "esp32p4"
       ],
       "version_cmd": [
         "riscv32-esp-elf-gdb-no-python",
@@ -389,7 +389,6 @@
         "esp32s2",
         "esp32s3",
         "esp32c3",
-        "esp32h4",
         "esp32c2",
         "esp32c6",
         "esp32h2"
@@ -403,36 +402,36 @@
       "versions": [
         {
           "linux-amd64": {
-            "sha256": "839e5adfa7f44982e8a2d828680f6e4aa435dcd3d1df765e02f015b04286056f",
-            "size": 209731340,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-15.0.0-20221201/llvm-esp-15.0.0-20221201-linux-amd64.tar.xz"
+            "sha256": "3dbd8dd290913a93e8941da8a451ecd49f9798cc2d74bb9b63ef5cf5c4fee37f",
+            "size": 215176120,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-16.0.0-20230516/llvm-esp-16.0.0-20230516-linux-amd64.tar.xz"
           },
           "linux-arm64": {
-            "sha256": "614c44ab7305d65dde54a884c5614516777038027dc61bcc125d02171c248c53",
-            "size": 220076792,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-15.0.0-20221201/llvm-esp-15.0.0-20221201-linux-arm64.tar.xz"
+            "sha256": "4b115af6ddd04a9bffc1908fc05837998ee71d450891d741c446186f2aa9b961",
+            "size": 222261932,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-16.0.0-20230516/llvm-esp-16.0.0-20230516-linux-arm64.tar.xz"
           },
           "linux-armhf": {
-            "sha256": "158076696e4fc608e6e2b54bf739223b78949e0492ad4aa5119632ebfbea0499",
-            "size": 209791724,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-15.0.0-20221201/llvm-esp-15.0.0-20221201-linux-armhf.tar.xz"
+            "sha256": "935082bb0704420c5ca42b35038bba8702135348a50cac454ae2fb55af0b4c32",
+            "size": 214888520,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-16.0.0-20230516/llvm-esp-16.0.0-20230516-linux-armhf.tar.xz"
           },
           "macos": {
-            "sha256": "46f0f0368b5aa8d7e81558796c3acd67d943c9071b9619f2b487136c8e59c97c",
-            "size": 177703432,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-15.0.0-20221201/llvm-esp-15.0.0-20221201-macos.tar.xz"
+            "sha256": "d9824acafd3e7b1d17ace084243b82a95bbdcb149a26b085bba487ab3d3716d7",
+            "size": 182440672,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-16.0.0-20230516/llvm-esp-16.0.0-20230516-macos.tar.xz"
           },
           "macos-arm64": {
-            "sha256": "dc5a99186f9f532a5076d6900828310e4673cf01e8071a3d041456e8aab2cc4a",
-            "size": 167630856,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-15.0.0-20221201/llvm-esp-15.0.0-20221201-macos-arm64.tar.xz"
+            "sha256": "ed5621396dc3e48413e14e8b6caed8e2993e7f2ab5fca1410081f40c940a1060",
+            "size": 171912324,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-16.0.0-20230516/llvm-esp-16.0.0-20230516-macos-arm64.tar.xz"
           },
-          "name": "15.0.0-23786128ae",
+          "name": "16.0.1-fe4f10a809",
           "status": "recommended",
           "win64": {
-            "sha256": "87c9b2c2b8837535f102ae3fd5789defecbffa80b317f86055f3e9d6292aaa05",
-            "size": 241235020,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-15.0.0-20221201/llvm-esp-15.0.0-20221201-win64.tar.xz"
+            "sha256": "598c8241c8bf10fd1be8bd21845307cfc404e127041b4ba4e828350a88692883",
+            "size": 243979484,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-16.0.0-20230516/llvm-esp-16.0.0-20230516-win64.tar.xz"
           }
         }
       ]
@@ -454,7 +453,6 @@
         "esp32s2",
         "esp32s3",
         "esp32c3",
-        "esp32h4",
         "esp32c2",
         "esp32c6",
         "esp32h2"
@@ -560,6 +558,11 @@
             "sha256": "6c6dd25477b2e758d4669da3774bf664d1f012442c880f17dfdf0339e9c3dae9",
             "size": 9591791,
             "url": "https://github.com/espressif/binutils-gdb/releases/download/esp32ulp-elf-v2.35_20220830/esp32ulp-elf-2.35_20220830-linux-armhf.tar.gz"
+          },
+          "linux-i686": {
+            "sha256": "beb9b6737c975369b6959007739c88f44eb5afbb220f40737071540b2c1a9064",
+            "size": 10596533,
+            "url": "https://github.com/espressif/binutils-gdb/releases/download/esp32ulp-elf-v2.35_20220830/esp32ulp-elf-2.35_20220830-linux-i686.tar.gz"
           },
           "macos": {
             "sha256": "5a952087b621ced16af1e375feac1371a61cb51ab7e7b44cbefb5afda2d573de",
@@ -739,46 +742,46 @@
       "versions": [
         {
           "linux-amd64": {
-            "sha256": "ce63e9b1dfab60cc62da5dc2abcc22ba7036c42afe74671c787eb026744e7d0b",
-            "size": 2051435,
-            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.11.0-esp32-20221026/openocd-esp32-linux-amd64-0.11.0-esp32-20221026.tar.gz"
+            "sha256": "5144e7516cd75a2152b35ecae0a400f7d3d4424c2488fbacc49433564f54c70d",
+            "size": 2126949,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20230419/openocd-esp32-linux-amd64-0.12.0-esp32-20230419.tar.gz"
           },
           "linux-arm64": {
-            "sha256": "fe60a3a603e8c6bee47367e40fcb8c0da3a38e01163e9674ebc919b067700506",
-            "size": 1993843,
-            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.11.0-esp32-20221026/openocd-esp32-linux-arm64-0.11.0-esp32-20221026.tar.gz"
+            "sha256": "1c4d900c738fe00730c6033abb6cf1cc6587717dbeee291d5908272d153d329a",
+            "size": 1989161,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20230419/openocd-esp32-linux-arm64-0.12.0-esp32-20230419.tar.gz"
           },
           "linux-armel": {
-            "sha256": "6ef76101cca196a4be30fc74f191eff34abb423e32930a383012b866c9b76135",
-            "size": 2092111,
-            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.11.0-esp32-20221026/openocd-esp32-linux-armel-0.11.0-esp32-20221026.tar.gz"
+            "sha256": "293258fd67618dd352e1096137ad9f2b801926eaf74ffcd570540ae94ad8ee5c",
+            "size": 2129727,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20230419/openocd-esp32-linux-armel-0.12.0-esp32-20230419.tar.gz"
           },
           "linux-armhf": {
-            "sha256": "519b6584339b837b81a952e38655cdb5f640d25545574b477b7ae94b32844c4f",
-            "size": 1995258,
-            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.11.0-esp32-20221026/openocd-esp32-linux-armhf-0.11.0-esp32-20221026.tar.gz"
+            "sha256": "b87cfb291476fc2e34468ea9175a9e195c6f1fce88e643c955c87ccc58bfb1f8",
+            "size": 1987240,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20230419/openocd-esp32-linux-armhf-0.12.0-esp32-20230419.tar.gz"
           },
           "macos": {
-            "sha256": "8edc666a0a230432554b73df7c62e0b5ec21fb018e7fda13b11a7ca8b6c1763b",
-            "size": 2199855,
-            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.11.0-esp32-20221026/openocd-esp32-macos-0.11.0-esp32-20221026.tar.gz"
+            "sha256": "621aad7d011c6817cde9570dfea42c7bcc699458bf43c37706cb4c2f6475a247",
+            "size": 2237976,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20230419/openocd-esp32-macos-0.12.0-esp32-20230419.tar.gz"
           },
           "macos-arm64": {
-            "sha256": "c426c0158ba6488e2f432f7c5b22e79155b5b0fae6d1ad5bbd7894723b43aa12",
-            "size": 2247179,
-            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.11.0-esp32-20221026/openocd-esp32-macos-arm64-0.11.0-esp32-20221026.tar.gz"
+            "sha256": "3af7eac3a7de3939731ec4c13fb5d72a8e6ce5e5d274bb9697f5d93039561e42",
+            "size": 2270699,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20230419/openocd-esp32-macos-arm64-0.12.0-esp32-20230419.tar.gz"
           },
-          "name": "v0.11.0-esp32-20221026",
+          "name": "v0.12.0-esp32-20230419",
           "status": "recommended",
           "win32": {
-            "sha256": "e0e789d35308c029c6b53457cf4a42a5620cb1a3014740026c089c2ed4fd77b2",
-            "size": 2493214,
-            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.11.0-esp32-20221026/openocd-esp32-win32-0.11.0-esp32-20221026.zip"
+            "sha256": "f2cb3d9cacfe789c20d3272af846d726a062ce8f2e4ee142bddb27501d7dd7a7",
+            "size": 2619680,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20230419/openocd-esp32-win32-0.12.0-esp32-20230419.zip"
           },
           "win64": {
-            "sha256": "e0e789d35308c029c6b53457cf4a42a5620cb1a3014740026c089c2ed4fd77b2",
-            "size": 2493214,
-            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.11.0-esp32-20221026/openocd-esp32-win32-0.11.0-esp32-20221026.zip"
+            "sha256": "f2cb3d9cacfe789c20d3272af846d726a062ce8f2e4ee142bddb27501d7dd7a7",
+            "size": 2619680,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20230419/openocd-esp32-win32-0.12.0-esp32-20230419.zip"
           }
         }
       ]
@@ -889,7 +892,7 @@
       "description": "Ccache (compiler cache)",
       "export_paths": [
         [
-          "ccache-4.6.2-windows-x86_64"
+          "ccache-4.8-windows-x86_64"
         ]
       ],
       "export_vars": {
@@ -917,12 +920,12 @@
       "version_regex": "ccache version ([0-9.]+)",
       "versions": [
         {
-          "name": "4.6.2",
+          "name": "4.8",
           "status": "recommended",
           "win64": {
-            "sha256": "bf230b0936962eae43a3410d6477a7d0b9308e29f89a3091881d22e2502604c5",
-            "size": 1957177,
-            "url": "https://github.com/ccache/ccache/releases/download/v4.6.2/ccache-4.6.2-windows-x86_64.zip"
+            "sha256": "a2b3bab4bb8318ffc5b3e4074dc25636258bc7e4b51261f7d9bef8127fda8309",
+            "size": 2005781,
+            "url": "https://github.com/ccache/ccache/releases/download/v4.8/ccache-4.8-windows-x86_64.zip"
           }
         }
       ]
@@ -993,11 +996,11 @@
       "versions": [
         {
           "any": {
-            "sha256": "c5e3d6e6921c9e3f0bff759f47a6529c101f3a0a268a6ae6581948bbccb3afc2",
-            "size": 2832501,
-            "url": "https://github.com/espressif/esp-rom-elfs/releases/download/20230113/esp-rom-elfs-20230113.tar.gz"
+            "sha256": "24bcc8cb3287175d4a0bfd65e04bf7ef592a10f022acffca0d5e87eee05996d4",
+            "size": 2832570,
+            "url": "https://github.com/espressif/esp-rom-elfs/releases/download/20230320/esp-rom-elfs-20230320.tar.gz"
           },
-          "name": "20230113",
+          "name": "20230320",
           "status": "recommended"
         }
       ]

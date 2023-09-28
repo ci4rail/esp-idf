@@ -35,6 +35,10 @@ config SOC_SUPPORTS_SECURE_DL_MODE
     bool
     default y
 
+config SOC_ULP_FSM_SUPPORTED
+    bool
+    default y
+
 config SOC_RISCV_COPROC_SUPPORTED
     bool
     default y
@@ -64,6 +68,10 @@ config SOC_ASYNC_MEMCPY_SUPPORTED
     default y
 
 config SOC_EFUSE_KEY_PURPOSE_FIELD
+    bool
+    default y
+
+config SOC_EFUSE_SUPPORTED
     bool
     default y
 
@@ -167,6 +175,10 @@ config SOC_BOD_SUPPORTED
     bool
     default y
 
+config SOC_CLK_TREE_SUPPORTED
+    bool
+    default y
+
 config SOC_XTAL_SUPPORT_40M
     bool
     default y
@@ -239,6 +251,10 @@ config SOC_ADC_DIGI_DATA_BYTES_PER_CONV
     int
     default 2
 
+config SOC_ADC_DIGI_MONITOR_NUM
+    int
+    default 2
+
 config SOC_ADC_SAMPLE_FREQ_THRES_HIGH
     int
     default 83333
@@ -260,6 +276,10 @@ config SOC_ADC_CALIBRATION_V1_SUPPORTED
     default y
 
 config SOC_ADC_SELF_HW_CALI_SUPPORTED
+    bool
+    default y
+
+config SOC_ADC_SHARED_POWER
     bool
     default y
 
@@ -363,6 +383,10 @@ config SOC_I2C_FIFO_LEN
     int
     default 32
 
+config SOC_I2C_CMD_REG_NUM
+    int
+    default 16
+
 config SOC_I2C_SUPPORT_SLAVE
     bool
     default y
@@ -458,10 +482,6 @@ config SOC_LEDC_TIMER_BIT_WIDTH
 config SOC_LEDC_SUPPORT_FADE_STOP
     bool
     default y
-
-config SOC_LEDC_GAMMA_FADE_RANGE_MAX
-    int
-    default 1
 
 config SOC_MMU_LINEAR_ADDRESS_REGION_NUM
     int
@@ -747,6 +767,10 @@ config SOC_UART_NUM
     int
     default 2
 
+config SOC_UART_HP_NUM
+    int
+    default 2
+
 config SOC_UART_SUPPORT_WAKEUP_INT
     bool
     default y
@@ -827,6 +851,14 @@ config SOC_SHA_SUPPORT_SHA512_T
     bool
     default y
 
+config SOC_MPI_MEM_BLOCKS_NUM
+    int
+    default 4
+
+config SOC_MPI_OPERATIONS_NUM
+    int
+    default 3
+
 config SOC_RSA_MAX_BIT_LEN
     int
     default 4096
@@ -860,6 +892,10 @@ config SOC_EFUSE_DIS_BOOT_REMAP
     default y
 
 config SOC_EFUSE_DIS_LEGACY_SPI_BOOT
+    bool
+    default y
+
+config SOC_EFUSE_DIS_ICACHE
     bool
     default y
 
@@ -935,10 +971,6 @@ config SOC_SPI_MEM_SUPPORT_AUTO_WAIT_IDLE
     bool
     default y
 
-config SOC_SPI_MEM_SUPPORT_AUTO_SUSPEND
-    bool
-    default y
-
 config SOC_SPI_MEM_SUPPORT_SW_SUSPEND
     bool
     default y
@@ -951,6 +983,14 @@ config SOC_SPI_MEM_SUPPORT_WRAP
     bool
     default y
 
+config SOC_PM_SUPPORT_EXT0_WAKEUP
+    bool
+    default y
+
+config SOC_PM_SUPPORT_EXT1_WAKEUP
+    bool
+    default y
+
 config SOC_PM_SUPPORT_EXT_WAKEUP
     bool
     default y
@@ -959,15 +999,15 @@ config SOC_PM_SUPPORT_WIFI_WAKEUP
     bool
     default y
 
+config SOC_PM_SUPPORT_TOUCH_SENSOR_WAKEUP
+    bool
+    default y
+
 config SOC_PM_SUPPORT_WIFI_PD
     bool
     default y
 
 config SOC_PM_SUPPORT_RTC_PERIPH_PD
-    bool
-    default y
-
-config SOC_PM_SUPPORT_TOUCH_SENSOR_WAKEUP
     bool
     default y
 
@@ -1031,6 +1071,14 @@ config SOC_COEX_HW_PTI
     bool
     default y
 
+config SOC_EXTERNAL_COEX_ADVANCE
+    bool
+    default n
+
+config SOC_EXTERNAL_COEX_LEADER_TX_LINE
+    bool
+    default y
+
 config SOC_TEMPERATURE_SENSOR_SUPPORT_FAST_RC
     bool
     default y
@@ -1043,10 +1091,6 @@ config SOC_WIFI_FTM_SUPPORT
     bool
     default y
 
-config SOC_WIFI_GCMP_SUPPORT
-    bool
-    default n
-
 config SOC_WIFI_WAPI_SUPPORT
     bool
     default y
@@ -1056,5 +1100,17 @@ config SOC_WIFI_CSI_SUPPORT
     default y
 
 config SOC_WIFI_MESH_SUPPORT
+    bool
+    default y
+
+config SOC_WIFI_SUPPORT_VARIABLE_BEACON_WINDOW
+    bool
+    default y
+
+config SOC_WIFI_NAN_SUPPORT
+    bool
+    default y
+
+config SOC_ULP_HAS_ADC
     bool
     default y

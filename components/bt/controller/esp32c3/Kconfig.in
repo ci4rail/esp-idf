@@ -4,11 +4,13 @@ config BT_CTRL_MODE_EFF
 
 config BT_CTRL_BLE_MAX_ACT
     int "BLE Max Instances"
-    default 10
+    default 6
     range 1 10
     help
         BLE maximum activities of bluetooth controller，both of connections,
-        scan , sync and adv(periodic adv, multi-adv).
+        scan , sync and adv(periodic adv, multi-adv). Each instance needs to
+        consume 828 bytes, you can save RAM by modifying the instance value
+        according to actual needs.
 
 config BT_CTRL_BLE_MAX_ACT_EFF
     int
@@ -24,8 +26,24 @@ config BT_CTRL_BLE_STATIC_ACL_TX_BUF_NB
         (alloate when controller initialise, never free until controller de-initialise)
         another is dynamically allocating (allocate before TX and free after TX).
 
+choice BT_CTRL_PINNED_TO_CORE_CHOICE
+    prompt "The cpu core which bluetooth controller run"
+    depends on !FREERTOS_UNICORE
+    help
+        Specify the cpu core to run bluetooth controller.
+        Can not specify no-affinity.
+
+    config BT_CTRL_PINNED_TO_CORE_0
+        bool "Core 0 (PRO CPU)"
+    config BT_CTRL_PINNED_TO_CORE_1
+        bool "Core 1 (APP CPU)"
+        depends on !FREERTOS_UNICORE
+endchoice
+
 config BT_CTRL_PINNED_TO_CORE
     int
+    default 0 if BT_CTRL_PINNED_TO_CORE_0
+    default 1 if BT_CTRL_PINNED_TO_CORE_1
     default 0
 
 choice BT_CTRL_HCI_MODE_CHOICE
@@ -36,7 +54,7 @@ choice BT_CTRL_HCI_MODE_CHOICE
     config BT_CTRL_HCI_MODE_VHCI
         bool "VHCI"
         help
-            Normal option. Mostly, choose this VHCI when bluetooth host run on ESP32C3, too.
+            Normal option. Mostly, choose this VHCI when bluetooth host run on ESP32S3 or ESP32C3.
 
     config BT_CTRL_HCI_MODE_UART_H4
         bool "UART(H4)"
@@ -60,15 +78,29 @@ config BT_CTRL_ADV_DUP_FILT_MAX
     help
         The maxinum number of suplicate scan filter
 
-config BT_CTRL_HW_CCA
-    bool "HW CCA check enable"
-    default n
+choice BT_BLE_CCA_MODE
+    prompt "BLE CCA mode"
+    default BT_BLE_CCA_MODE_NONE
     help
-        It enables HW CCA feature in controller
+        Define BT BLE CCA mode
+
+    config BT_BLE_CCA_MODE_NONE
+        bool "NONE"
+    config BT_BLE_CCA_MODE_HW
+        bool "Hardware"
+    config BT_BLE_CCA_MODE_SW
+        bool "Software"
+endchoice
+
+config BT_BLE_CCA_MODE
+    int
+    default 0 if BT_BLE_CCA_MODE_NONE
+    default 1 if BT_BLE_CCA_MODE_HW
+    default 2 if BT_BLE_CCA_MODE_SW
 
 config BT_CTRL_HW_CCA_VAL
     int "CCA threshold value"
-    range 20 60
+    range 20 100
     default 20
     help
         It is the threshold value of HW CCA, if the value is 30, it means CCA threshold is -30 dBm.
@@ -394,7 +426,6 @@ menu "MODEM SLEEP Options"
             If this option is selected, the main crystal will power up during light sleep when the low power clock
             selects an external 32kHz crystal but the external 32kHz crystal does not exist or the low power clock
             selects the main crystal.
-
 
 endmenu
 

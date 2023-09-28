@@ -45,12 +45,15 @@ typedef int sdspi_dev_handle_t;
     .get_bus_width = NULL, \
     .set_bus_ddr_mode = NULL, \
     .set_card_clk = &sdspi_host_set_card_clk, \
+    .set_cclk_always_on = NULL, \
     .do_transaction = &sdspi_host_do_transaction, \
     .deinit_p = &sdspi_host_remove_device, \
     .io_int_enable = &sdspi_host_io_int_enable, \
     .io_int_wait = &sdspi_host_io_int_wait, \
     .command_timeout_ms = 0, \
-    .get_real_freq = &sdspi_host_get_real_freq \
+    .get_real_freq = &sdspi_host_get_real_freq, \
+    .input_delay_phase = SDMMC_DELAY_PHASE_0, \
+    .set_input_delay = NULL \
 }
 
 /**
@@ -58,16 +61,20 @@ typedef int sdspi_dev_handle_t;
  */
 typedef struct {
     spi_host_device_t host_id; ///< SPI host to use, SPIx_HOST (see spi_types.h).
-    gpio_num_t gpio_cs;     ///< GPIO number of CS signal
-    gpio_num_t gpio_cd;     ///< GPIO number of card detect signal
-    gpio_num_t gpio_wp;     ///< GPIO number of write protect signal
-    gpio_num_t gpio_int;    ///< GPIO number of interrupt line (input) for SDIO card.
+    gpio_num_t gpio_cs;        ///< GPIO number of CS signal
+    gpio_num_t gpio_cd;        ///< GPIO number of card detect signal
+    gpio_num_t gpio_wp;        ///< GPIO number of write protect signal
+    gpio_num_t gpio_int;       ///< GPIO number of interrupt line (input) for SDIO card.
+    bool gpio_wp_polarity;     ///< GPIO write protect polarity
+                               /// 0 means "active low", i.e. card is protected when the GPIO is low;
+                               /// 1 means "active high", i.e. card is protected when GPIO is high.
 } sdspi_device_config_t;
 
-#define SDSPI_SLOT_NO_CS    GPIO_NUM_NC ///< indicates that card select line is not used
-#define SDSPI_SLOT_NO_CD    GPIO_NUM_NC ///< indicates that card detect line is not used
-#define SDSPI_SLOT_NO_WP    GPIO_NUM_NC ///< indicates that write protect line is not used
-#define SDSPI_SLOT_NO_INT   GPIO_NUM_NC ///< indicates that interrupt line is not used
+#define SDSPI_SLOT_NO_CS          GPIO_NUM_NC      ///< indicates that card select line is not used
+#define SDSPI_SLOT_NO_CD          GPIO_NUM_NC      ///< indicates that card detect line is not used
+#define SDSPI_SLOT_NO_WP          GPIO_NUM_NC      ///< indicates that write protect line is not used
+#define SDSPI_SLOT_NO_INT         GPIO_NUM_NC      ///< indicates that interrupt line is not used
+#define SDSPI_IO_ACTIVE_LOW       0
 
 /**
  * Macro defining default configuration of SD SPI device.
@@ -78,6 +85,7 @@ typedef struct {
     .gpio_cd   = SDSPI_SLOT_NO_CD, \
     .gpio_wp   = SDSPI_SLOT_NO_WP, \
     .gpio_int  = GPIO_NUM_NC, \
+    .gpio_wp_polarity = SDSPI_IO_ACTIVE_LOW, \
 }
 
 /**

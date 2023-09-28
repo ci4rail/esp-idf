@@ -24,6 +24,9 @@ typedef struct {
     struct {
         uint32_t invert_pwm: 1;   /*!< Whether to invert the PWM signal (done by GPIO matrix) */
         uint32_t io_loop_back: 1; /*!< For debug/test, the signal output from the GPIO will be fed to the input path as well */
+        uint32_t io_od_mode: 1;   /*!< Configure the GPIO as open-drain mode */
+        uint32_t pull_up: 1;      /*!< Whether to pull up internally */
+        uint32_t pull_down: 1;    /*!< Whether to pull down internally */
     } flags;                      /*!< Extra configuration flags for generator */
 } mcpwm_generator_config_t;
 
@@ -59,6 +62,7 @@ esp_err_t mcpwm_del_generator(mcpwm_gen_handle_t gen);
  * @note The force level will be applied to the generator immediately, regardless any other events that would change the generator's behaviour.
  * @note If the `hold_on` is true, the force level will retain forever, until user removes the force level by setting the force level to `-1`.
  * @note If the `hold_on` is false, the force level can be overridden by the next event action.
+ * @note The force level set by this function can be inverted by GPIO matrix or dead-time module. So the level set here doesn't equal to the final output level.
  *
  * @param[in] gen MCPWM generator handle, allocated by `mcpwm_new_generator()`
  * @param[in] level GPIO level to be applied to MCPWM generator, specially, -1 means to remove the force level
@@ -202,6 +206,62 @@ esp_err_t mcpwm_generator_set_action_on_brake_event(mcpwm_gen_handle_t generator
 esp_err_t mcpwm_generator_set_actions_on_brake_event(mcpwm_gen_handle_t generator, mcpwm_gen_brake_event_action_t ev_act, ...);
 
 /**
+ * @brief Generator action on specific fault event
+ */
+typedef struct {
+    mcpwm_timer_direction_t direction;       /*!< Timer direction */
+    mcpwm_fault_handle_t fault;              /*!< Which fault as the trigger. Only support GPIO fault */
+    mcpwm_generator_action_t action;         /*!< Generator action should perform */
+} mcpwm_gen_fault_event_action_t;
+
+/**
+ * @brief Help macros to construct a mcpwm_gen_fault_event_action_t entry
+ */
+#define MCPWM_GEN_FAULT_EVENT_ACTION(dir, flt, act) \
+    (mcpwm_gen_fault_event_action_t) { .direction = dir, .fault = flt, .action = act }
+
+/**
+ * @brief Set generator action on MCPWM Fault event
+ *
+ * @param[in] generator MCPWM generator handle, allocated by `mcpwm_new_generator()`
+ * @param[in] ev_act MCPWM trigger event action, can be constructed by `MCPWM_GEN_FAULT_EVENT_ACTION` helper macro
+ * @return
+ *      - ESP_OK: Set generator action successfully
+ *      - ESP_ERR_INVALID_ARG: Set generator action failed because of invalid argument
+ *      - ESP_FAIL: Set generator action failed because of other error
+ */
+esp_err_t mcpwm_generator_set_action_on_fault_event(mcpwm_gen_handle_t generator, mcpwm_gen_fault_event_action_t ev_act);
+
+/**
+ * @brief Generator action on specific sync event
+ */
+typedef struct {
+    mcpwm_timer_direction_t direction;       /*!< Timer direction */
+    mcpwm_sync_handle_t sync;                /*!< Which sync as the trigger*/
+    mcpwm_generator_action_t action;         /*!< Generator action should perform */
+} mcpwm_gen_sync_event_action_t;
+
+/**
+ * @brief Help macros to construct a mcpwm_gen_sync_event_action_t entry
+ */
+#define MCPWM_GEN_SYNC_EVENT_ACTION(dir, syn, act) \
+    (mcpwm_gen_sync_event_action_t) { .direction = dir, .sync = syn, .action = act }
+
+/**
+ * @brief Set generator action on MCPWM Sync event
+ *
+ * @note The trigger only support one sync action, regardless of the kinds. Should not call this function more than once.
+ *
+ * @param[in] generator MCPWM generator handle, allocated by `mcpwm_new_generator()`
+ * @param[in] ev_act MCPWM trigger event action, can be constructed by `MCPWM_GEN_SYNC_EVENT_ACTION` helper macro
+ * @return
+ *      - ESP_OK: Set generator action successfully
+ *      - ESP_ERR_INVALID_ARG: Set generator action failed because of invalid argument
+ *      - ESP_FAIL: Set generator action failed because of other error
+ */
+esp_err_t mcpwm_generator_set_action_on_sync_event(mcpwm_gen_handle_t generator, mcpwm_gen_sync_event_action_t ev_act);
+
+/**
  * @brief MCPWM dead time configuration structure
  */
 typedef struct {
@@ -215,12 +275,17 @@ typedef struct {
 /**
  * @brief Set dead time for MCPWM generator
  *
+ * @note Due to a hardware limitation, you can't set rising edge delay for both MCPWM generator 0 and 1 at the same time,
+ *       otherwise, there will be a conflict inside the dead time module. The same goes for the falling edge setting.
+ *       But you can set both the rising edge and falling edge delay for the same MCPWM generator.
+ *
  * @param[in] in_generator MCPWM generator, before adding the dead time
  * @param[in] out_generator MCPWM generator, after adding the dead time
  * @param[in] config MCPWM dead time configuration
  * @return
  *      - ESP_OK: Set dead time for MCPWM generator successfully
  *      - ESP_ERR_INVALID_ARG: Set dead time for MCPWM generator failed because of invalid argument
+ *      - ESP_ERR_INVALID_STATE: Set dead time for MCPWM generator failed because of invalid state (e.g. delay module is already in use by other generator)
  *      - ESP_FAIL: Set dead time for MCPWM generator failed because of other error
  */
 esp_err_t mcpwm_generator_set_dead_time(mcpwm_gen_handle_t in_generator, mcpwm_gen_handle_t out_generator, const mcpwm_dead_time_config_t *config);

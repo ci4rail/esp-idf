@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2019-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2019-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -31,12 +31,14 @@
 #define SOC_WIFI_SUPPORTED              1
 #define SOC_TWAI_SUPPORTED              1
 #define SOC_GDMA_SUPPORTED              1
+#define SOC_AHB_GDMA_SUPPORTED          1
 #define SOC_GPTIMER_SUPPORTED           1
 #define SOC_LCDCAM_SUPPORTED            1
 #define SOC_MCPWM_SUPPORTED             1
 #define SOC_DEDICATED_GPIO_SUPPORTED    1
 #define SOC_CACHE_SUPPORT_WRAP          1
 #define SOC_ULP_SUPPORTED               1
+#define SOC_ULP_FSM_SUPPORTED           1
 #define SOC_RISCV_COPROC_SUPPORTED      1
 #define SOC_BT_SUPPORTED                1
 #define SOC_USB_OTG_SUPPORTED           1
@@ -45,6 +47,7 @@
 #define SOC_ASYNC_MEMCPY_SUPPORTED      1
 #define SOC_SUPPORTS_SECURE_DL_MODE     1
 #define SOC_EFUSE_KEY_PURPOSE_FIELD     1
+#define SOC_EFUSE_SUPPORTED             1
 #define SOC_SDMMC_HOST_SUPPORTED        1
 #define SOC_RTC_FAST_MEM_SUPPORTED      1
 #define SOC_RTC_SLOW_MEM_SUPPORTED      1
@@ -70,6 +73,7 @@
 #define SOC_MEMPROT_SUPPORTED           1
 #define SOC_TOUCH_SENSOR_SUPPORTED      1
 #define SOC_BOD_SUPPORTED               1
+#define SOC_CLK_TREE_SUPPORTED          1
 
 /*-------------------------- XTAL CAPS ---------------------------------------*/
 #define SOC_XTAL_SUPPORT_40M            1
@@ -99,6 +103,7 @@
 #define SOC_ADC_DIGI_RESULT_BYTES               (4)
 #define SOC_ADC_DIGI_DATA_BYTES_PER_CONV        (4)
 #define SOC_ADC_DIGI_IIR_FILTER_NUM             (2)
+#define SOC_ADC_DIGI_MONITOR_NUM                (2)
 /*!< F_sample = F_digi_con / 2 / interval. F_digi_con = 5M for now. 30 <= interval<= 4095 */
 #define SOC_ADC_SAMPLE_FREQ_THRES_HIGH          83333
 #define SOC_ADC_SAMPLE_FREQ_THRES_LOW           611
@@ -110,6 +115,9 @@
 /*!< Calibration */
 #define SOC_ADC_CALIBRATION_V1_SUPPORTED        (1) /*!< support HW offset calibration version 1*/
 #define SOC_ADC_SELF_HW_CALI_SUPPORTED          (1) /*!< support HW offset self calibration */
+
+/*!< ADC power control is shared by PWDET, TempSensor */
+#define SOC_ADC_SHARED_POWER                    1
 
 /*-------------------------- APB BACKUP DMA CAPS -------------------------------*/
 #define SOC_APB_BACKUP_DMA              (1)
@@ -142,9 +150,10 @@
 #define SOC_DS_KEY_CHECK_MAX_WAIT_US (1100)
 
 /*-------------------------- GDMA CAPS ---------------------------------------*/
-#define SOC_GDMA_GROUPS            (1)  // Number of GDMA groups
-#define SOC_GDMA_PAIRS_PER_GROUP   (5)  // Number of GDMA pairs in each group
-#define SOC_GDMA_SUPPORT_PSRAM     (1)  // GDMA can access external PSRAM
+#define SOC_AHB_GDMA_VERSION           1U
+#define SOC_GDMA_NUM_GROUPS_MAX        1U
+#define SOC_GDMA_PAIRS_PER_GROUP_MAX   5
+#define SOC_AHB_GDMA_SUPPORT_PSRAM     1
 
 /*-------------------------- GPIO CAPS ---------------------------------------*/
 // ESP32-S3 has 1 GPIO peripheral
@@ -165,7 +174,6 @@
 // digital I/O pad powered by VDD3P3_CPU or VDD_SPI(GPIO_NUM_26~GPIO_NUM_48)
 #define SOC_GPIO_VALID_DIGITAL_IO_PAD_MASK 0x0001FFFFFC000000ULL
 
-
 /*-------------------------- Dedicated GPIO CAPS -----------------------------*/
 #define SOC_DEDIC_GPIO_OUT_CHANNELS_NUM (8) /*!< 8 outward channels on each CPU core */
 #define SOC_DEDIC_GPIO_IN_CHANNELS_NUM  (8) /*!< 8 inward channels on each CPU core */
@@ -176,6 +184,7 @@
 #define SOC_I2C_NUM            (2)
 
 #define SOC_I2C_FIFO_LEN       (32) /*!< I2C hardware FIFO depth */
+#define SOC_I2C_CMD_REG_NUM         (8)  /*!< Number of I2C command registers */
 #define SOC_I2C_SUPPORT_SLAVE       (1)
 
 // FSM_RST only resets the FSM, not using it. So SOC_I2C_SUPPORT_HW_FSM_RST not defined.
@@ -184,6 +193,8 @@
 
 #define SOC_I2C_SUPPORT_XTAL       (1)
 #define SOC_I2C_SUPPORT_RTC        (1)
+
+#define SOC_I2C_SUPPORT_10BIT_ADDR  (1)
 
 /*-------------------------- I2S CAPS ----------------------------------------*/
 #define SOC_I2S_NUM                 (2U)
@@ -204,7 +215,6 @@
 #define SOC_LEDC_CHANNEL_NUM             (8)
 #define SOC_LEDC_TIMER_BIT_WIDTH         (14)
 #define SOC_LEDC_SUPPORT_FADE_STOP       (1)
-#define SOC_LEDC_GAMMA_FADE_RANGE_MAX    (1U) // The target does not support gamma curve fading
 
 /*-------------------------- MCPWM CAPS --------------------------------------*/
 #define SOC_MCPWM_GROUPS                     (2)    ///< 2 MCPWM groups on the chip (i.e., the number of independent MCPWM peripherals)
@@ -274,7 +284,10 @@
 
 /*-------------------------- RTCIO CAPS --------------------------------------*/
 #define SOC_RTCIO_PIN_COUNT   22
-#define SOC_RTCIO_INPUT_OUTPUT_SUPPORTED 1
+#define SOC_RTCIO_INPUT_OUTPUT_SUPPORTED 1  /* This macro indicates that the target has separate RTC IOMUX hardware feature,
+                                             * so it supports unique IOMUX configuration (including IE, OE, PU, PD, DRV etc.)
+                                             * when the pins are switched to RTC function.
+                                             */
 #define SOC_RTCIO_HOLD_SUPPORTED 1
 #define SOC_RTCIO_WAKE_SUPPORTED 1
 
@@ -332,7 +345,7 @@
 #define SOC_TIMER_GROUP_TOTAL_TIMERS      (4)
 
 /*-------------------------- TOUCH SENSOR CAPS -------------------------------*/
-#define SOC_TOUCH_VERSION_2               	(1)  // Hardware version of touch sensor
+#define SOC_TOUCH_VERSION_2                 (1)  // Hardware version of touch sensor
 #define SOC_TOUCH_SENSOR_NUM                (15) /*! 15 Touch channels */
 #define SOC_TOUCH_PROXIMITY_CHANNEL_NUM     (3)  /* Sopport touch proximity channel number. */
 #define SOC_TOUCH_PROXIMITY_MEAS_DONE_SUPPORTED (1) /*Sopport touch proximity channel measure done interrupt type. */
@@ -350,6 +363,7 @@
 /*-------------------------- UART CAPS ---------------------------------------*/
 // ESP32-S3 has 3 UARTs
 #define SOC_UART_NUM                (3)
+#define SOC_UART_HP_NUM             (3)
 #define SOC_UART_FIFO_LEN           (128)      /*!< The UART hardware FIFO length */
 #define SOC_UART_BITRATE_MAX        (5000000)  /*!< Max bit rate supported by UART */
 // UART has an extra TX_WAIT_SEND state when the FIFO is not empty and XOFF is enabled
@@ -362,7 +376,6 @@
 
 /*-------------------------- USB CAPS ----------------------------------------*/
 #define SOC_USB_PERIPH_NUM 1
-
 
 /*--------------------------- SHA CAPS ---------------------------------------*/
 /* Max amount of bytes in a single DMA operation is 4095,
@@ -388,10 +401,12 @@
 #define SOC_SHA_SUPPORT_SHA512_256      (1)
 #define SOC_SHA_SUPPORT_SHA512_T        (1)
 
+/*--------------------------- MPI CAPS ---------------------------------------*/
+#define SOC_MPI_MEM_BLOCKS_NUM (4)
+#define SOC_MPI_OPERATIONS_NUM (3)
 
 /*--------------------------- RSA CAPS ---------------------------------------*/
 #define SOC_RSA_MAX_BIT_LEN    (4096)
-
 
 /*-------------------------- AES CAPS -----------------------------------------*/
 #define SOC_AES_SUPPORT_DMA     (1)
@@ -402,9 +417,10 @@
 #define SOC_AES_SUPPORT_AES_128 (1)
 #define SOC_AES_SUPPORT_AES_256 (1)
 
-
 /*-------------------------- Power Management CAPS ---------------------------*/
-#define SOC_PM_SUPPORT_EXT_WAKEUP       (1)
+#define SOC_PM_SUPPORT_EXT0_WAKEUP      (1)
+#define SOC_PM_SUPPORT_EXT1_WAKEUP      (1)
+#define SOC_PM_SUPPORT_EXT_WAKEUP       (1)     /*!<Compatible to the old version of IDF */
 #define SOC_PM_SUPPORT_WIFI_WAKEUP      (1)
 #define SOC_PM_SUPPORT_BT_WAKEUP        (1)
 #define SOC_PM_SUPPORT_TOUCH_SENSOR_WAKEUP    (1)     /*!<Supports waking up from touch pad trigger */
@@ -414,11 +430,14 @@
 #define SOC_PM_SUPPORT_RTC_PERIPH_PD    (1)
 #define SOC_PM_SUPPORT_RC_FAST_PD       (1)
 #define SOC_PM_SUPPORT_VDDSDIO_PD       (1)
+#define SOC_PM_SUPPORT_MAC_BB_PD        (1)
+#define SOC_PM_SUPPORT_MODEM_PD         (1)     /*!<Modem here includes wifi and ble */
 
 #define SOC_CONFIGURABLE_VDDSDIO_SUPPORTED        (1)
 #define SOC_PM_SUPPORT_DEEPSLEEP_CHECK_STUB_ONLY   (1) /*!<Supports CRC only the stub code in RTC memory */
 
-#define SOC_PM_CPU_RETENTION_BY_RTCCNTL  (1)
+#define SOC_PM_CPU_RETENTION_BY_RTCCNTL         (1)
+#define SOC_PM_MODEM_RETENTION_BY_BACKUPDMA     (1)
 
 /*--------------------------- CLOCK SUBSYSTEM CAPS -------------------------- */
 #define SOC_CLK_RC_FAST_D256_SUPPORTED            (1)
@@ -434,6 +453,8 @@
 #define SOC_EFUSE_DIS_USB_JTAG 1
 #define SOC_EFUSE_SOFT_DIS_JTAG 1
 #define SOC_EFUSE_DIS_DIRECT_BOOT 1
+#define SOC_EFUSE_DIS_ICACHE 1
+#define SOC_EFUSE_BLOCK9_KEY_PURPOSE_QUIRK 1  // XTS-AES key purpose not supported for this block
 
 /*-------------------------- Secure Boot CAPS----------------------------*/
 #define SOC_SECURE_BOOT_V2_RSA              1
@@ -465,12 +486,18 @@
 #define SOC_SPI_MEM_SUPPORT_AUTO_RESUME                   (1)
 #define SOC_SPI_MEM_SUPPORT_SW_SUSPEND                    (1)
 #define SOC_SPI_MEM_SUPPORT_OPI_MODE                      (1)
-#define SOC_SPI_MEM_SUPPORT_TIME_TUNING                   (1)
+#define SOC_SPI_MEM_SUPPORT_TIMING_TUNING                 (1)
 #define SOC_SPI_MEM_SUPPORT_CONFIG_GPIO_BY_EFUSE          (1)
 #define SOC_SPI_MEM_SUPPORT_WRAP                          (1)
+#define SOC_MEMSPI_TIMING_TUNING_BY_MSPI_DELAY            (1)
+#define SOC_MEMSPI_CORE_CLK_SHARED_WITH_PSRAM             (1)
 
 /*-------------------------- COEXISTENCE HARDWARE PTI CAPS -------------------------------*/
 #define SOC_COEX_HW_PTI                 (1)
+
+/*-------------------------- EXTERNAL COEXISTENCE CAPS -------------------------------------*/
+#define SOC_EXTERNAL_COEX_ADVANCE              (0) /*!< HARDWARE ADVANCED EXTERNAL COEXISTENCE CAPS */
+#define SOC_EXTERNAL_COEX_LEADER_TX_LINE       (1) /*!< EXTERNAL COEXISTENCE TX LINE CAPS */
 
 /*-------------------------- SDMMC CAPS -----------------------------------------*/
 
@@ -481,18 +508,27 @@
 #define SOC_SDMMC_NUM_SLOTS        2
 /* Indicates that there is an option to use XTAL clock instead of PLL for SDMMC */
 #define SOC_SDMMC_SUPPORT_XTAL_CLOCK    1
+/* Supported host clock delay phase number */
+#define SOC_SDMMC_DELAY_PHASE_NUM    4
 
 /*-------------------------- Temperature Sensor CAPS -------------------------------------*/
 #define SOC_TEMPERATURE_SENSOR_SUPPORT_FAST_RC                (1)
 
 /*------------------------------------ WI-FI CAPS ------------------------------------*/
-#define SOC_WIFI_HW_TSF                 (1)    /*!< Support hardware TSF */
-#define SOC_WIFI_FTM_SUPPORT            (1)    /*!< Support FTM */
-#define SOC_WIFI_GCMP_SUPPORT           (1)    /*!< Support GCMP(GCMP128 and GCMP256) */
-#define SOC_WIFI_WAPI_SUPPORT           (1)    /*!< Support WAPI */
-#define SOC_WIFI_CSI_SUPPORT            (1)    /*!< Support CSI */
-#define SOC_WIFI_MESH_SUPPORT           (1)    /*!< Support WIFI MESH */
+#define SOC_WIFI_HW_TSF                     (1)    /*!< Support hardware TSF */
+#define SOC_WIFI_FTM_SUPPORT                (1)    /*!< Support FTM */
+#define SOC_WIFI_GCMP_SUPPORT               (1)    /*!< Support GCMP(GCMP128 and GCMP256) */
+#define SOC_WIFI_WAPI_SUPPORT               (1)    /*!< Support WAPI */
+#define SOC_WIFI_CSI_SUPPORT                (1)    /*!< Support CSI */
+#define SOC_WIFI_MESH_SUPPORT               (1)    /*!< Support WIFI MESH */
+#define SOC_WIFI_SUPPORT_VARIABLE_BEACON_WINDOW   (1)    /*!< Support delta early time for rf phy on/off */
 
 /*---------------------------------- Bluetooth CAPS ----------------------------------*/
 #define SOC_BLE_SUPPORTED               (1)    /*!< Support Bluetooth Low Energy hardware */
 #define SOC_BLE_MESH_SUPPORTED          (1)    /*!< Support BLE MESH */
+#define SOC_BLE_50_SUPPORTED            (1)    /*!< Support Bluetooth 5.0 */
+#define SOC_BLE_DEVICE_PRIVACY_SUPPORTED (1)   /*!< Support BLE device privacy mode */
+#define SOC_BLUFI_SUPPORTED             (1)    /*!< Support BLUFI */
+
+/*-------------------------- ULP CAPS ----------------------------------------*/
+#define SOC_ULP_HAS_ADC                     (1)    /* ADC can be accessed from ULP */

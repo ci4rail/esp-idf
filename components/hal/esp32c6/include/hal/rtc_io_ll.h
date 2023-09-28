@@ -13,14 +13,14 @@
 #pragma once
 
 #include <stdlib.h>
-#include "soc/rtc_periph.h"
+#include <stdbool.h>
+#include "soc/soc_caps.h"
 #include "soc/pcr_struct.h"
-#include "soc/rtc_io_struct.h"
+#include "soc/lp_io_struct.h"
 #include "soc/lp_aon_struct.h"
 #include "soc/pmu_struct.h"
 #include "hal/misc.h"
-#include "hal/gpio_types.h"
-#include "soc/io_mux_reg.h"
+#include "hal/assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,23 +28,32 @@ extern "C" {
 
 #define RTCIO_LL_PIN_FUNC       0
 
-#define RTCIO_LL_PIN_MASK_ALL   ((1 << SOC_RTCIO_PIN_COUNT) - 1)
-
 typedef enum {
-    RTCIO_FUNC_RTC = 0x0,         /*!< The pin controlled by RTC module. */
-    RTCIO_FUNC_DIGITAL = 0x1,     /*!< The pin controlled by DIGITAL module. */
+    RTCIO_LL_FUNC_RTC = 0x0,         /*!< The pin controlled by RTC module. */
+    RTCIO_LL_FUNC_DIGITAL = 0x1,     /*!< The pin controlled by DIGITAL module. */
 } rtcio_ll_func_t;
 
 typedef enum {
-    RTCIO_WAKEUP_DISABLE    = 0,    /*!< Disable GPIO interrupt                             */
-    RTCIO_WAKEUP_LOW_LEVEL  = 0x4,  /*!< GPIO interrupt type : input low level trigger      */
-    RTCIO_WAKEUP_HIGH_LEVEL = 0x5,  /*!< GPIO interrupt type : input high level trigger     */
+    RTCIO_LL_WAKEUP_DISABLE    = 0,    /*!< Disable GPIO interrupt                             */
+    RTCIO_LL_WAKEUP_LOW_LEVEL  = 0x4,  /*!< GPIO interrupt type : input low level trigger      */
+    RTCIO_LL_WAKEUP_HIGH_LEVEL = 0x5,  /*!< GPIO interrupt type : input high level trigger     */
 } rtcio_ll_wake_type_t;
 
 typedef enum {
-    RTCIO_OUTPUT_NORMAL = 0,    /*!< RTCIO output mode is normal. */
-    RTCIO_OUTPUT_OD = 0x1,      /*!< RTCIO output mode is open-drain. */
+    RTCIO_LL_OUTPUT_NORMAL = 0,    /*!< RTCIO output mode is normal. */
+    RTCIO_LL_OUTPUT_OD = 0x1,      /*!< RTCIO output mode is open-drain. */
 } rtcio_ll_out_mode_t;
+
+/**
+ * @brief Select a RTC IOMUX function for the RTC IO
+ *
+ * @param rtcio_num The index of rtcio. 0 ~ MAX(rtcio).
+ * @param func Function to assign to the pin
+ */
+static inline void rtcio_ll_iomux_func_sel(int rtcio_num, int func)
+{
+    LP_IO.gpio[rtcio_num].mcu_sel = func;
+}
 
 /**
  * @brief Select the rtcio function.
@@ -58,14 +67,14 @@ typedef enum {
  */
 static inline void rtcio_ll_function_select(int rtcio_num, rtcio_ll_func_t func)
 {
-    if (func == RTCIO_FUNC_RTC) {
+    if (func == RTCIO_LL_FUNC_RTC) {
         // 0: GPIO connected to digital GPIO module. 1: GPIO connected to analog RTC module.
         uint32_t sel_mask = HAL_FORCE_READ_U32_REG_FIELD(LP_AON.gpio_mux, gpio_mux_sel);
         sel_mask |= BIT(rtcio_num);
         HAL_FORCE_MODIFY_U32_REG_FIELD(LP_AON.gpio_mux, gpio_mux_sel, sel_mask);
         //0:RTC FUNCTION 1,2,3:Reserved
-        LP_IO.gpio[rtcio_num].mcu_sel = RTCIO_LL_PIN_FUNC;
-    } else if (func == RTCIO_FUNC_DIGITAL) {
+        rtcio_ll_iomux_func_sel(rtcio_num, RTCIO_LL_PIN_FUNC);
+    } else if (func == RTCIO_LL_FUNC_DIGITAL) {
         // Clear the bit to use digital GPIO module
         uint32_t sel_mask = HAL_FORCE_READ_U32_REG_FIELD(LP_AON.gpio_mux, gpio_mux_sel);
         sel_mask &= ~BIT(rtcio_num);
@@ -136,7 +145,7 @@ static inline void rtcio_ll_input_disable(int rtcio_num)
  */
 static inline uint32_t rtcio_ll_get_level(int rtcio_num)
 {
-    return (uint32_t)(LP_IO.in.in_data_next >> rtcio_num) & 0x1;
+    return (uint32_t)(HAL_FORCE_READ_U32_REG_FIELD(LP_IO.in, in_data_next) >> rtcio_num) & 0x1;
 }
 
 /**
@@ -243,22 +252,6 @@ static inline void rtcio_ll_force_hold_disable(int rtcio_num)
 }
 
 /**
- * @brief Enable all LP IO pads hold function during Deep-sleep
- */
-static inline void rtcio_ll_deep_sleep_hold_en_all(void)
-{
-    PMU.imm.pad_hold_all.tie_high_lp_pad_hold_all = 1;
-}
-
-/**
- * @brief Disable all LP IO pads hold function during Deep-sleep
- */
-static inline void rtcio_ll_deep_sleep_hold_dis_all(void)
-{
-    PMU.imm.pad_hold_all.tie_low_lp_pad_hold_all = 1;
-}
-
-/**
  * Enable force hold function for all RTC IO pads
  *
  * Enabling HOLD function will cause the pad to lock current status, such as,
@@ -268,8 +261,7 @@ static inline void rtcio_ll_deep_sleep_hold_dis_all(void)
  */
 static inline void rtcio_ll_force_hold_all(void)
 {
-    // No such a 'hold_all' bit on C6, use bit hold instead
-    LP_AON.gpio_hold0.gpio_hold0 |= RTCIO_LL_PIN_MASK_ALL;
+    PMU.imm.pad_hold_all.tie_high_lp_pad_hold_all = 1;
 }
 
 /**
@@ -279,8 +271,7 @@ static inline void rtcio_ll_force_hold_all(void)
  */
 static inline void rtcio_ll_force_unhold_all(void)
 {
-    // No such a 'hold_all' bit on C6, use bit hold instead
-    LP_AON.gpio_hold0.gpio_hold0 &= ~RTCIO_LL_PIN_MASK_ALL;
+    PMU.imm.pad_hold_all.tie_low_lp_pad_hold_all = 1;
 }
 
 /**
@@ -303,7 +294,7 @@ static inline void rtcio_ll_wakeup_enable(int rtcio_num, rtcio_ll_wake_type_t ty
 static inline void rtcio_ll_wakeup_disable(int rtcio_num)
 {
     LP_IO.pin[rtcio_num].wakeup_enable = 0;
-    LP_IO.pin[rtcio_num].int_type = RTCIO_WAKEUP_DISABLE;
+    LP_IO.pin[rtcio_num].int_type = RTCIO_LL_WAKEUP_DISABLE;
 }
 
 /**
@@ -311,9 +302,9 @@ static inline void rtcio_ll_wakeup_disable(int rtcio_num)
  *
  * @param rtcio_num The index of rtcio. 0 ~ MAX(rtcio).
  */
-static inline void rtcio_ll_enable_output_in_sleep(gpio_num_t gpio_num)
+static inline void rtcio_ll_enable_output_in_sleep(int rtcio_num)
 {
-    LP_IO.gpio[gpio_num].mcu_oe = 1;
+    LP_IO.gpio[rtcio_num].mcu_oe = 1;
 }
 
 /**
@@ -321,9 +312,9 @@ static inline void rtcio_ll_enable_output_in_sleep(gpio_num_t gpio_num)
  *
  * @param rtcio_num The index of rtcio. 0 ~ MAX(rtcio).
  */
-static inline void rtcio_ll_disable_output_in_sleep(gpio_num_t gpio_num)
+static inline void rtcio_ll_disable_output_in_sleep(int rtcio_num)
 {
-    LP_IO.gpio[gpio_num].mcu_oe = 0;
+    LP_IO.gpio[rtcio_num].mcu_oe = 0;
 }
 
 /**
@@ -331,9 +322,9 @@ static inline void rtcio_ll_disable_output_in_sleep(gpio_num_t gpio_num)
  *
  * @param rtcio_num The index of rtcio. 0 ~ MAX(rtcio).
  */
-static inline void rtcio_ll_enable_input_in_sleep(gpio_num_t gpio_num)
+static inline void rtcio_ll_enable_input_in_sleep(int rtcio_num)
 {
-    LP_IO.gpio[gpio_num].mcu_ie = 1;
+    LP_IO.gpio[rtcio_num].mcu_ie = 1;
 }
 
 /**
@@ -341,9 +332,9 @@ static inline void rtcio_ll_enable_input_in_sleep(gpio_num_t gpio_num)
  *
  * @param rtcio_num The index of rtcio. 0 ~ MAX(rtcio).
  */
-static inline void rtcio_ll_disable_input_in_sleep(gpio_num_t gpio_num)
+static inline void rtcio_ll_disable_input_in_sleep(int rtcio_num)
 {
-    LP_IO.gpio[gpio_num].mcu_ie = 0;
+    LP_IO.gpio[rtcio_num].mcu_ie = 0;
 }
 
 /**
@@ -351,9 +342,9 @@ static inline void rtcio_ll_disable_input_in_sleep(gpio_num_t gpio_num)
  *
  * @param rtcio_num The index of rtcio. 0 ~ MAX(rtcio).
  */
-static inline void rtcio_ll_enable_sleep_setting(gpio_num_t gpio_num)
+static inline void rtcio_ll_enable_sleep_setting(int rtcio_num)
 {
-    LP_IO.gpio[gpio_num].slp_sel = 1;
+    LP_IO.gpio[rtcio_num].slp_sel = 1;
 }
 
 /**
@@ -361,9 +352,39 @@ static inline void rtcio_ll_enable_sleep_setting(gpio_num_t gpio_num)
  *
  * @param rtcio_num The index of rtcio. 0 ~ MAX(rtcio).
  */
-static inline void rtcio_ll_disable_sleep_setting(gpio_num_t gpio_num)
+static inline void rtcio_ll_disable_sleep_setting(int rtcio_num)
 {
-    LP_IO.gpio[gpio_num].slp_sel = 0;
+    LP_IO.gpio[rtcio_num].slp_sel = 0;
+}
+
+/**
+ * @brief Get the status of whether an IO is used for sleep wake-up.
+ *
+ * @param rtcio_num The index of rtcio. 0 ~ MAX(rtcio).
+ * @return True if the pin is enabled to wake up from deep-sleep
+ */
+static inline bool rtcio_ll_wakeup_is_enabled(int rtcio_num)
+{
+    HAL_ASSERT(rtcio_num >= 0 && rtcio_num < SOC_RTCIO_PIN_COUNT && "io does not support deep sleep wake-up function");
+    return LP_IO.pin[rtcio_num].wakeup_enable;
+}
+
+/**
+ * @brief Get the rtc io interrupt status
+ *
+ * @return  bit 0~7 corresponding to 0 ~ SOC_RTCIO_PIN_COUNT.
+ */
+static inline  uint32_t rtcio_ll_get_interrupt_status(void)
+{
+    return (uint32_t)HAL_FORCE_READ_U32_REG_FIELD(LP_IO.status, status_interrupt);
+}
+
+/**
+ * @brief Clear all LP IO pads status
+ */
+static inline  void rtcio_ll_clear_interrupt_status(void)
+{
+    HAL_FORCE_MODIFY_U32_REG_FIELD(LP_IO.status_w1tc, status_w1tc, 0xff);
 }
 
 #ifdef __cplusplus

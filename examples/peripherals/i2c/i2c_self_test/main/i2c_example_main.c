@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
@@ -265,7 +265,7 @@ static void i2c_test_task(void *arg)
             printf("====TASK[%d] Master read ====\n", task_idx);
             disp_buf(data_rd, d_size);
         } else {
-            ESP_LOGW(TAG, "TASK[%d] %s: Master read slave error, IO not connected...\n",
+            ESP_LOGW(TAG, "TASK[%d] %s: Master read slave error, IO not connected...",
                      task_idx, esp_err_to_name(ret));
         }
         xSemaphoreGive(print_mux);
@@ -280,7 +280,7 @@ static void i2c_test_task(void *arg)
         ret = i2c_master_write_slave(I2C_MASTER_NUM, data_wr, RW_TEST_LENGTH);
         if (ret == ESP_OK) {
             size = i2c_slave_read_buffer(I2C_SLAVE_NUM, data, RW_TEST_LENGTH, 1000 / portTICK_PERIOD_MS);
-        }
+    }
         if (ret == ESP_ERR_TIMEOUT) {
             ESP_LOGE(TAG, "I2C Timeout");
         } else if (ret == ESP_OK) {
@@ -292,7 +292,7 @@ static void i2c_test_task(void *arg)
             printf("----TASK[%d] Slave read: [%d] bytes ----\n", task_idx, size);
             disp_buf(data, size);
         } else {
-            ESP_LOGW(TAG, "TASK[%d] %s: Master write slave error, IO not connected....\n",
+            ESP_LOGW(TAG, "TASK[%d] %s: Master write slave error, IO not connected....",
                      task_idx, esp_err_to_name(ret));
         }
         xSemaphoreGive(print_mux);

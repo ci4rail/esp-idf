@@ -44,6 +44,8 @@
 #include "task.h"
 #include "queue.h"
 #include "timers.h"
+/* Include private IDF API additions for critical thread safety macros */
+#include "esp_private/freertos_idf_additions_priv.h"
 
 #if ( INCLUDE_xTimerPendFunctionCall == 1 ) && ( configUSE_TIMERS == 0 )
     #error configUSE_TIMERS must be set to 1 to make the xTimerPendFunctionCall() function available.
@@ -510,6 +512,30 @@
         xReturn = listGET_LIST_ITEM_VALUE( &( pxTimer->xTimerListItem ) );
         return xReturn;
     }
+/*-----------------------------------------------------------*/
+
+    #if ( configSUPPORT_STATIC_ALLOCATION == 1 )
+        BaseType_t xTimerGetStaticBuffer( TimerHandle_t xTimer,
+                                          StaticTimer_t ** ppxTimerBuffer )
+        {
+            BaseType_t xReturn;
+            Timer_t * pxTimer = xTimer;
+
+            configASSERT( ppxTimerBuffer != NULL );
+
+            if( ( pxTimer->ucStatus & tmrSTATUS_IS_STATICALLY_ALLOCATED ) != 0 )
+            {
+                *ppxTimerBuffer = ( StaticTimer_t * ) pxTimer;
+                xReturn = pdTRUE;
+            }
+            else
+            {
+                xReturn = pdFALSE;
+            }
+
+            return xReturn;
+        }
+    #endif /* configSUPPORT_STATIC_ALLOCATION */
 /*-----------------------------------------------------------*/
 
     const char * pcTimerGetName( TimerHandle_t xTimer ) /*lint !e971 Unqualified char types are allowed for strings and single characters only. */

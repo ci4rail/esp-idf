@@ -4,12 +4,17 @@ set(includes "include" "interface" "${target}/include" "deprecated/include")
 
 set(srcs "adc_cali.c"
          "adc_cali_curve_fitting.c"
-         "adc_oneshot.c"
-         "adc_common.c"
          "deprecated/esp_adc_cal_common_legacy.c")
+
+if(CONFIG_SOC_ADC_SUPPORTED)
+    list(APPEND srcs "adc_oneshot.c" "adc_common.c")
+endif()
 
 if(CONFIG_SOC_ADC_DMA_SUPPORTED)
     list(APPEND srcs "adc_continuous.c")
+    if(CONFIG_SOC_ADC_MONITOR_SUPPORTED)
+        list(APPEND srcs "adc_monitor.c")
+    endif()
 endif()
 
 if(CONFIG_SOC_ADC_DIG_IIR_FILTER_SUPPORTED)

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2020-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2020-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -19,6 +19,8 @@
 #include "soc/i2s_periph.h"
 #include "soc/i2s_struct.h"
 #include "hal/i2s_types.h"
+#include "hal/hal_utils.h"
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,8 +32,8 @@ extern "C" {
 #define I2S_LL_AD_BCK_FACTOR           (2)
 #define I2S_LL_PDM_BCK_FACTOR          (64)
 
-#define I2S_LL_MCLK_DIVIDER_BIT_WIDTH  (6)
-#define I2S_LL_MCLK_DIVIDER_MAX        ((1 << I2S_LL_MCLK_DIVIDER_BIT_WIDTH) - 1)
+#define I2S_LL_CLK_FRAC_DIV_N_MAX  256 // I2S_MCLK = I2S_SRC_CLK / (N + b/a), the N register is 8 bit-width
+#define I2S_LL_CLK_FRAC_DIV_AB_MAX 64  // I2S_MCLK = I2S_SRC_CLK / (N + b/a), the a/b register is 6 bit-width
 
 #define I2S_LL_BCK_MAX_PRESCALE   (64)
 
@@ -47,13 +49,6 @@ extern "C" {
 
 #define I2S_LL_PLL_F160M_CLK_FREQ   (160 * 1000000) // PLL_F160M_CLK: 160MHz
 #define I2S_LL_DEFAULT_PLL_CLK_FREQ     I2S_LL_PLL_F160M_CLK_FREQ    // The default PLL clock frequency while using I2S_CLK_SRC_DEFAULT
-
-/* I2S clock configuration structure */
-typedef struct {
-    uint16_t mclk_div; // I2S module clock divider, Fmclk = Fsclk /(mclk_div+b/a)
-    uint16_t a;
-    uint16_t b;        // The decimal part of module clock divider, the decimal is: b/a
-} i2s_ll_mclk_div_t;
 
 /**
  * @brief Enable DMA descriptor owner check
@@ -286,54 +281,6 @@ static inline void i2s_ll_tx_set_bck_div_num(i2s_dev_t *hw, uint32_t val)
 }
 
 /**
- * @brief Configure I2S TX module clock divider
- * @note mclk on ESP32 is shared by both TX and RX channel
- *
- * @param hw Peripheral I2S hardware instance address.
- * @param sclk system clock
- * @param mclk module clock
- * @param mclk_div integer part of the division from sclk to mclk
- */
-static inline void i2s_ll_tx_set_mclk(i2s_dev_t *hw, uint32_t sclk, uint32_t mclk, uint32_t mclk_div)
-{
-    int ma = 0;
-    int mb = 0;
-    int denominator = 1;
-    int numerator = 0;
-
-    uint32_t freq_diff = abs((int)sclk - (int)(mclk * mclk_div));
-    if (!freq_diff) {
-        goto finish;
-    }
-    float decimal = freq_diff / (float)mclk;
-    // Carry bit if the decimal is greater than 1.0 - 1.0 / (63.0 * 2) = 125.0 / 126.0
-    if (decimal > 125.0 / 126.0) {
-        mclk_div++;
-        goto finish;
-    }
-    uint32_t min = ~0;
-    for (int a = 2; a <= I2S_LL_MCLK_DIVIDER_MAX; a++) {
-        int b = (int)(a * (freq_diff / (double)mclk) + 0.5);
-        ma = freq_diff * a;
-        mb = mclk * b;
-        if (ma == mb) {
-            denominator = a;
-            numerator = b;
-            goto finish;
-        }
-        if (abs((mb - ma)) < min) {
-            denominator = a;
-            numerator = b;
-            min = abs(mb - ma);
-        }
-    }
-finish:
-    HAL_FORCE_MODIFY_U32_REG_FIELD(hw->clkm_conf, clkm_div_num, mclk_div);
-    hw->clkm_conf.clkm_div_b = numerator;
-    hw->clkm_conf.clkm_div_a = denominator;
-}
-
-/**
  * @brief Configure I2S module clock divider
  * @note mclk on ESP32 is shared by both TX and RX channel
  *       mclk = sclk / (mclk_div + b/a)
@@ -348,6 +295,23 @@ static inline void i2s_ll_set_raw_mclk_div(i2s_dev_t *hw, uint32_t mclk_div, uin
     HAL_FORCE_MODIFY_U32_REG_FIELD(hw->clkm_conf, clkm_div_num, mclk_div);
     hw->clkm_conf.clkm_div_b = b;
     hw->clkm_conf.clkm_div_a = a;
+}
+
+/**
+ * @brief Configure I2S TX module clock divider
+ * @note mclk on ESP32 is shared by both TX and RX channel
+ *
+ * @param hw Peripheral I2S hardware instance address.
+ * @param mclk_div The mclk division coefficients
+ */
+static inline void i2s_ll_tx_set_mclk(i2s_dev_t *hw, const hal_utils_clk_div_t *mclk_div)
+{
+    /* Workaround for inaccurate clock while switching from a relatively low sample rate to a high sample rate
+     * Set to particular coefficients first then update to the target coefficients,
+     * otherwise the clock division might be inaccurate.
+     * the general idea is to set a value that unlike to calculate from the regular decimal */
+    i2s_ll_set_raw_mclk_div(hw, 7, 47, 3);
+    i2s_ll_set_raw_mclk_div(hw, mclk_div->integer, mclk_div->denominator, mclk_div->numerator);
 }
 
 /**
@@ -366,13 +330,12 @@ static inline void i2s_ll_rx_set_bck_div_num(i2s_dev_t *hw, uint32_t val)
  * @note mclk on ESP32 is shared by both TX and RX channel
  *
  * @param hw Peripheral I2S hardware instance address.
- * @param sclk system clock
- * @param mclk module clock
- * @param mclk_div integer part of the division from sclk to mclk
+ * @param mclk_div The mclk division coefficients
  */
-static inline void i2s_ll_rx_set_mclk(i2s_dev_t *hw, uint32_t sclk, uint32_t mclk, uint32_t mclk_div)
+static inline void i2s_ll_rx_set_mclk(i2s_dev_t *hw, const hal_utils_clk_div_t *mclk_div)
 {
-    i2s_ll_tx_set_mclk(hw, sclk, mclk, mclk_div);
+    // TX and RX channel on ESP32 shares a same mclk
+    i2s_ll_tx_set_mclk(hw, mclk_div);
 }
 
 /**
@@ -384,11 +347,13 @@ static inline void i2s_ll_rx_set_mclk(i2s_dev_t *hw, uint32_t sclk, uint32_t mcl
  */
 static inline void i2s_ll_enable_intr(i2s_dev_t *hw, uint32_t mask, bool en)
 {
+    uint32_t int_ena_mask = hw->int_ena.val;
     if (en) {
-        hw->int_ena.val |= mask;
+        int_ena_mask |= mask;
     } else {
-        hw->int_ena.val &= ~mask;
+        int_ena_mask &= ~mask;
     }
+    hw->int_ena.val = int_ena_mask;
 }
 
 /**

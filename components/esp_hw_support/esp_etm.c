@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -27,6 +27,13 @@
 #include "esp_private/etm_interface.h"
 
 #define ETM_MEM_ALLOC_CAPS   MALLOC_CAP_DEFAULT
+
+#if CONFIG_IDF_TARGET_ESP32P4
+// Reset and Clock Control registers are mixing with other peripherals, so we need to use a critical section
+#define ETM_RCC_ATOMIC() PERIPH_RCC_ATOMIC()
+#else
+#define ETM_RCC_ATOMIC()
+#endif
 
 static const char *TAG = "etm";
 
@@ -78,10 +85,12 @@ static etm_group_t *etm_acquire_group_handle(int group_id)
             // initialize ETM group members
             group->group_id = group_id;
             group->spinlock = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
-            // enable APB access ETM registers
-            // if we have multiple ETM groups/instances, we assume the peripheral defines are continuous
-            periph_module_enable(PERIPH_ETM_MODULE + group_id);
-            periph_module_reset(PERIPH_ETM_MODULE + group_id);
+            // enable bus clock for the ETM registers
+            ETM_RCC_ATOMIC() {
+                etm_ll_enable_bus_clock(group_id, true);
+                etm_ll_reset_register(group_id);
+            }
+
             // initialize HAL context
             etm_hal_init(&group->hal);
         }
@@ -112,7 +121,10 @@ static void etm_release_group_handle(etm_group_t *group)
         assert(s_platform.groups[group_id]);
         do_deinitialize = true;
         s_platform.groups[group_id] = NULL; // deregister from platform
-        periph_module_disable(PERIPH_ETM_MODULE + group_id);
+        // disable the bus clock for the ETM registers
+        ETM_RCC_ATOMIC() {
+            etm_ll_enable_bus_clock(group_id, false);
+        }
     }
     _lock_release(&s_platform.mutex);
 
@@ -145,7 +157,7 @@ static esp_err_t etm_chan_register_to_group(esp_etm_channel_t *chan)
         } else {
             chan->chan_id = chan_id;
             chan->group = group;
-            break;;
+            break;
         }
     }
     ESP_RETURN_ON_FALSE(chan_id != -1, ESP_ERR_NOT_FOUND, TAG, "no free channel");

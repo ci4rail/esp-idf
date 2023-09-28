@@ -506,6 +506,11 @@ FORCE_INLINE_ATTR bool pmu_ll_hp_is_sleep_reject(pmu_dev_t *hw)
     return (hw->hp_ext.int_raw.reject == 1);
 }
 
+FORCE_INLINE_ATTR void pmu_ll_hp_clear_sw_intr_status(pmu_dev_t *hw)
+{
+    hw->hp_ext.int_clr.sw = 1;
+}
+
 FORCE_INLINE_ATTR void pmu_ll_hp_clear_wakeup_intr_status(pmu_dev_t *hw)
 {
     hw->hp_ext.int_clr.wakeup = 1;
@@ -659,6 +664,11 @@ FORCE_INLINE_ATTR void pmu_ll_hp_set_digital_power_up_wait_cycle(pmu_dev_t *hw, 
 FORCE_INLINE_ATTR uint32_t pmu_ll_hp_get_digital_power_up_wait_cycle(pmu_dev_t *hw)
 {
     return hw->power.wait_timer0.powerup_timer;
+}
+
+static inline uint32_t pmu_ll_get_sysclk_sleep_select_state(pmu_dev_t *hw)
+{
+    return hw->clk_state0.sysclk_slp_sel;
 }
 
 #ifdef __cplusplus

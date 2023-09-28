@@ -1,4 +1,4 @@
-Optional features for flash
+Optional Features for Flash
 ===========================
 
 Some features are not supported on all ESP chips and Flash chips. You can check the list below for more information.
@@ -15,7 +15,7 @@ Some features are not supported on all ESP chips and Flash chips. You can check 
 
 .. note::
 
-    - The features listed above needs to be supported by both esp chips and flash chips.
+    - The features listed above needs to be supported by both ESP chips and flash chips.
 
     - If you are using an official Espressif modules/SiP. Some of the modules/SiPs always support the feature, in this case you can see these features listed in the datasheet. Otherwise please contact `Espressif's business team <https://www.espressif.com/en/contact-us/sales-questions>`_ to know if we can supply such products for you.
 
@@ -23,24 +23,33 @@ Some features are not supported on all ESP chips and Flash chips. You can check 
 
 .. attention::
 
-    This document only shows that IDF code has supported the features of those flash chips. It's not a list of stable flash chips certified by Espressif. If you build your own hardware from flash chips with your own brought flash chips (even with flash listed in this page), you need to validate the reliability of flash chips yourself.
+    This document only shows that ESP-IDF code has supported the features of those flash chips. It is not a list of stable flash chips certified by Espressif. If you build your own hardware from flash chips with your own brought flash chips (even with flash listed in this page), you need to validate the reliability of flash chips yourself.
+
+.. _auto-suspend-intro:
 
 Auto Suspend & Resume
 ---------------------
 
-.. only:: esp32c3
-
-    You can refer to :ref:`auto-suspend` for more information about this feature. The support list is as follows.
+The support list is as follows.
 
 ESP Chips List:
 
 1. ESP32C3
+2. ESP32C2
+3. ESP32S3
 
 Flash Chips List:
 
 1. XM25QxxC series.
+2. GD25QxxE series.
 
-Flash unique ID
+.. only:: esp32c3 or esp32c2 or esp32s3
+
+    .. attention::
+
+        There are multiple limitations about the auto-suspend feature, please do read :ref:`auto-suspend` for more information before you enable this feature.
+
+Flash Unique ID
 ---------------
 
 Unique ID is not flash id, which means flash has 64-Bit unique ID for each device. The instruction to read the unique ID (4Bh) accesses a factory-set read-only 64-bit number that is unique to each flash device. This ID number helps you to recognize each single device. Not all flash vendors support this feature. If you try to read the unique ID on a chip which does not have this feature, the behavior is not determined. The support list is as follows.
@@ -59,16 +68,18 @@ Flash Chips List:
 6. XMC
 7. BOYA
 
-High performance mode
+.. _hpm-doc:
+
+High Performance Mode
 ---------------------
 
 .. note::
 
     This section is provided for Dual mode (DOUT/DIO) and Quad mode (QIO/QOUT) flash chips. Octal flash used on ESP-chips support High performance mode by default so far, you can refer to the octal flash support list below.
 
-High performance mode (HPM) means that the SPI1 and flash chip works under high frequency. Usually, when the operating frequency of the flash is greater than 80MHz, it is considered that the flash works under HPM. As far as we acknowledged, flash chips have more than two different coping strategies when flash work under HPM. For some flash chips, HPM is controlled by high performance flag (HPF) in status register and for some flash chips, HPM is controlled by dummy cycle bit.
+High performance mode (HPM) means that the SPI1 and flash chip works under high frequency. Usually, when the operating frequency of the flash is greater than 80 MHz, it is considered that the flash works under HPM. As far as we acknowledged, flash chips have more than two different coping strategies when flash work under HPM. For some flash chips, HPM is controlled by high performance flag (HPF) in status register and for some flash chips, HPM is controlled by dummy cycle bit.
 
-For following conditions， IDF start code deals with HPM internally.
+For following conditions, ESP-IDF start code deals with HPM internally.
 
 ESP Chips List:
 
@@ -83,7 +94,10 @@ Flash Chips (name & ID) List:
 
     It is hard to create several strategies to cover all situations, so all flash chips using HPM need to be supported explicitly. Therefore, if you try to use a flash not listed as supported under high performance mode, it might cause some error. So, when you try to use the flash chip beyond supported list, please test properly.
 
-OPI flash support
+
+.. _oct-flash-doc:
+
+OPI flash Support
 -----------------
 
 OPI flash means that the flash chip supports octal peripheral interface, which has octal I/O pins. Different octal flash has different configurations and different commands. Hence, it is necessary to carefully check the support list.
@@ -102,6 +116,9 @@ Flash Chips List:
 
 1. MX25UM25645G
 
+
+.. _32-bit-flash-doc:
+
 32-bit Address Flash Chips
 --------------------------
 
@@ -115,3 +132,11 @@ Flash Chips List:
 
 1. W25Q256
 2. GD25Q256
+
+.. important::
+
+    Over 16 MBytes space on flash mentioned above can be only used for ``data saving``, like file system. If your data/instructions over 16 MBytes spaces need to be mapped to MMU (so as to be accessed by the CPU), please enable the config ``IDF_EXPERIMENTAL_FEATURES`` and ``CONFIG_SPI_FLASH_32BIT_ADDRESS`` and read the limitations following:
+
+    1. This option only valid for 4-line flash. Octal flash does not need this.
+    2. Only MMU on ESP chip that supports mapping to a range over 16 MB memory supports this config. (Only ESP32S3 supports this up to now)
+    3. This option is experimental, which means it can not use on all flash chips stable, for more information, please contact Espressif Business support.

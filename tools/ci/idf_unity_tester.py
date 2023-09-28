@@ -1,5 +1,7 @@
 # SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: Apache-2.0
+import logging
+import os
 import time
 from multiprocessing import Manager, Process, Semaphore
 from multiprocessing.managers import SyncManager
@@ -264,7 +266,7 @@ class MultiDevCaseTester(BaseTester):
         for retry in range(self.retry_times):
             dut.write(str(case.index))
             try:
-                dut.expect_exact('Running {}...'.format(case.name), timeout=1)
+                dut.expect_exact('Running {}...'.format(case.name), timeout=10)
                 break
             except TIMEOUT as e:
                 if retry >= self.retry_times - 1:
@@ -304,6 +306,13 @@ class MultiDevCaseTester(BaseTester):
                     break
 
         # The case finished, release the semaphore to unblock the '_wait_multi_dev_case_finish'
+        #
+        # Manually to create the real test case junit report
+        # The child process attributes won't be reflected to the parent one.
+        junit_report = os.path.splitext(dut.logfile)[0] + f'_{case.index}_{sub_case_index}.xml'
+        dut.testsuite.dump(junit_report)
+        logging.info(f'Created unity output junit report: {junit_report}')
+
         dev_res.sem.release()
 
     def run_all_multi_dev_cases(self, reset: bool = False, timeout: int = 60) -> None:
@@ -334,6 +343,8 @@ class MultiDevCaseTester(BaseTester):
             if reset:
                 for dev_res in self.group:
                     dev_res.dut.serial.hard_reset()
+                # delay a few seconds to make sure the duts are ready.
+                time.sleep(5)
             for sub_case in case.subcases:
                 if isinstance(sub_case['index'], str):
                     index = int(sub_case['index'], 10)

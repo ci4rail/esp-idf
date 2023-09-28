@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -7,6 +7,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdatomic.h>
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "esp_err.h"
@@ -34,6 +35,8 @@ extern "C" {
 #define GPTIMER_INTR_ALLOC_FLAGS    ESP_INTR_FLAG_INTRDISABLED
 #endif
 
+#define GPTIMER_ALLOW_INTR_PRIORITY_MASK ESP_INTR_FLAG_LOWMED
+
 #define GPTIMER_PM_LOCK_NAME_LEN_MAX 16
 
 typedef struct gptimer_t gptimer_t;
@@ -45,8 +48,11 @@ typedef struct gptimer_group_t {
 } gptimer_group_t;
 
 typedef enum {
-    GPTIMER_FSM_INIT,
-    GPTIMER_FSM_ENABLE,
+    GPTIMER_FSM_INIT,        // Timer is initialized, but not enabled
+    GPTIMER_FSM_ENABLE,      // Timer is enabled, but is not running
+    GPTIMER_FSM_ENABLE_WAIT, // Timer is in the middle of the enable process (Intermediate state)
+    GPTIMER_FSM_RUN,         // Timer is in running
+    GPTIMER_FSM_RUN_WAIT,    // Timer is in the middle of the run process (Intermediate state)
 } gptimer_fsm_t;
 
 struct gptimer_t {
@@ -57,7 +63,8 @@ struct gptimer_t {
     uint64_t alarm_count;
     gptimer_count_direction_t direction;
     timer_hal_context_t hal;
-    gptimer_fsm_t fsm;
+    _Atomic gptimer_fsm_t fsm;
+    int intr_priority;
     intr_handle_t intr;
     portMUX_TYPE spinlock; // to protect per-timer resources concurrent accessed by task and ISR handler
     gptimer_alarm_cb_t on_alarm;

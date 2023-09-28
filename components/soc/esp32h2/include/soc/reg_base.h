@@ -40,6 +40,7 @@
 #define DR_REG_PAU_BASE                         0x60093000
 #define DR_REG_LPPERI_BASE                      0x600B2800
 #define DR_REG_GPIO_BASE                        0x60091000
+#define DR_REG_GPIO_EXT_BASE                    0x60091f00
 #define DR_REG_MEM_ACS_MONITOR_BASE             0x60092000
 #define DR_REG_REGDMA_BASE                      0x60093000
 #define DR_REG_HP_SYSTEM_BASE                   0x60095000
@@ -67,4 +68,4 @@
 #define DR_REG_INTPRI_BASE                      0x600C5000
 #define DR_REG_CACHE_BASE                       0x600C8000
 
-#define PWDET_CONF_REG                          0x600A8010
+#define PWDET_CONF_REG                          0x600A0810

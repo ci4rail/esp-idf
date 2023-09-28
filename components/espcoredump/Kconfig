@@ -14,11 +14,9 @@ menu "Core dump"
 
         config ESP_COREDUMP_ENABLE_TO_FLASH
             bool "Flash"
-            select FREERTOS_ENABLE_TASK_SNAPSHOT
             select ESP_COREDUMP_ENABLE
         config ESP_COREDUMP_ENABLE_TO_UART
             bool "UART"
-            select FREERTOS_ENABLE_TASK_SNAPSHOT
             select ESP_COREDUMP_ENABLE
         config ESP_COREDUMP_ENABLE_TO_NONE
             bool "None"
@@ -62,6 +60,14 @@ menu "Core dump"
         default F
         help
             Enables/disable core dump module.
+
+    config ESP_COREDUMP_LOGS
+        bool "Enable coredump logs for debugging"
+        depends on ESP_COREDUMP_ENABLE
+        default y
+        help
+            Enable/disable coredump logs. Logs strings from espcoredump component are
+            placed in DRAM. Disabling these helps to save ~5KB of internal memory.
 
     config ESP_COREDUMP_MAX_TASKS_NUM
         int "Maximum number of tasks"

@@ -85,9 +85,15 @@ menu "Driver Configurations"
         config SPI_MASTER_ISR_IN_IRAM
             bool "Place SPI master ISR function into IRAM"
             default y
+            depends on !HEAP_PLACE_FUNCTION_INTO_FLASH
             select PERIPH_CTRL_FUNC_IN_IRAM
+            select HAL_SPI_MASTER_FUNC_IN_IRAM
             help
                 Place the SPI master ISR in to IRAM to avoid possible cache miss.
+
+                Enabling this configuration is possible only when HEAP_PLACE_FUNCTION_INTO_FLASH
+                is disabled since the spi master uses can allocate transactions buffers into DMA
+                memory section using the heap component API that ipso facto has to be placed in IRAM.
 
                 Also you can forbid the ISR being disabled during flash writing
                 access, by add ESP_INTR_FLAG_IRAM when initializing the driver.
@@ -109,6 +115,7 @@ menu "Driver Configurations"
             bool "Place SPI slave ISR function into IRAM"
             default y
             select PERIPH_CTRL_FUNC_IN_IRAM
+            select HAL_SPI_SLAVE_FUNC_IN_IRAM
             help
                 Place the SPI slave ISR in to IRAM to avoid possible cache miss.
 
@@ -123,7 +130,6 @@ menu "Driver Configurations"
         config TWAI_ISR_IN_IRAM
             bool "Place TWAI ISR function into IRAM"
             default n
-            select PERIPH_CTRL_FUNC_IN_IRAM if TWAI_ERRATA_FIX_RX_FRAME_INVALID || TWAI_ERRATA_FIX_RX_FIFO_CORRUPT
             help
                 Place the TWAI ISR in to IRAM. This will allow the ISR to avoid
                 cache misses, and also be able to run whilst the cache is disabled
@@ -208,19 +214,17 @@ menu "Driver Configurations"
                 Wether to enable the debug log message for temperature sensor driver.
                 Note that, this option only controls the temperature sensor driver log, won't affect other drivers.
 
-    endmenu # TEMP_SENSOR Configuration
-
-    menu "UART Configuration"
-
-        config UART_ISR_IN_IRAM
-            bool "Place UART ISR function into IRAM"
-            depends on !RINGBUF_PLACE_ISR_FUNCTIONS_INTO_FLASH
+        config TEMP_SENSOR_ISR_IRAM_SAFE
+            depends on SOC_TEMPERATURE_SENSOR_INTR_SUPPORT
+            bool "Temperature sensor ISR IRAM-Safe"
             default n
             help
-                If this option is not selected, UART interrupt will be disabled for a long time and
-                may cause data lost when doing spi flash operation.
+                Ensure the Temperature Sensor interrupt is IRAM-Safe by allowing the interrupt handler to be
+                executable when the cache is disabled (e.g. SPI Flash write).
 
-    endmenu # UART Configuration
+    endmenu # TEMP_SENSOR Configuration
+
+    orsource "./uart/Kconfig.uart"
 
     menu "GPIO Configuration"
         config GPIO_ESP32_SUPPORT_SWITCH_SLP_PULL
@@ -266,131 +270,38 @@ menu "Driver Configurations"
                 Note that, this option only controls the SDM driver log, won't affect other drivers.
     endmenu # Sigma Delta Modulator Configuration
 
-    menu "GPTimer Configuration"
-        config GPTIMER_CTRL_FUNC_IN_IRAM
-            bool "Place GPTimer control functions into IRAM"
+    menu "Analog Comparator Configuration"
+        depends on SOC_ANA_CMPR_SUPPORTED
+        config ANA_CMPR_ISR_IRAM_SAFE
+            bool "Analog comparator ISR IRAM-Safe"
             default n
             help
-                Place GPTimer control functions (like start/stop) into IRAM,
-                so that these functions can be IRAM-safe and able to be called in the other IRAM interrupt context.
-                Enabling this option can improve driver performance as well.
-
-        config GPTIMER_ISR_IRAM_SAFE
-            bool "GPTimer ISR IRAM-Safe"
-            default n
-            help
-                Ensure the GPTimer interrupt is IRAM-Safe by allowing the interrupt handler to be
+                Ensure the Analog Comparator interrupt is IRAM-Safe by allowing the interrupt handler to be
                 executable when the cache is disabled (e.g. SPI Flash write).
 
-        config GPTIMER_SUPPRESS_DEPRECATE_WARN
-            bool "Suppress legacy driver deprecated warning"
+        config ANA_CMPR_CTRL_FUNC_IN_IRAM
+            bool "Place Analog Comparator control functions into IRAM"
             default n
             help
-                Wether to suppress the deprecation warnings when using legacy timer group driver (driver/timer.h).
-                If you want to continue using the legacy driver, and don't want to see related deprecation warnings,
-                you can enable this option.
-
-        config GPTIMER_ENABLE_DEBUG_LOG
-            bool "Enable debug log"
-            default n
-            help
-                Wether to enable the debug log message for GPTimer driver.
-                Note that, this option only controls the GPTimer driver log, won't affect other drivers.
-    endmenu # GPTimer Configuration
-
-    menu "PCNT Configuration"
-        depends on SOC_PCNT_SUPPORTED
-        config PCNT_CTRL_FUNC_IN_IRAM
-            bool "Place PCNT control functions into IRAM"
-            default n
-            help
-                Place PCNT control functions (like start/stop) into IRAM,
-                so that these functions can be IRAM-safe and able to be called in the other IRAM interrupt context.
+                Place Analog Comparator control functions (like ana_cmpr_set_internal_reference) into IRAM,
+                so that these functions can be IRAM-safe and able to be called in an IRAM interrupt context.
                 Enabling this option can improve driver performance as well.
 
-        config PCNT_ISR_IRAM_SAFE
-            bool "PCNT ISR IRAM-Safe"
-            default n
-            help
-                Ensure the PCNT interrupt is IRAM-Safe by allowing the interrupt handler to be
-                executable when the cache is disabled (e.g. SPI Flash write).
-
-        config PCNT_SUPPRESS_DEPRECATE_WARN
-            bool "Suppress legacy driver deprecated warning"
-            default n
-            help
-                Wether to suppress the deprecation warnings when using legacy PCNT driver (driver/pcnt.h).
-                If you want to continue using the legacy driver, and don't want to see related deprecation warnings,
-                you can enable this option.
-
-        config PCNT_ENABLE_DEBUG_LOG
+        config ANA_CMPR_ENABLE_DEBUG_LOG
             bool "Enable debug log"
             default n
             help
-                Wether to enable the debug log message for PCNT driver.
-                Note that, this option only controls the PCNT driver log, won't affect other drivers.
-    endmenu # PCNT Configuration
+                Wether to enable the debug log message for Analog Comparator driver.
+                Note that, this option only controls the Analog Comparator driver log, won't affect other drivers.
+    endmenu # Analog Comparator Configuration
 
-    menu "RMT Configuration"
-        depends on SOC_RMT_SUPPORTED
-        config RMT_ISR_IRAM_SAFE
-            bool "RMT ISR IRAM-Safe"
-            default n
-            select GDMA_ISR_IRAM_SAFE if SOC_RMT_SUPPORT_DMA     # RMT basic functionality relies on GDMA callback
-            select GDMA_CTRL_FUNC_IN_IRAM if SOC_RMT_SUPPORT_DMA # RMT needs to restart the GDMA in the interrupt
-            help
-                Ensure the RMT interrupt is IRAM-Safe by allowing the interrupt handler to be
-                executable when the cache is disabled (e.g. SPI Flash write).
+    orsource "./gptimer/Kconfig.gptimer"
 
-        config RMT_SUPPRESS_DEPRECATE_WARN
-            bool "Suppress legacy driver deprecated warning"
-            default n
-            help
-                Wether to suppress the deprecation warnings when using legacy rmt driver (driver/rmt.h).
-                If you want to continue using the legacy driver, and don't want to see related deprecation warnings,
-                you can enable this option.
+    orsource "./pcnt/Kconfig.pcnt"
 
-        config RMT_ENABLE_DEBUG_LOG
-            bool "Enable debug log"
-            default n
-            help
-                Wether to enable the debug log message for RMT driver.
-                Note that, this option only controls the RMT driver log, won't affect other drivers.
-    endmenu # RMT Configuration
+    orsource "./rmt/Kconfig.rmt"
 
-    menu "MCPWM Configuration"
-        depends on SOC_MCPWM_SUPPORTED
-        config MCPWM_ISR_IRAM_SAFE
-            bool "Place MCPWM ISR function into IRAM"
-            default n
-            help
-                This will ensure the MCPWM interrupt handle is IRAM-Safe, allow to avoid flash
-                cache misses, and also be able to run whilst the cache is disabled.
-                (e.g. SPI Flash write)
-
-        config MCPWM_CTRL_FUNC_IN_IRAM
-            bool "Place MCPWM control functions into IRAM"
-            default n
-            help
-                Place MCPWM control functions (like set_compare_value) into IRAM,
-                so that these functions can be IRAM-safe and able to be called in the other IRAM interrupt context.
-                Enabling this option can improve driver performance as well.
-
-        config MCPWM_SUPPRESS_DEPRECATE_WARN
-            bool "Suppress leagcy driver deprecated warning"
-            default n
-            help
-                Wether to suppress the deprecation warnings when using legacy MCPWM driver (driver/mcpwm.h).
-                If you want to continue using the legacy driver, and don't want to see related deprecation warnings,
-                you can enable this option.
-
-        config MCPWM_ENABLE_DEBUG_LOG
-            bool "Enable debug log"
-            default n
-            help
-                Wether to enable the debug log message for MCPWM driver.
-                Note that, this option only controls the MCPWM driver log, won't affect other drivers.
-    endmenu # MCPWM Configuration
+    orsource "./mcpwm/Kconfig.mcpwm"
 
     menu "I2S Configuration"
         depends on SOC_I2S_SUPPORTED
@@ -477,5 +388,55 @@ menu "Driver Configurations"
                 called manually from the program, enabling this option will not prevent light sleep entry even if the
                 USB Serial/JTAG is in use.
     endmenu # USB Serial/JTAG Configuration
+
+    menu "Parallel IO Configuration"
+        depends on SOC_PARLIO_SUPPORTED
+
+        config PARLIO_ENABLE_DEBUG_LOG
+            bool "Enable debug log"
+            default n
+            help
+                Wether to enable the debug log message for parallel IO driver.
+                Note that, this option only controls the parallel IO driver log, won't affect other drivers.
+
+        config PARLIO_ISR_IRAM_SAFE
+            bool "Parallel IO ISR IRAM-Safe"
+            default n
+            select GDMA_CTRL_FUNC_IN_IRAM # the driver needs to start the GDMA in the interrupt
+            help
+                Ensure the Parallel IO interrupt is IRAM-Safe by allowing the interrupt handler to be
+                executable when the cache is disabled (e.g. SPI Flash write).
+
+    endmenu # Parallel IO Configuration
+
+    menu "LEDC Configuration"
+        config LEDC_CTRL_FUNC_IN_IRAM
+            bool "Place LEDC control functions into IRAM"
+            default n
+            help
+                Place LEDC control functions (ledc_update_duty and ledc_stop) into IRAM,
+                so that these functions can be IRAM-safe and able to be called in an IRAM context.
+                Enabling this option can improve driver performance as well.
+    endmenu # LEDC Configuration
+
+    menu "I2C Configuration"
+        config I2C_ISR_IRAM_SAFE
+            bool "I2C ISR IRAM-Safe"
+            default n
+            help
+                Ensure the I2C interrupt is IRAM-Safe by allowing the interrupt handler to be
+                executable when the cache is disabled (e.g. SPI Flash write).
+                note: This cannot be used in the I2C legacy driver.
+
+        config I2C_ENABLE_DEBUG_LOG
+            bool "Enable I2C debug log"
+            default n
+            help
+                Wether to enable the debug log message for I2C driver.
+                Note that this option only controls the I2C driver log, will not affect other drivers.
+
+                note: This cannot be used in the I2C legacy driver.
+
+    endmenu # I2C Configurations
 
 endmenu  # Driver configurations

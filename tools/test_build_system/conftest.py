@@ -99,6 +99,29 @@ def test_app_copy(session_work_dir: Path, request: FixtureRequest) -> typing.Gen
 
 
 @pytest.fixture
+def test_git_template_app(session_work_dir: Path, request: FixtureRequest) -> typing.Generator[Path, None, None]:
+    copy_to = request.node.name + '_app'
+    path_to = session_work_dir / copy_to
+
+    logging.debug(f'clonning git-teplate app to {path_to}')
+    path_to.mkdir()
+    # No need to clone full repository, just single master branch
+    subprocess.run(['git', 'clone', '--single-branch', '-b', 'master', '--depth', '1', 'https://github.com/espressif/esp-idf-template.git', '.'],
+                   cwd=path_to, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    old_cwd = Path.cwd()
+    os.chdir(path_to)
+
+    yield Path(path_to)
+
+    os.chdir(old_cwd)
+
+    if should_clean_test_dir(request):
+        logging.debug('cleaning up work directory after a successful test: {}'.format(path_to))
+        shutil.rmtree(path_to, ignore_errors=True)
+
+
+@pytest.fixture
 def idf_copy(session_work_dir: Path, request: FixtureRequest) -> typing.Generator[Path, None, None]:
     copy_to = request.node.name + '_idf'
 
@@ -139,6 +162,6 @@ def fixture_default_idf_env() -> EnvDict:
 
 @pytest.fixture
 def idf_py(default_idf_env: EnvDict) -> IdfPyFunc:
-    def result(*args: str, check: bool = True) -> subprocess.CompletedProcess:
-        return run_idf_py(*args, env=default_idf_env, workdir=os.getcwd(), check=check)  # type: ignore
+    def result(*args: str, check: bool = True, input_str: typing.Optional[str] = None) -> subprocess.CompletedProcess:
+        return run_idf_py(*args, env=default_idf_env, workdir=os.getcwd(), check=check, input_str=input_str)  # type: ignore
     return result

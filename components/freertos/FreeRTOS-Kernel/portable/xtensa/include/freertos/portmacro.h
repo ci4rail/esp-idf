@@ -4,7 +4,7 @@
  *
  * SPDX-License-Identifier: MIT
  *
- * SPDX-FileContributor: 2016-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileContributor: 2016-2023 Espressif Systems (Shanghai) CO LTD
  */
 /*
  * FreeRTOS Kernel V10.4.3
@@ -209,7 +209,7 @@ static inline void vPortClearInterruptMaskFromISR(UBaseType_t prev_level);
  * - See "Critical Sections & Disabling Interrupts" in docs/api-guides/freertos-smp.rst for more details
  * - Remark: For the ESP32, portENTER_CRITICAL and portENTER_CRITICAL_ISR both alias vPortEnterCritical, meaning that
  *           either function can be called both from ISR as well as task context. This is not standard FreeRTOS
- *           behaviorr; please keep this in mind if you need any compatibility with other FreeRTOS implementations.
+ *           behavior; please keep this in mind if you need any compatibility with other FreeRTOS implementations.
  * @note [refactor-todo] Check if these comments are still true
  * ------------------------------------------------------ */
 
@@ -406,6 +406,19 @@ void vPortSetStackWatchpoint( void *pxStackStart );
  */
 FORCE_INLINE_ATTR BaseType_t xPortGetCoreID(void);
 
+// --------------------- TCB Cleanup -----------------------
+
+/**
+ * @brief TCB cleanup hook
+ *
+ * The portCLEAN_UP_TCB() macro is called in prvDeleteTCB() right before a
+ * deleted task's memory is freed. We map that macro to this internal function
+ * so that IDF FreeRTOS ports can inject some task pre-deletion operations.
+ *
+ * @note We can't use vPortCleanUpTCB() due to API compatibility issues. See
+ * CONFIG_FREERTOS_ENABLE_STATIC_TASK_CLEAN_UP. Todo: IDF-8097
+ */
+void vPortTCBPreDeleteHook( void *pxTCB );
 
 
 /* ------------------------------------------- FreeRTOS Porting Interface ----------------------------------------------
@@ -414,19 +427,10 @@ FORCE_INLINE_ATTR BaseType_t xPortGetCoreID(void);
  * - Maps to forward declared functions
  * ------------------------------------------------------------------------------------------------------------------ */
 
-// ----------------------- Memory --------------------------
-
-/**
- * @brief Task memory allocation macros
- *
- * @note Because the ROM routines don't necessarily handle a stack in external RAM correctly, we force the stack
- * memory to always be internal.
- * @note [refactor-todo] Update portable.h to match v10.4.3 to use new malloc prototypes
- */
-#define portTcbMemoryCaps               (MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT)
-#define portStackMemoryCaps             (MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT)
-#define pvPortMallocTcbMem(size)        heap_caps_malloc(size, portTcbMemoryCaps)
-#define pvPortMallocStackMem(size)      heap_caps_malloc(size, portStackMemoryCaps)
+#if CONFIG_FREERTOS_USE_KERNEL_10_5_1
+#define portGET_CORE_ID()       xPortGetCoreID()
+#define portYIELD_CORE( x )     vPortYieldOtherCore( x )
+#endif
 
 // --------------------- Interrupts ------------------------
 
@@ -537,6 +541,10 @@ extern void _frxt_setup_switch( void );     //Defined in portasm.S
 #define portALT_GET_RUN_TIME_COUNTER_VALUE(x) do {x = (uint32_t)esp_timer_get_time();} while(0)
 #endif
 
+// --------------------- TCB Cleanup -----------------------
+
+#define portCLEAN_UP_TCB( pxTCB ) vPortTCBPreDeleteHook( pxTCB )
+
 // -------------- Optimized Task Selection -----------------
 
 #if configUSE_PORT_OPTIMISED_TASK_SELECTION == 1
@@ -641,22 +649,15 @@ FORCE_INLINE_ATTR BaseType_t xPortGetCoreID(void)
 
 /* ------------------------------------------------------ Misc ---------------------------------------------------------
  * - Miscellaneous porting macros
- * - These are not port of the FreeRTOS porting interface, but are used by other FreeRTOS dependent components
+ * - These are not part of the FreeRTOS porting interface, but are used by other FreeRTOS dependent components
  * ------------------------------------------------------------------------------------------------------------------ */
-
-// -------------------- Co-Processor -----------------------
-
-#if XCHAL_CP_NUM > 0
-void vPortCleanUpCoprocArea(void *pvTCB);
-#define portCLEAN_UP_COPROC(pvTCB)      vPortCleanUpCoprocArea(pvTCB)
-#endif
 
 // -------------------- Heap Related -----------------------
 
 /**
  * @brief Checks if a given piece of memory can be used to store a task's TCB
  *
- * - Defined in port_common.c
+ * - Defined in heap_idf.c
  *
  * @param ptr Pointer to memory
  * @return true Memory can be used to store a TCB
@@ -667,7 +668,7 @@ bool xPortCheckValidTCBMem(const void *ptr);
 /**
  * @brief Checks if a given piece of memory can be used to store a task's stack
  *
- * - Defined in port_common.c
+ * - Defined in heap_idf.c
  *
  * @param ptr Pointer to memory
  * @return true Memory can be used to store a task stack
@@ -675,8 +676,8 @@ bool xPortCheckValidTCBMem(const void *ptr);
  */
 bool xPortcheckValidStackMem(const void *ptr);
 
-#define portVALID_TCB_MEM(ptr) xPortCheckValidTCBMem(ptr)
-#define portVALID_STACK_MEM(ptr) xPortcheckValidStackMem(ptr)
+#define portVALID_TCB_MEM(ptr)      xPortCheckValidTCBMem(ptr)
+#define portVALID_STACK_MEM(ptr)    xPortcheckValidStackMem(ptr)
 
 // --------------------- App-Trace -------------------------
 

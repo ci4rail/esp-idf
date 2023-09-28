@@ -1,16 +1,18 @@
 RF 共存
 ==================
+
 :link_to_translation:`en:[English]`
 
 概览
 -----
 
-{IDF_TARGET_NAME} 只支持一路 RF，Bluetooth (BT 和 BLE）和 Wi-Fi 共享这一路 RF，无法同时收发数据，因此采用时分复用的方法进行收发数据包。
+{IDF_TARGET_NAME} 只支持一路 RF，Bluetooth（BT 和 BLE）和 Wi-Fi 共享这一路 RF，无法同时收发数据，因此采用时分复用的方法进行收发数据包。
 
 
 {IDF_TARGET_NAME} 支持的共存场景
 ------------------------------------
-.. only:: esp32c3 or esp32s3 or esp32
+
+.. only:: esp32c3 or esp32s3 or esp32 or esp32c6
 
   .. table:: 表 1  Wi-Fi 和 BLE 共存支持功能
 
@@ -73,7 +75,8 @@ RF 共存
   Y：支持且性能稳定。
   C1：不能保证性能处于稳定状态。
   X：不支持。
-  S：在STA模式下支持且性能稳定，否则不支持。
+  S：在 STA 模式下支持且性能稳定，否则不支持。
+
 
 共存机制与策略
 ----------------------------------
@@ -111,6 +114,8 @@ RF 共存
     }
 
 
+.. _coexist_policy-cn:
+
 共存策略
 ^^^^^^^^^^^^^^
 
@@ -122,7 +127,7 @@ RF 共存
   Wi-Fi、BT、BLE 三者对于 RF 的使用，主要是按照时间片来划分的。在一个共存周期内，按照 Wi-Fi、BT、BLE 的顺序划分时间片。在 Wi-Fi 的时间片内，Wi-Fi 会向共存仲裁模块发出较高优先级的请求，同理，BT/BLE 在自己的时间片内会具有较高优先级。共存周期大小和各个时间片占比根据 Wi-Fi 的状态分成四类：
 
 
-.. only:: esp32c3 or esp32s3
+.. only:: esp32c3 or esp32s3 or esp32c6
 
   Wi-Fi、BLE 二者对于 RF 的使用，主要是按照时间片来划分的。在 Wi-Fi 的时间片内，Wi-Fi 会向共存仲裁模块发出较高优先级的请求，在 Bluetooth 的时间片内，BLE 会具有较高优先级。共存周期大小和各个时间片占比根据 Wi-Fi 的状态分成四类：
 
@@ -130,7 +135,7 @@ RF 共存
 .. list::
 
   :esp32: 1) IDLE 状态：BT 和 BLE 共存由 Bluetooth 模块控制。
-  :esp32c3 or esp32s3: 1) IDLE 状态：RF 模块由 Bluetooth 模块控制。
+  :esp32c3 or esp32s3 or esp32c6: 1) IDLE 状态：RF 模块由 Bluetooth 模块控制。
   #) CONNECTED 状态：共存周期以目标信标传输时间 (Target Beacon Transmission Time, TBTT) 点为起始点，周期大于 100 ms。
   #) SCAN 状态：Wi-Fi 时间片以及共存周期都比在 CONNECTED 状态下的长。为了确保蓝牙的性能，蓝牙的时间片也会做相应的调整。
   #) CONNECTING 状态：Wi-Fi 时间片比在 CONNECTED 状态下的长。为了确保蓝牙的性能，蓝牙的时间片也会做相应的调整。
@@ -151,6 +156,7 @@ RF 共存
 
 共存模块对 Wi-Fi 和 Bluetooth 不同的状态赋予其不同的优先级。每种状态下的优先级并不是一成不变的，例如每 N 个广播事件 (Advertising event) 中会有一个广播事件使用高优先级。如果高优先级的广播事件发生在 Wi-Fi 时间片内，RF 的使用权可能会被 BLE 抢占。
 
+
 .. only:: SOC_WIFI_SUPPORTED
 
     Wi-Fi 非连接模块的共存
@@ -158,9 +164,10 @@ RF 共存
 
     在一定程度上，某些 Wi-Fi 非连接模块功耗参数 Window 与 Interval 的组合会导致共存模块在 Wi-Fi 时间片外申请共存优先级。这是为了按设定的功耗参数在共存时获取 RF 资源，但这会影响既定的蓝牙性能。
 
-    如果 Wi-Fi 非连接模块功耗参数为默认值时，上述动作不会发生，共存模块会按照性能稳定的模式运行。因此，除非您对特定非连接功耗参数下的共存性能有足够的测试，请在共存场景下将 Wi-Fi 非连接模块功耗参数配置为默认参数。
+    如果 Wi-Fi 非连接模块功耗参数为默认值时，上述动作不会发生，共存模块会按照性能稳定的模式运行。因此，除非你对特定非连接功耗参数下的共存性能有足够的测试，请在共存场景下将 Wi-Fi 非连接模块功耗参数配置为默认参数。
 
     请参考 :ref:`非连接模块功耗管理 <connectionless-module-power-save-cn>` 获取更多信息。
+
 
 如何使用共存功能
 ----------------------------------
@@ -169,6 +176,7 @@ RF 共存
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 在大多数共存情况下，{IDF_TARGET_NAME} 会自动进行共存状态切换，无需调用 API 对其进行干预。但是对于 BLE MESH 和 Wi-Fi 的共存，{IDF_TARGET_NAME} 对其提供了两个 API。当 BLE MESH 的状态发生变化时，应先调用 :code:`esp_coex_status_bit_clear` 对上一个状态进行清除，然后调用 :code:`esp_coex_status_bit_set` 设置当前状态。
+
 
 BLE MESH 共存状态描述
 """"""""""""""""""""""""""""

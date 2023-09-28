@@ -8,9 +8,11 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "hal/assert.h"
 #include "soc/periph_defs.h"
 #include "soc/pcr_reg.h"
 #include "soc/soc.h"
+#include "soc/soc_caps.h"
 #include "esp_attr.h"
 
 #ifdef __cplusplus
@@ -18,7 +20,7 @@ extern "C" {
 #endif
 
 static inline uint32_t periph_ll_get_clk_en_mask(periph_module_t periph)
-{ // TODO: IDF-5713
+{
     switch (periph) {
         case PERIPH_SARADC_MODULE:
             return PCR_SARADC_CLK_EN;
@@ -58,6 +60,8 @@ static inline uint32_t periph_ll_get_clk_en_mask(periph_module_t periph)
             return PCR_PWM_CLK_EN;
         case PERIPH_ETM_MODULE:
             return PCR_ETM_CLK_EN;
+        case PERIPH_PARLIO_MODULE:
+            return PCR_PARL_CLK_EN;
         case PERIPH_AES_MODULE:
             return PCR_AES_CLK_EN;
         case PERIPH_SHA_MODULE:
@@ -76,25 +80,15 @@ static inline uint32_t periph_ll_get_clk_en_mask(periph_module_t periph)
             return PCR_SDIO_SLAVE_CLK_EN;
         case PERIPH_REGDMA_MODULE:
             return PCR_REGDMA_CLK_EN;
-        // case PERIPH_RNG_MODULE:
-        //     return PCR_WIFI_CLK_RNG_EN;
-        // case PERIPH_WIFI_MODULE:
-        //     return PCR_WIFI_CLK_WIFI_EN_M;
-        // case PERIPH_BT_MODULE:
-        //     return PCR_WIFI_CLK_BT_EN_M;
-        // case PERIPH_WIFI_BT_COMMON_MODULE:
-        //     return PCR_WIFI_CLK_WIFI_BT_COMMON_M;
-        // case PERIPH_BT_BASEBAND_MODULE:
-        //     return PCR_BT_BASEBAND_EN;
-        // case PERIPH_BT_LC_MODULE:
-        //     return PCR_BT_LC_EN;
+        case PERIPH_ASSIST_DEBUG_MODULE:
+            return PCR_ASSIST_CLK_EN;
         default:
             return 0;
     }
 }
 
 static inline uint32_t periph_ll_get_rst_en_mask(periph_module_t periph, bool enable)
-{ // TODO: IDF-5713
+{
     (void)enable; // unused
 
     switch (periph) {
@@ -136,6 +130,8 @@ static inline uint32_t periph_ll_get_rst_en_mask(periph_module_t periph, bool en
             return PCR_PWM_RST_EN;
         case PERIPH_ETM_MODULE:
             return PCR_ETM_RST_EN;
+        case PERIPH_PARLIO_MODULE:
+            return PCR_PARL_RST_EN;
         case PERIPH_ECC_MODULE:
             return PCR_ECC_RST_EN;
         case PERIPH_TEMPSENSOR_MODULE:
@@ -167,34 +163,16 @@ static inline uint32_t periph_ll_get_rst_en_mask(periph_module_t periph, bool en
             return PCR_SDIO_SLAVE_RST_EN;
         case PERIPH_REGDMA_MODULE:
             return PCR_REGDMA_RST_EN;
-        // case PERIPH_RNG_MODULE:
-        //     return PCR_WIFI_CLK_RNG_EN;
-        // case PERIPH_WIFI_MODULE:
-        //     return PCR_WIFI_CLK_WIFI_EN_M;
-        // case PERIPH_BT_MODULE:
-        //     return PCR_WIFI_CLK_BT_EN_M;
-        // case PERIPH_WIFI_BT_COMMON_MODULE:
-        //     return PCR_WIFI_CLK_WIFI_BT_COMMON_M;
-        // case PERIPH_BT_BASEBAND_MODULE:
-        //     return PCR_BT_BASEBAND_EN;
-        // case PERIPH_BT_LC_MODULE:
-        //     return PCR_BT_LC_EN;
+        case PERIPH_ASSIST_DEBUG_MODULE:
+            return PCR_ASSIST_RST_EN;
         default:
             return 0;
     }
 }
 
-static uint32_t periph_ll_get_clk_en_reg(periph_module_t periph)
-{ // TODO: IDF-5713
+static inline uint32_t periph_ll_get_clk_en_reg(periph_module_t periph)
+{
     switch (periph) {
-    // case PERIPH_RNG_MODULE:
-    // case PERIPH_WIFI_MODULE:
-    // case PERIPH_BT_MODULE:
-    // case PERIPH_WIFI_BT_COMMON_MODULE:
-    // case PERIPH_BT_BASEBAND_MODULE:
-    // case PERIPH_BT_LC_MODULE:
-    //      return SYSTEM_WIFI_CLK_EN_REG;
-
         case PERIPH_SARADC_MODULE:
             return PCR_SARADC_CONF_REG;
         case PERIPH_RMT_MODULE:
@@ -233,6 +211,8 @@ static uint32_t periph_ll_get_clk_en_reg(periph_module_t periph)
             return PCR_PWM_CONF_REG;
         case PERIPH_ETM_MODULE:
             return PCR_ETM_CONF_REG;
+        case PERIPH_PARLIO_MODULE:
+            return PCR_PARL_IO_CONF_REG;
         case PERIPH_AES_MODULE:
             return PCR_AES_CONF_REG;
         case PERIPH_SHA_MODULE:
@@ -251,13 +231,15 @@ static uint32_t periph_ll_get_clk_en_reg(periph_module_t periph)
             return PCR_SDIO_SLAVE_CONF_REG;
         case PERIPH_REGDMA_MODULE:
             return PCR_REGDMA_CONF_REG;
+        case PERIPH_ASSIST_DEBUG_MODULE:
+            return PCR_ASSIST_CONF_REG;
     default:
         return 0;
     }
 }
 
-static uint32_t periph_ll_get_rst_en_reg(periph_module_t periph)
-{ // TODO: IDF-5713
+static inline uint32_t periph_ll_get_rst_en_reg(periph_module_t periph)
+{
     switch (periph) {
         case PERIPH_SARADC_MODULE:
             return PCR_SARADC_CONF_REG;
@@ -297,6 +279,8 @@ static uint32_t periph_ll_get_rst_en_reg(periph_module_t periph)
             return PCR_PWM_CONF_REG;
         case PERIPH_ETM_MODULE:
             return PCR_ETM_CONF_REG;
+        case PERIPH_PARLIO_MODULE:
+            return PCR_PARL_IO_CONF_REG;
         case PERIPH_AES_MODULE:
             return PCR_AES_CONF_REG;
         case PERIPH_SHA_MODULE:
@@ -315,6 +299,8 @@ static uint32_t periph_ll_get_rst_en_reg(periph_module_t periph)
             return PCR_SDIO_SLAVE_CONF_REG;
         case PERIPH_REGDMA_MODULE:
             return PCR_REGDMA_CONF_REG;
+        case PERIPH_ASSIST_DEBUG_MODULE:
+            return PCR_ASSIST_CONF_REG;
     default:
         return 0;
     }
@@ -342,6 +328,19 @@ static inline bool IRAM_ATTR periph_ll_periph_enabled(periph_module_t periph)
 {
     return REG_GET_BIT(periph_ll_get_rst_en_reg(periph), periph_ll_get_rst_en_mask(periph, false)) == 0 &&
            REG_GET_BIT(periph_ll_get_clk_en_reg(periph), periph_ll_get_clk_en_mask(periph)) != 0;
+}
+
+FORCE_INLINE_ATTR bool periph_ll_uart_enabled(uint32_t uart_num)
+{
+    HAL_ASSERT(uart_num < SOC_UART_HP_NUM);
+    uint32_t uart_clk_config_reg = ((uart_num == 0) ? PCR_UART0_CONF_REG :
+                                    (uart_num == 1) ? PCR_UART1_CONF_REG : 0);
+    uint32_t uart_rst_bit = ((uart_num == 0) ? PCR_UART0_RST_EN :
+                            (uart_num == 1) ? PCR_UART1_RST_EN : 0);
+    uint32_t uart_en_bit  = ((uart_num == 0) ? PCR_UART0_CLK_EN :
+                            (uart_num == 1) ? PCR_UART1_CLK_EN : 0);
+    return REG_GET_BIT(uart_clk_config_reg, uart_rst_bit) == 0 &&
+        REG_GET_BIT(uart_clk_config_reg, uart_en_bit) != 0;
 }
 
 #ifdef __cplusplus

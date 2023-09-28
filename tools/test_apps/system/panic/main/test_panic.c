@@ -27,6 +27,7 @@ void die(const char* msg)
 {
     printf("Test error: %s\n\n", msg);
     fflush(stdout);
+    fsync(fileno(stdout));
     usleep(1000);
     /* Don't use abort here as it would enter the panic handler */
     esp_restart_noos();
@@ -58,6 +59,13 @@ void test_task_wdt_cpu0(void)
     while (true) {
         ;
     }
+}
+
+__attribute__((optimize("-O0")))
+void test_hw_stack_guard_cpu0(void)
+{
+    uint32_t buf[128];
+    test_hw_stack_guard_cpu0();
 }
 
 #if CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH && CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY

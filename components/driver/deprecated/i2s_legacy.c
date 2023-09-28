@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -159,8 +159,8 @@ __attribute__((weak)) esp_err_t i2s_platform_release_occupation(int id);
 static bool IRAM_ATTR i2s_dma_rx_callback(gdma_channel_handle_t dma_chan, gdma_event_data_t *event_data, void *user_data)
 {
     i2s_obj_t *p_i2s = (i2s_obj_t *) user_data;
-    portBASE_TYPE need_awoke = 0;
-    portBASE_TYPE tmp = 0;
+    BaseType_t need_awoke = 0;
+    BaseType_t tmp = 0;
     int dummy;
     i2s_event_t i2s_event;
     uint32_t finish_desc;
@@ -191,8 +191,8 @@ static bool IRAM_ATTR i2s_dma_rx_callback(gdma_channel_handle_t dma_chan, gdma_e
 static bool IRAM_ATTR i2s_dma_tx_callback(gdma_channel_handle_t dma_chan, gdma_event_data_t *event_data, void *user_data)
 {
     i2s_obj_t *p_i2s = (i2s_obj_t *) user_data;
-    portBASE_TYPE need_awoke = 0;
-    portBASE_TYPE tmp = 0;
+    BaseType_t need_awoke = 0;
+    BaseType_t tmp = 0;
     int dummy;
     i2s_event_t i2s_event;
     uint32_t finish_desc;
@@ -235,8 +235,8 @@ static void IRAM_ATTR i2s_intr_handler_default(void *arg)
 
     i2s_event_t i2s_event;
     int dummy;
-    portBASE_TYPE need_awoke = 0;
-    portBASE_TYPE tmp = 0;
+    BaseType_t need_awoke = 0;
+    BaseType_t tmp = 0;
     uint32_t  finish_desc = 0;
     if ((status & I2S_LL_EVENT_TX_DSCR_ERR) || (status & I2S_LL_EVENT_RX_DSCR_ERR)) {
         ESP_EARLY_LOGE(TAG, "dma error, interrupt status: 0x%08x", status);
@@ -1607,7 +1607,7 @@ esp_err_t i2s_driver_install(i2s_port_t i2s_num, const i2s_config_t *i2s_config,
         i2s_obj->i2s_queue = xQueueCreate(queue_size, sizeof(i2s_event_t));
         ESP_GOTO_ON_FALSE(i2s_obj->i2s_queue, ESP_ERR_NO_MEM, err, TAG, "I2S queue create failed");
         *((QueueHandle_t *) i2s_queue) = i2s_obj->i2s_queue;
-        ESP_LOGD(TAG, "queue free spaces: %d", uxQueueSpacesAvailable(i2s_obj->i2s_queue));
+        ESP_LOGD(TAG, "queue free spaces: %" PRIu32, (uint32_t)uxQueueSpacesAvailable(i2s_obj->i2s_queue));
     } else {
         i2s_obj->i2s_queue = NULL;
     }
@@ -1730,7 +1730,7 @@ esp_err_t i2s_write_expand(i2s_port_t i2s_num, const void *src, size_t size, siz
 
 esp_err_t i2s_read(i2s_port_t i2s_num, void *dest, size_t size, size_t *bytes_read, TickType_t ticks_to_wait)
 {
-    char *data_ptr;;
+    char *data_ptr;
     char *dest_byte;
     int bytes_can_read;
     *bytes_read = 0;

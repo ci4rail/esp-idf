@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2020-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2020-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -16,13 +16,16 @@
 #pragma once
 
 #include "soc/soc_caps.h"
+#if SOC_I2S_SUPPORTED
 #include "hal/i2s_types.h"
 #include "hal/i2s_ll.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+#if SOC_I2S_SUPPORTED
 /**
  * @brief General slot configuration information
  * @note It is a general purpose struct, not supposed to be used directly by user
@@ -119,6 +122,15 @@ typedef struct {
  * @param port_id The I2S port number, the max port number is (SOC_I2S_NUM -1)
  */
 void i2s_hal_init(i2s_hal_context_t *hal, int port_id);
+
+/**
+ * @brief Helper function for calculating the precise mclk division by sclk and mclk
+ *
+ * @param sclk      system clock
+ * @param mclk      module clock
+ * @param mclk_div  mclk division coefficients, including integer part and decimal part
+ */
+void i2s_hal_calc_mclk_precise_division(uint32_t sclk, uint32_t mclk, hal_utils_clk_div_t *mclk_div);
 
 /**
  * @brief Set tx channel clock
@@ -444,6 +456,8 @@ void i2s_hal_tdm_enable_rx_channel(i2s_hal_context_t *hal);
  */
 #define i2s_hal_get_in_eof_des_addr(hal, addr) i2s_ll_rx_get_eof_des_addr((hal)->dev, addr)
 #endif
+
+#endif // SOC_I2S_SUPPORTED
 
 #ifdef __cplusplus
 }

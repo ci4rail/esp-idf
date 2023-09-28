@@ -54,8 +54,13 @@ enum {
     BTA_DM_API_DISABLE_EVT,
     BTA_DM_API_SET_NAME_EVT,
     BTA_DM_API_GET_NAME_EVT,
+#if (ESP_COEX_VSC_INCLUDED == TRUE)
+    BTA_DM_API_CFG_COEX_ST_EVT,
+#endif
 #if (CLASSIC_BT_INCLUDED == TRUE)
     BTA_DM_API_CONFIG_EIR_EVT,
+    BTA_DM_API_PAGE_TO_SET_EVT,
+    BTA_DM_API_PAGE_TO_GET_EVT,
 #endif
     BTA_DM_API_SET_AFH_CHANNELS_EVT,
 #if (SDP_INCLUDED == TRUE)
@@ -83,13 +88,13 @@ enum {
     BTA_DM_API_QOS_SET_EVT,
 #endif /* #if (BTA_DM_QOS_INCLUDED == TRUE) */
 #if (SMP_INCLUDED == TRUE)
+#if (CLASSIC_BT_INCLUDED == TRUE)
     /* simple pairing events */
     BTA_DM_API_CONFIRM_EVT,
-#if (BT_SSP_INCLUDED == TRUE)
     BTA_DM_API_KEY_REQ_EVT,
-#endif ///BT_SSP_INCLUDED == TRUE
+#endif /* (CLASSIC_BT_INCLUDED == TRUE) */
     BTA_DM_API_SET_ENCRYPTION_EVT,
-#endif  ///SMP_INCLUDED == TRUE
+#endif /* (SMP_INCLUDED == TRUE) */
 #if (BTM_OOB_INCLUDED == TRUE && SMP_INCLUDED == TRUE)
     BTA_DM_API_LOC_OOB_EVT,
     BTA_DM_API_OOB_REPLY_EVT,
@@ -200,6 +205,12 @@ enum {
     BTA_DM_API_SET_PERF_EXT_CONN_PARAMS_EVT,
     BTA_DM_API_EXT_CONN_EVT,
 #endif // #if (BLE_50_FEATURE_SUPPORT == TRUE)
+#if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
+    BTA_DM_API_PERIODIC_ADV_RECV_ENABLE_EVT,
+    BTA_DM_API_PERIODIC_ADV_SYNC_TRANS_EVT,
+    BTA_DM_API_PERIODIC_ADV_SET_INFO_TRANS_EVT,
+    BTA_DM_API_SET_PERIODIC_ADV_SYNC_TRANS_PARAMS_EVT,
+#endif // #if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
     BTA_DM_MAX_EVT
 };
 
@@ -236,10 +247,20 @@ typedef struct {
     tBTA_GET_DEV_NAME_CBACK *p_cback;
 } tBTA_DM_API_GET_NAME;
 
+#if (ESP_COEX_VSC_INCLUDED == TRUE)
+typedef struct {
+    BT_HDR hdr;
+    UINT8  op;
+    UINT8  type;
+    UINT8  status;
+} tBTA_DM_API_CFG_COEX_STATUS;
+#endif
+
 /* data type for BTA_DM_API_CONFIG_EIR_EVT */
 typedef struct {
     BT_HDR              hdr;
     BOOLEAN             eir_fec_required;
+    BOOLEAN             eir_included_name;
     BOOLEAN             eir_included_tx_power;
     BOOLEAN             eir_included_uuid;
     UINT8               eir_flags;
@@ -256,6 +277,19 @@ typedef struct {
     AFH_CHANNELS        channels;
     tBTA_CMPL_CB        *set_afh_cb;
 }tBTA_DM_API_SET_AFH_CHANNELS;
+
+/* data type for BTA_DM_API_PAGE_TO_SET_EVT */
+typedef struct {
+    BT_HDR              hdr;
+    UINT16              page_to;
+    tBTM_CMPL_CB        *set_page_to_cb;
+} tBTA_DM_API_PAGE_TO_SET;
+
+/* data type for BTA_DM_API_PAGE_TO_GET_EVT */
+typedef struct {
+    BT_HDR              hdr;
+    tBTM_CMPL_CB        *get_page_to_cb;
+} tBTA_DM_API_PAGE_TO_GET;
 
 /* data type for BTA_DM_API_GET_REMOTE_NAME_EVT */
 typedef struct {
@@ -279,7 +313,7 @@ typedef struct {
     BOOLEAN   add_remove;
     BD_ADDR   remote_addr;
     tBLE_ADDR_TYPE addr_type;
-    tBTA_ADD_WHITELIST_CBACK *add_wl_cb;
+    tBTA_UPDATE_WHITELIST_CBACK *update_wl_cb;
 }tBTA_DM_API_UPDATE_WHITE_LIST;
 
 typedef struct {
@@ -962,12 +996,13 @@ typedef struct {
     UINT8                           instance;
     UINT16                          length;
     UINT8                           *data;
+    BOOLEAN                         only_update_did;
 } tBTA_DM_API_CFG_PERIODIC_ADV_DATA;
 
 typedef struct {
     BT_HDR                          hdr;
     UINT8                           instance;
-    BOOLEAN                         enable;
+    UINT8                           enable;
 } tBTA_DM_API_ENABLE_PERIODIC_ADV;
 
 typedef struct {
@@ -1030,6 +1065,35 @@ typedef struct {
     BD_ADDR                         peer_addr;
 } tBTA_DM_API_EXT_CONN;
 #endif //#if (BLE_50_FEATURE_SUPPORT == TRUE)
+
+#if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
+typedef struct {
+    BT_HDR                          hdr;
+    UINT16                          sync_handle;
+    UINT8                           enable;
+} tBTA_DM_API_PERIODIC_ADV_RECV_ENABLE;
+
+typedef struct {
+    BT_HDR                          hdr;
+    BD_ADDR                         addr;
+    UINT16                          service_data;
+    UINT16                          sync_handle;
+} tBTA_DM_API_PERIODIC_ADV_SYNC_TRANS;
+
+typedef struct {
+    BT_HDR                          hdr;
+    BD_ADDR                         addr;
+    UINT16                          service_data;
+    UINT8                           adv_hanlde;
+} tBTA_DM_API_PERIODIC_ADV_SET_INFO_TRANS;
+
+typedef struct {
+    BT_HDR                          hdr;
+    BD_ADDR                         addr;
+    tBTA_DM_BLE_PAST_PARAMS         params;
+} tBTA_DM_API_SET_PAST_PARAMS;
+#endif // #if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
+
 /* union of all data types */
 typedef union {
     /* event buffer header */
@@ -1038,9 +1102,14 @@ typedef union {
 
     tBTA_DM_API_SET_NAME set_name;
     tBTA_DM_API_GET_NAME get_name;
+#if (ESP_COEX_VSC_INCLUDED == TRUE)
+    tBTA_DM_API_CFG_COEX_STATUS cfg_coex_status;
+#endif
     tBTA_DM_API_CONFIG_EIR config_eir;
 
     tBTA_DM_API_SET_AFH_CHANNELS set_afh_channels;
+    tBTA_DM_API_PAGE_TO_SET set_page_timeout;
+    tBTA_DM_API_PAGE_TO_GET get_page_timeout;
 #if (SDP_INCLUDED == TRUE)
     tBTA_DM_API_GET_REMOTE_NAME  get_rmt_name;
 #endif
@@ -1170,6 +1239,12 @@ typedef union {
     tBTA_DM_API_EXT_SCAN                ble_ext_scan;
     tBTA_DM_API_SET_PER_EXT_CONN_PARAMS ble_set_per_ext_conn_params;
 #endif // #if (BLE_50_FEATURE_SUPPORT == TRUE)
+#if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
+    tBTA_DM_API_PERIODIC_ADV_RECV_ENABLE ble_periodic_adv_recv_enable;
+    tBTA_DM_API_PERIODIC_ADV_SYNC_TRANS ble_periodic_adv_sync_trans;
+    tBTA_DM_API_PERIODIC_ADV_SET_INFO_TRANS ble_periodic_adv_set_info_trans;
+    tBTA_DM_API_SET_PAST_PARAMS ble_set_past_params;
+#endif // #if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
 #endif
 
     tBTA_DM_API_REMOVE_ACL              remove_acl;
@@ -1533,8 +1608,13 @@ extern void bta_dm_enable (tBTA_DM_MSG *p_data);
 extern void bta_dm_disable (tBTA_DM_MSG *p_data);
 extern void bta_dm_set_dev_name (tBTA_DM_MSG *p_data);
 extern void bta_dm_get_dev_name (tBTA_DM_MSG *p_data);
+#if (ESP_COEX_VSC_INCLUDED == TRUE)
+extern void bta_dm_cfg_coex_status(tBTA_DM_MSG *p_data);
+#endif
 #if (CLASSIC_BT_INCLUDED == TRUE)
 extern void bta_dm_config_eir (tBTA_DM_MSG *p_data);
+extern void bta_dm_set_page_timeout (tBTA_DM_MSG *p_data);
+extern void bta_dm_get_page_timeout (tBTA_DM_MSG *p_data);
 #endif
 extern void bta_dm_set_afh_channels (tBTA_DM_MSG *p_data);
 extern void bta_dm_read_rmt_name(tBTA_DM_MSG *p_data);
@@ -1725,5 +1805,15 @@ extern void bta_dm_ble_gap_ext_scan(tBTA_DM_MSG *p_data);
 
 extern void bta_dm_ble_gap_set_prefer_ext_conn_params(tBTA_DM_MSG *p_data);
 #endif // #if (BLE_50_FEATURE_SUPPORT == TRUE)
+
+#if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
+extern void bta_dm_ble_gap_periodic_adv_recv_enable(tBTA_DM_MSG *p_data);
+
+extern void bta_dm_ble_gap_periodic_adv_sync_trans(tBTA_DM_MSG *p_data);
+
+extern void bta_dm_ble_gap_periodic_adv_set_info_trans(tBTA_DM_MSG *p_data);
+
+extern void bta_dm_ble_gap_set_periodic_adv_sync_trans_params(tBTA_DM_MSG *p_data);
+#endif // #if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
 
 #endif /* BTA_DM_INT_H */

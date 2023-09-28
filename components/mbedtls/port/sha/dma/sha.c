@@ -54,8 +54,6 @@
 #include "esp32s3/rom/cache.h"
 #elif CONFIG_IDF_TARGET_ESP32C3
 #include "esp32s3/rom/cache.h"
-#elif CONFIG_IDF_TARGET_ESP32H4
-#include "esp32h4/rom/cache.h"
 #elif CONFIG_IDF_TARGET_ESP32C2
 #include "esp32c2/rom/cache.h"
 #endif
@@ -140,48 +138,6 @@ void esp_sha_release_hardware()
     SHA_RELEASE();
 }
 
-#if SOC_SHA_SUPPORT_SHA512_T
-/* The initial hash value for SHA512/t is generated according to the
-   algorithm described in the TRM, chapter SHA-Accelerator
-*/
-int esp_sha_512_t_init_hash(uint16_t t)
-{
-    uint32_t t_string = 0;
-    uint8_t t0, t1, t2, t_len;
-
-    if (t == 384) {
-        ESP_LOGE(TAG, "Invalid t for SHA512/t, t = %u,cannot be 384", t);
-        return -1;
-    }
-
-    if (t <= 9) {
-        t_string = (uint32_t)((1 << 23) | ((0x30 + t) << 24));
-        t_len = 0x48;
-    } else if (t <= 99) {
-        t0 = t % 10;
-        t1 = (t / 10) % 10;
-        t_string = (uint32_t)((1 << 15) | ((0x30 + t0) << 16) |
-                              (((0x30 + t1) << 24)));
-        t_len = 0x50;
-    } else if (t <= 512) {
-        t0 = t % 10;
-        t1 = (t / 10) % 10;
-        t2 = t / 100;
-        t_string = (uint32_t)((1 << 7) | ((0x30 + t0) << 8) |
-                              (((0x30 + t1) << 16) + ((0x30 + t2) << 24)));
-        t_len = 0x58;
-    } else {
-        ESP_LOGE(TAG, "Invalid t for SHA512/t, t = %u, must equal or less than 512", t);
-        return -1;
-    }
-
-    sha_hal_sha512_init_hash(t_string, t_len);
-
-    return 0;
-}
-
-#endif //SOC_SHA_SUPPORT_SHA512_T
-
 
 /* Hash the input block by block, using non-DMA mode */
 static void esp_sha_block_mode(esp_sha_type sha_type, const uint8_t *input, uint32_t ilen,
@@ -219,7 +175,6 @@ int esp_sha_dma(esp_sha_type sha_type, const void *input, uint32_t ilen,
 {
     int ret = 0;
     unsigned char *dma_cap_buf = NULL;
-    int dma_op_num = ( ilen / (SOC_SHA_DMA_MAX_BUFFER_SIZE + 1) ) + 1;
 
     if (buf_len > block_length(sha_type)) {
         ESP_LOGE(TAG, "SHA DMA buf_len cannot exceed max size for a single block");
@@ -253,6 +208,16 @@ int esp_sha_dma(esp_sha_type sha_type, const void *input, uint32_t ilen,
         buf = dma_cap_buf;
     }
 
+    uint32_t dma_op_num;
+
+    if (ilen > 0) {
+        /* Number of DMA operations based on maximum chunk size in single operation */
+        dma_op_num = (ilen + SOC_SHA_DMA_MAX_BUFFER_SIZE - 1) / SOC_SHA_DMA_MAX_BUFFER_SIZE;
+    } else {
+        /* For zero input length, we must allow at-least 1 DMA operation to see
+         * if there is any pending data that is yet to be copied out */
+        dma_op_num = 1;
+    }
 
     /* The max amount of blocks in a single hardware operation is 2^6 - 1 = 63
        Thus we only do a single DMA input list + dma buf list,

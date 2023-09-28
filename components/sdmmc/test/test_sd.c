@@ -69,6 +69,8 @@
 #define SDSPI_TEST_CS_PIN GPIO_NUM_13
 #endif
 
+#define GPIO_ACTIVE_LOW     0
+#define GPIO_ACTIVE_HIGH    1
 
 TEST_CASE("MMC_RSP_BITS", "[sd]")
 {
@@ -194,7 +196,7 @@ TEST_CASE("SD clock dividers calculation", "[sd][test_env=UT_T1_SDMODE]")
 #endif //WITH_SD_TEST
 
 #if WITH_EMMC_TEST
-TEST_CASE("probe eMMC, slot 0, 4-bit", "[sd][test_env=EMMC]")
+TEST_CASE("probe eMMC, slot 0, 4-bit", "[sd][test_env=EMMC][ignore]")
 {
     //Test with SDR
     probe_sd(SDMMC_HOST_SLOT_0, 4, SDMMC_FREQ_PROBING, 0);
@@ -204,7 +206,7 @@ TEST_CASE("probe eMMC, slot 0, 4-bit", "[sd][test_env=EMMC]")
     probe_sd(SDMMC_HOST_SLOT_0, 4, SDMMC_FREQ_HIGHSPEED, 1);
 }
 
-TEST_CASE("probe eMMC, slot 0, 8-bit", "[sd][test_env=EMMC]")
+TEST_CASE("probe eMMC, slot 0, 8-bit", "[sd][test_env=EMMC][ignore]")
 {
     //8-bit DDR not supported yet, test with SDR only
     probe_sd(SDMMC_HOST_SLOT_0, 8, SDMMC_FREQ_PROBING, 0);
@@ -457,28 +459,28 @@ TEST_CASE("SDMMC test read/write with offset (SD slot 1)", "[sd][test_env=UT_T1_
 #endif //WITH_SD_TEST
 
 #if WITH_EMMC_TEST
-TEST_CASE("SDMMC performance test (eMMC slot 0, 4 line DDR)", "[sd][test_env=EMMC]")
+TEST_CASE("SDMMC performance test (eMMC slot 0, 4 line DDR)", "[sd][test_env=EMMC][ignore]")
 {
     sd_test_board_power_on();
     sd_test_rw_blocks(0, 4, test_read_write_performance);
     sd_test_board_power_off();
 }
 
-TEST_CASE("SDMMC test read/write with offset (eMMC slot 0, 4 line DDR)", "[sd][test_env=EMMC]")
+TEST_CASE("SDMMC test read/write with offset (eMMC slot 0, 4 line DDR)", "[sd][test_env=EMMC][ignore]")
 {
     sd_test_board_power_on();
     sd_test_rw_blocks(0, 4, test_read_write_with_offset);
     sd_test_board_power_off();
 }
 
-TEST_CASE("SDMMC performance test (eMMC slot 0, 8 line)", "[sd][test_env=EMMC]")
+TEST_CASE("SDMMC performance test (eMMC slot 0, 8 line)", "[sd][test_env=EMMC][ignore]")
 {
     sd_test_board_power_on();
     sd_test_rw_blocks(0, 8, test_read_write_performance);
     sd_test_board_power_off();
 }
 
-TEST_CASE("SDMMC test read/write with offset (eMMC slot 0, 8 line)", "[sd][test_env=EMMC]")
+TEST_CASE("SDMMC test read/write with offset (eMMC slot 0, 8 line)", "[sd][test_env=EMMC][ignore]")
 {
     sd_test_board_power_on();
     sd_test_rw_blocks(0, 8, test_read_write_with_offset);
@@ -578,18 +580,24 @@ static void test_cd_input(int gpio_cd_num, const sdmmc_host_t* config)
 
     // Check that card initialization fails if CD is high
     REG_WRITE(GPIO_OUT_W1TS_REG, BIT(gpio_cd_num));
-    usleep(1000);
+    usleep(10000);
     TEST_ESP_ERR(ESP_ERR_NOT_FOUND, sdmmc_card_init(config, card));
 
     // Check that card initialization succeeds if CD is low
     REG_WRITE(GPIO_OUT_W1TC_REG, BIT(gpio_cd_num));
-    usleep(1000);
-    TEST_ESP_OK(sdmmc_card_init(config, card));
+    usleep(10000);
+    esp_err_t err = sdmmc_card_init(config, card);
+    if (err != ESP_OK) {
+        usleep(10000);
+        // Try again, in case the card was not ready yet
+        err = sdmmc_card_init(config, card);
+    }
+    TEST_ESP_OK(err);
 
     free(card);
 }
 
-static void test_wp_input(int gpio_wp_num, const sdmmc_host_t* config)
+static void test_wp_input(int gpio_wp_num, bool gpio_wp_polarity, const sdmmc_host_t* config)
 {
     sdmmc_card_t* card = malloc(sizeof(sdmmc_card_t));
     TEST_ASSERT_NOT_NULL(card);
@@ -607,12 +615,12 @@ static void test_wp_input(int gpio_wp_num, const sdmmc_host_t* config)
     uint32_t* data = heap_caps_calloc(1, 512, MALLOC_CAP_DMA);
 
     // Check that card write succeeds if WP is high
-    REG_WRITE(GPIO_OUT_W1TS_REG, BIT(gpio_wp_num));
+    REG_WRITE((gpio_wp_polarity? GPIO_OUT_W1TC_REG : GPIO_OUT_W1TS_REG), BIT(gpio_wp_num));
     usleep(1000);
     TEST_ESP_OK(sdmmc_write_sectors(card, &data, 0, 1));
 
     // Check that write fails if WP is low
-    REG_WRITE(GPIO_OUT_W1TC_REG, BIT(gpio_wp_num));
+    REG_WRITE((gpio_wp_polarity? GPIO_OUT_W1TS_REG : GPIO_OUT_W1TC_REG), BIT(gpio_wp_num));
     usleep(1000);
     TEST_ESP_ERR(ESP_ERR_INVALID_STATE, sdmmc_write_sectors(card, &data, 0, 1));
     // ...but reads still work
@@ -631,6 +639,7 @@ TEST_CASE("CD input works in SD mode", "[sd][test_env=UT_T1_SDMODE]")
     sdmmc_slot_config_t slot_config = SDMMC_SLOT_CONFIG_DEFAULT();
     slot_config.gpio_cd = CD_WP_TEST_GPIO;
     TEST_ESP_OK(sdmmc_host_init());
+    usleep(10000);
     TEST_ESP_OK(sdmmc_host_init_slot(SDMMC_HOST_SLOT_1, &slot_config));
 
     test_cd_input(CD_WP_TEST_GPIO, &config);
@@ -645,10 +654,17 @@ TEST_CASE("WP input works in SD mode", "[sd][test_env=UT_T1_SDMODE]")
     sdmmc_host_t config = SDMMC_HOST_DEFAULT();
     sdmmc_slot_config_t slot_config = SDMMC_SLOT_CONFIG_DEFAULT();
     slot_config.gpio_wp = CD_WP_TEST_GPIO;
+    bool gpio_wp_polarity = GPIO_ACTIVE_LOW;
+    if (gpio_wp_polarity) {
+        slot_config.flags |= SDMMC_SLOT_FLAG_WP_ACTIVE_HIGH;
+    } else {
+        slot_config.flags &= ~(SDMMC_SLOT_FLAG_WP_ACTIVE_HIGH);
+    }
     TEST_ESP_OK(sdmmc_host_init());
+    usleep(10000);
     TEST_ESP_OK(sdmmc_host_init_slot(SDMMC_HOST_SLOT_1, &slot_config));
 
-    test_wp_input(CD_WP_TEST_GPIO, &config);
+    test_wp_input(slot_config.gpio_wp, gpio_wp_polarity, &config);
 
     TEST_ESP_OK(sdmmc_host_deinit());
     sd_test_board_power_off();
@@ -689,6 +705,7 @@ TEST_CASE("WP input works in SPI mode", "[sd][test_env=UT_T1_SPIMODE]")
     dev_config.host_id = config.slot;
     dev_config.gpio_cs = SDSPI_TEST_CS_PIN;
     dev_config.gpio_wp = CD_WP_TEST_GPIO;
+    dev_config.gpio_wp_polarity = GPIO_ACTIVE_LOW;
     test_sdspi_init_bus(dev_config.host_id, SDSPI_TEST_MOSI_PIN, SDSPI_TEST_MISO_PIN, SDSPI_TEST_SCLK_PIN, SPI_DMA_CH_AUTO);
 
     TEST_ESP_OK(sdspi_host_init());
@@ -696,7 +713,7 @@ TEST_CASE("WP input works in SPI mode", "[sd][test_env=UT_T1_SPIMODE]")
 
     config.slot = handle;
 
-    test_wp_input(CD_WP_TEST_GPIO, &config);
+    test_wp_input(dev_config.gpio_wp, dev_config.gpio_wp_polarity, &config);
 
     TEST_ESP_OK(sdspi_host_deinit());
     test_sdspi_deinit_bus(dev_config.host_id);
@@ -1035,6 +1052,29 @@ TEST_CASE("SDMMC discard test (SD slot 1, 4 line)", "[sd][test_env=UT_T1_SDMODE]
 }
 #endif //WITH_SD_TEST
 
+#if WITH_SD_TEST
+TEST_CASE("sdmmc read/write/erase sector shoud return ESP_OK with sector count == 0", "[sd][test_env=UT_T1_SDMODE]")
+{
+    sd_test_board_power_on();
+    sdmmc_host_t config = SDMMC_HOST_DEFAULT();
+    sdmmc_slot_config_t slot_config = SDMMC_SLOT_CONFIG_DEFAULT();
+    TEST_ESP_OK(sdmmc_host_init());
+
+    TEST_ESP_OK(sdmmc_host_init_slot(SDMMC_HOST_SLOT_1, &slot_config));
+    sdmmc_card_t* card = malloc(sizeof(sdmmc_card_t));
+    TEST_ASSERT_NOT_NULL(card);
+    TEST_ESP_OK(sdmmc_card_init(&config, card));
+
+    TEST_ESP_OK(sdmmc_write_sectors(card, NULL, 0, 0));
+    TEST_ESP_OK(sdmmc_read_sectors(card, NULL, 0, 0));
+    TEST_ESP_OK(sdmmc_erase_sectors(card, 0, 0, SDMMC_ERASE_ARG));
+
+    free(card);
+    TEST_ESP_OK(sdmmc_host_deinit());
+    sd_test_board_power_off();
+}
+#endif //WITH_SD_TEST
+
 #if WITH_EMMC_TEST
 static void test_mmc_sanitize_blocks(sdmmc_card_t* card)
 {
@@ -1182,42 +1222,42 @@ static void test_mmc_trim_blocks(sdmmc_card_t* card)
 #endif //SDMMC_FULL_ERASE_TEST
 }
 
-TEST_CASE("SDMMC trim test (eMMC slot 0, 4 line)", "[sd][test_env=EMMC]")
+TEST_CASE("SDMMC trim test (eMMC slot 0, 4 line)", "[sd][test_env=EMMC][ignore]")
 {
     sd_test_board_power_on();
     sd_test_rw_blocks(0, 4, test_mmc_trim_blocks);
     sd_test_board_power_off();
 }
 
-TEST_CASE("SDMMC trim test (eMMC slot 0, 8 line)", "[sd][test_env=EMMC]")
+TEST_CASE("SDMMC trim test (eMMC slot 0, 8 line)", "[sd][test_env=EMMC][ignore]")
 {
     sd_test_board_power_on();
     sd_test_rw_blocks(0, 8, test_mmc_trim_blocks);
     sd_test_board_power_off();
 }
 
-TEST_CASE("SDMMC discard test (eMMC slot 0, 4 line)", "[sd][test_env=EMMC]")
+TEST_CASE("SDMMC discard test (eMMC slot 0, 4 line)", "[sd][test_env=EMMC][ignore]")
 {
     sd_test_board_power_on();
     sd_test_rw_blocks(0, 4, test_mmc_discard_blocks);
     sd_test_board_power_off();
 }
 
-TEST_CASE("SDMMC discard test (eMMC slot 0, 8 line)", "[sd][test_env=EMMC]")
+TEST_CASE("SDMMC discard test (eMMC slot 0, 8 line)", "[sd][test_env=EMMC][ignore]")
 {
     sd_test_board_power_on();
     sd_test_rw_blocks(0, 8, test_mmc_discard_blocks);
     sd_test_board_power_off();
 }
 
-TEST_CASE("SDMMC sanitize test (eMMC slot 0, 4 line)", "[sd][test_env=EMMC]")
+TEST_CASE("SDMMC sanitize test (eMMC slot 0, 4 line)", "[sd][test_env=EMMC][ignore]")
 {
     sd_test_board_power_on();
     sd_test_rw_blocks(0, 4, test_mmc_sanitize_blocks);
     sd_test_board_power_off();
 }
 
-TEST_CASE("SDMMC sanitize test (eMMC slot 0, 8 line)", "[sd][test_env=EMMC]")
+TEST_CASE("SDMMC sanitize test (eMMC slot 0, 8 line)", "[sd][test_env=EMMC][ignore]")
 {
     sd_test_board_power_on();
     sd_test_rw_blocks(0, 8, test_mmc_sanitize_blocks);

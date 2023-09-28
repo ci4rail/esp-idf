@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2019-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2019-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -52,6 +52,14 @@ esp_err_t esp_wifi_set_default_wifi_sta_handlers(void);
 esp_err_t esp_wifi_set_default_wifi_ap_handlers(void);
 
 /**
+ * @brief Sets default wifi event handlers for NAN interface
+ *
+ * @return
+ *  - ESP_OK on success, error returned from esp_event_handler_register if failed
+ */
+esp_err_t esp_wifi_set_default_wifi_nan_handlers(void);
+
+/**
  * @brief Clears default wifi event handlers for supplied network interface
  *
  * @param esp_netif instance of corresponding if object
@@ -65,7 +73,9 @@ esp_err_t esp_wifi_clear_default_wifi_driver_and_handlers(void *esp_netif);
  * @brief Creates default WIFI AP. In case of any init error this API aborts.
  *
  * @note The API creates esp_netif object with default WiFi access point config,
- * attaches the netif to wifi and registers default wifi handlers.
+ * attaches the netif to wifi and registers wifi handlers to the default event loop.
+ * This API uses assert() to check for potential errors, so it could abort the program.
+ * (Note that the default event loop needs to be created prior to calling this API)
  *
  * @return pointer to esp-netif instance
  */
@@ -75,11 +85,24 @@ esp_netif_t* esp_netif_create_default_wifi_ap(void);
  * @brief Creates default WIFI STA. In case of any init error this API aborts.
  *
  * @note The API creates esp_netif object with default WiFi station config,
- * attaches the netif to wifi and registers default wifi handlers.
+ * attaches the netif to wifi and registers wifi handlers to the default event loop.
+ * This API uses assert() to check for potential errors, so it could abort the program.
+ * (Note that the default event loop needs to be created prior to calling this API)
  *
  * @return pointer to esp-netif instance
  */
 esp_netif_t* esp_netif_create_default_wifi_sta(void);
+
+/**
+ * @brief Creates default WIFI NAN. In case of any init error this API aborts.
+ *
+ * @note The API creates esp_netif object with default WiFi station config,
+ * attaches the netif to wifi and registers wifi handlers to the default event loop.
+ * (Note that the default event loop needs to be created prior to calling this API)
+ *
+ * @return pointer to esp-netif instance
+ */
+esp_netif_t* esp_netif_create_default_wifi_nan(void);
 
 /**
  * @brief Destroys default WIFI netif created with esp_netif_create_default_wifi_...() API.

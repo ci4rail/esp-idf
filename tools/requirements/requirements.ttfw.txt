@@ -16,14 +16,9 @@ python-gitlab
 pygdbmi
 
 # ble
-future
 dbus-python; sys_platform == 'linux'
 pygobject; sys_platform != 'win32'
 
 # esp_prov
 bleak
-# future  # addressed before under ble
 protobuf
-
-# tools/test_apps/system/monitor_ide_integration
-SimpleWebSocketServer

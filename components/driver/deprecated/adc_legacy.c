@@ -24,10 +24,11 @@
 #include "adc1_private.h"
 #include "hal/adc_types.h"
 #include "hal/adc_hal.h"
+#include "hal/adc_ll.h"
 #include "hal/adc_hal_common.h"
 #include "esp_private/periph_ctrl.h"
 #include "driver/adc_types_legacy.h"
-#include "clk_tree.h"
+#include "esp_clk_tree.h"
 
 #if SOC_DAC_SUPPORTED
 #include "hal/dac_types.h"
@@ -164,7 +165,7 @@ static void adc_rtc_chan_init(adc_unit_t adc_unit)
 #endif
     }
     if (adc_unit == ADC_UNIT_2) {
-        adc_hal_pwdet_set_cct(ADC_LL_PWDET_CCT_DEFAULT);
+        adc_ll_pwdet_set_cct(ADC_LL_PWDET_CCT_DEFAULT);
         adc_oneshot_ll_output_invert(ADC_UNIT_2, ADC_LL_DATA_INVERT_DEFAULT(ADC_UNIT_2));
         adc_ll_set_sar_clk_div(ADC_UNIT_2, ADC_LL_SAR_CLK_DIV_DEFAULT(ADC_UNIT_2));
     }
@@ -281,7 +282,7 @@ esp_err_t adc1_config_channel_atten(adc1_channel_t channel, adc_atten_t atten)
 #if SOC_ADC_DIG_CTRL_SUPPORTED && !SOC_ADC_RTC_CTRL_SUPPORTED
     if (!clk_src_freq_hz) {
         //should never fail
-        clk_tree_src_get_freq_hz(ADC_DIGI_CLK_SRC_DEFAULT, CLK_TREE_SRC_FREQ_PRECISION_CACHED, &clk_src_freq_hz);
+        esp_clk_tree_src_get_freq_hz(ADC_DIGI_CLK_SRC_DEFAULT, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &clk_src_freq_hz);
     }
 #endif  //#if SOC_ADC_DIG_CTRL_SUPPORTED && !SOC_ADC_RTC_CTRL_SUPPORTED
 
@@ -440,7 +441,7 @@ esp_err_t adc2_config_channel_atten(adc2_channel_t channel, adc_atten_t atten)
 #if SOC_ADC_DIG_CTRL_SUPPORTED && !SOC_ADC_RTC_CTRL_SUPPORTED
     if (!clk_src_freq_hz) {
         //should never fail
-        clk_tree_src_get_freq_hz(ADC_DIGI_CLK_SRC_DEFAULT, CLK_TREE_SRC_FREQ_PRECISION_CACHED, &clk_src_freq_hz);
+        esp_clk_tree_src_get_freq_hz(ADC_DIGI_CLK_SRC_DEFAULT, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &clk_src_freq_hz);
     }
 #endif  //#if SOC_ADC_DIG_CTRL_SUPPORTED && !SOC_ADC_RTC_CTRL_SUPPORTED
 
@@ -669,7 +670,7 @@ static adc_atten_t s_atten2_single[ADC2_CHANNEL_MAX];    //Array saving attenuat
 
 static int8_t adc_digi_get_io_num(adc_unit_t adc_unit, uint8_t adc_channel)
 {
-    assert(adc_unit <= SOC_ADC_PERIPH_NUM);
+    assert(adc_unit < SOC_ADC_PERIPH_NUM);
     uint8_t adc_n = (adc_unit == ADC_UNIT_1) ? 0 : 1;
     return adc_channel_io_map[adc_n][adc_channel];
 }
@@ -753,7 +754,7 @@ esp_err_t adc1_config_channel_atten(adc1_channel_t channel, adc_atten_t atten)
 #if SOC_ADC_DIG_CTRL_SUPPORTED && !SOC_ADC_RTC_CTRL_SUPPORTED
     if (!clk_src_freq_hz) {
         //should never fail
-        clk_tree_src_get_freq_hz(ADC_DIGI_CLK_SRC_DEFAULT, CLK_TREE_SRC_FREQ_PRECISION_CACHED, &clk_src_freq_hz);
+        esp_clk_tree_src_get_freq_hz(ADC_DIGI_CLK_SRC_DEFAULT, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &clk_src_freq_hz);
     }
 #endif  //#if SOC_ADC_DIG_CTRL_SUPPORTED && !SOC_ADC_RTC_CTRL_SUPPORTED
 
@@ -823,7 +824,7 @@ esp_err_t adc2_get_raw(adc2_channel_t channel, adc_bits_width_t width_bit, int *
 #if SOC_ADC_DIG_CTRL_SUPPORTED && !SOC_ADC_RTC_CTRL_SUPPORTED
     if (!clk_src_freq_hz) {
         //should never fail
-        clk_tree_src_get_freq_hz(ADC_DIGI_CLK_SRC_DEFAULT, CLK_TREE_SRC_FREQ_PRECISION_CACHED, &clk_src_freq_hz);
+        esp_clk_tree_src_get_freq_hz(ADC_DIGI_CLK_SRC_DEFAULT, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &clk_src_freq_hz);
     }
 #endif  //#if SOC_ADC_DIG_CTRL_SUPPORTED && !SOC_ADC_RTC_CTRL_SUPPORTED
 
@@ -947,6 +948,12 @@ static __attribute__((constructor)) void adc_hw_calibration(void)
              * update this when bringing up the calibration on that chip
              */
             adc_calc_hw_calibration_code(i, j);
+#if SOC_ADC_CALIB_CHAN_COMPENS_SUPPORTED
+            /* Load the channel compensation from efuse */
+            for (int k = 0; k < SOC_ADC_CHANNEL_NUM(i); k++) {
+                adc_load_hw_calibration_chan_compens(i, k, j);
+            }
+#endif
         }
     }
 }

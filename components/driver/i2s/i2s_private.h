@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -22,6 +22,17 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// If ISR handler is allowed to run whilst cache is disabled,
+// Make sure all the code and related variables used by the handler are in the SRAM
+#if CONFIG_I2S_ISR_IRAM_SAFE
+#define I2S_INTR_ALLOC_FLAGS    (ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_INTRDISABLED | ESP_INTR_FLAG_SHARED | ESP_INTR_FLAG_LOWMED)
+#define I2S_MEM_ALLOC_CAPS      (MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)
+#else
+#define I2S_INTR_ALLOC_FLAGS    (ESP_INTR_FLAG_INTRDISABLED | ESP_INTR_FLAG_SHARED | ESP_INTR_FLAG_LOWMED)
+#define I2S_MEM_ALLOC_CAPS      MALLOC_CAP_DEFAULT
+#endif //CONFIG_I2S_ISR_IRAM_SAFE
+#define I2S_DMA_ALLOC_CAPS      (MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)
 
 #define I2S_NULL_POINTER_CHECK(tag, p)          ESP_RETURN_ON_FALSE((p), ESP_ERR_INVALID_ARG, tag, "input parameter '"#p"' is NULL")
 
@@ -88,12 +99,6 @@ struct i2s_channel_obj_t {
     SemaphoreHandle_t       binary;         /*!< Binary semaphore for writing / reading / enabling / disabling */
 #if CONFIG_PM_ENABLE
     esp_pm_lock_handle_t    pm_lock;        /*!< Power management lock, to avoid apb clock frequency changes while i2s is working */
-#endif
-#if CONFIG_I2S_ISR_IRAM_SAFE
-    StaticSemaphore_t       *mutex_struct;      /*!< Static mutex struct */
-    StaticSemaphore_t       *binary_struct;     /*!< Static binary struct */
-    StaticQueue_t           *msg_que_struct;    /*!< Static message queue struct */
-    void                    *msg_que_storage;   /*!< Static message queue storage */
 #endif
     QueueHandle_t           msg_queue;      /*!< Message queue handler, used for transporting data between interrupt and read/write task */
     i2s_event_callbacks_t   callbacks;      /*!< Callback functions */
@@ -186,13 +191,13 @@ void i2s_gpio_check_and_set(gpio_num_t gpio, uint32_t signal_idx, bool is_input,
  *
  * @param id            I2S port id
  * @param gpio_num      GPIO number
- * @param is_apll       Is using APLL as clock source
+ * @param clk_src       The clock source of this I2S port
  * @param is_invert     Is invert the GPIO
  * @return
  *      - ESP_OK                Set mclk output gpio success
  *      - ESP_ERR_INVALID_ARG   Invalid GPIO number
  */
-esp_err_t i2s_check_set_mclk(i2s_port_t id, gpio_num_t gpio_num, bool is_apll, bool is_invert);
+esp_err_t i2s_check_set_mclk(i2s_port_t id, gpio_num_t gpio_num, i2s_clock_src_t clk_src, bool is_invert);
 
 /**
  * @brief Attach data out signal and data in signal to a same gpio

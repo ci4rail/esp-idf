@@ -13,12 +13,75 @@
 #include "esp_timer.h"
 #include "soc/soc_caps.h"
 #include "test_util_rmt_encoders.h"
+#include "test_board.h"
 
 #if CONFIG_RMT_ISR_IRAM_SAFE
 #define TEST_RMT_CALLBACK_ATTR IRAM_ATTR
 #else
 #define TEST_RMT_CALLBACK_ATTR
 #endif
+
+TEST_CASE("rmt bytes encoder", "[rmt]")
+{
+    rmt_tx_channel_config_t tx_channel_cfg = {
+        .mem_block_symbols = SOC_RMT_MEM_WORDS_PER_CHANNEL,
+        .clk_src = RMT_CLK_SRC_DEFAULT,
+        .resolution_hz = 1000000, // 1MHz, 1 tick = 1us
+        .trans_queue_depth = 4,
+        .gpio_num = TEST_RMT_GPIO_NUM_A,
+        .intr_priority = 3
+    };
+    printf("install tx channel\r\n");
+    rmt_channel_handle_t tx_channel = NULL;
+    TEST_ESP_OK(rmt_new_tx_channel(&tx_channel_cfg, &tx_channel));
+    printf("install bytes encoder\r\n");
+    rmt_encoder_handle_t bytes_encoder = NULL;
+    rmt_bytes_encoder_config_t bytes_enc_config = {
+        .bit0 = {
+            .level0 = 1,
+            .duration0 = 3, // 3us
+            .level1 = 0,
+            .duration1 = 9, // 9us
+        },
+        .bit1 = {
+            .level0 = 1,
+            .duration0 = 9, // 9us
+            .level1 = 0,
+            .duration1 = 3, // 3us
+        },
+    };
+    TEST_ESP_OK(rmt_new_bytes_encoder(&bytes_enc_config, &bytes_encoder));
+    printf("enable tx channel\r\n");
+    TEST_ESP_OK(rmt_enable(tx_channel));
+
+    printf("start transaction\r\n");
+    rmt_transmit_config_t transmit_config = {
+        .loop_count = 0, // no loop
+    };
+    TEST_ESP_OK(rmt_transmit(tx_channel, bytes_encoder, (uint8_t[]) {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05
+    }, 6, &transmit_config));
+    // adding extra delay here for visualizing
+    vTaskDelay(pdMS_TO_TICKS(500));
+    TEST_ESP_OK(rmt_transmit(tx_channel, bytes_encoder, (uint8_t[]) {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
+    }, 7, &transmit_config));
+    vTaskDelay(pdMS_TO_TICKS(500));
+    TEST_ESP_OK(rmt_transmit(tx_channel, bytes_encoder, (uint8_t[]) {
+        0x00, 0x01, 0x02, 0x03, 0x04
+    }, 5, &transmit_config));
+    vTaskDelay(pdMS_TO_TICKS(500));
+
+    printf("disable tx channel\r\n");
+    TEST_ESP_OK(rmt_disable(tx_channel));
+    printf("remove tx channel and encoder\r\n");
+    TEST_ESP_OK(rmt_del_channel(tx_channel));
+    TEST_ESP_OK(rmt_del_encoder(bytes_encoder));
+
+    // Test if intr_priority check works
+    tx_channel_cfg.intr_priority = 4;  // 4 is an invalid interrupt priority
+    TEST_ESP_ERR(rmt_new_tx_channel(&tx_channel_cfg, &tx_channel), ESP_ERR_INVALID_ARG);
+}
 
 static void test_rmt_channel_single_trans(size_t mem_block_symbols, bool with_dma)
 {
@@ -27,8 +90,9 @@ static void test_rmt_channel_single_trans(size_t mem_block_symbols, bool with_dm
         .clk_src = RMT_CLK_SRC_DEFAULT,
         .resolution_hz = 10000000, // 10MHz, 1 tick = 0.1us (led strip needs a high resolution)
         .trans_queue_depth = 4,
-        .gpio_num = 0,
+        .gpio_num = TEST_RMT_GPIO_NUM_A,
         .flags.with_dma = with_dma,
+        .intr_priority = 2
     };
     printf("install tx channel\r\n");
     rmt_channel_handle_t tx_channel_single_led = NULL;
@@ -66,17 +130,13 @@ static void test_rmt_channel_single_trans(size_t mem_block_symbols, bool with_dm
     TEST_ESP_OK(rmt_del_encoder(led_strip_encoder));
 }
 
-TEST_CASE("rmt_single_trans_no_dma", "[rmt]")
+TEST_CASE("rmt single transaction", "[rmt]")
 {
     test_rmt_channel_single_trans(SOC_RMT_MEM_WORDS_PER_CHANNEL, false);
-}
-
 #if SOC_RMT_SUPPORT_DMA
-TEST_CASE("rmt_single_trans_with_dma", "[rmt]")
-{
     test_rmt_channel_single_trans(512, true);
-}
 #endif
+}
 
 static void test_rmt_ping_pong_trans(size_t mem_block_symbols, bool with_dma)
 {
@@ -85,8 +145,9 @@ static void test_rmt_ping_pong_trans(size_t mem_block_symbols, bool with_dma)
         .clk_src = RMT_CLK_SRC_DEFAULT,
         .resolution_hz = 10000000, // 10MHz, 1 tick = 0.1us (led strip needs a high resolution)
         .trans_queue_depth = 4,
-        .gpio_num = 0,
+        .gpio_num = TEST_RMT_GPIO_NUM_A,
         .flags.with_dma = with_dma,
+        .intr_priority = 1
     };
     printf("install tx channel\r\n");
     rmt_channel_handle_t tx_channel_multi_leds = NULL;
@@ -147,17 +208,13 @@ static void test_rmt_ping_pong_trans(size_t mem_block_symbols, bool with_dma)
 #undef TEST_LED_NUM
 }
 
-TEST_CASE("rmt_ping_pong_trans_no_dma", "[rmt]")
+TEST_CASE("rmt ping-pong transaction", "[rmt]")
 {
     test_rmt_ping_pong_trans(SOC_RMT_MEM_WORDS_PER_CHANNEL, false);
-}
-
 #if SOC_RMT_SUPPORT_DMA
-TEST_CASE("rmt_ping_pong_trans_with_dma", "[rmt]")
-{
     test_rmt_ping_pong_trans(1024, true);
-}
 #endif
+}
 
 TEST_RMT_CALLBACK_ATTR
 static bool test_rmt_tx_done_cb_check_event_data(rmt_channel_handle_t channel, const rmt_tx_done_event_data_t *edata, void *user_data)
@@ -174,8 +231,9 @@ static void test_rmt_trans_done_event(size_t mem_block_symbols, bool with_dma)
         .clk_src = RMT_CLK_SRC_DEFAULT,
         .resolution_hz = 10000000, // 10MHz, 1 tick = 0.1us (led strip needs a high resolution)
         .trans_queue_depth = 1,
-        .gpio_num = 0,
+        .gpio_num = TEST_RMT_GPIO_NUM_A,
         .flags.with_dma = with_dma,
+        .intr_priority = 3
     };
     printf("install tx channel\r\n");
     rmt_channel_handle_t tx_channel_multi_leds = NULL;
@@ -222,17 +280,13 @@ static void test_rmt_trans_done_event(size_t mem_block_symbols, bool with_dma)
 #undef TEST_LED_NUM
 }
 
-TEST_CASE("rmt_trans_done_event_callback_no_dma", "[rmt]")
+TEST_CASE("rmt trans_done event callback", "[rmt]")
 {
     test_rmt_trans_done_event(SOC_RMT_MEM_WORDS_PER_CHANNEL, false);
-}
-
 #if SOC_RMT_SUPPORT_DMA
-TEST_CASE("rmt_trans_done_event_callback_with_dma", "[rmt]")
-{
     test_rmt_trans_done_event(332, true);
-}
 #endif
+}
 
 #if SOC_RMT_SUPPORT_TX_LOOP_COUNT
 
@@ -251,8 +305,9 @@ static void test_rmt_loop_trans(size_t mem_block_symbols, bool with_dma)
         .clk_src = RMT_CLK_SRC_DEFAULT,
         .resolution_hz = 10000000, // 10MHz, 1 tick = 0.1us (led strip needs a high resolution)
         .trans_queue_depth = 4,
-        .gpio_num = 0,
+        .gpio_num = TEST_RMT_GPIO_NUM_A,
         .flags.with_dma = with_dma,
+        .intr_priority = 2
     };
     printf("install tx channel\r\n");
     rmt_channel_handle_t tx_channel_multi_leds = NULL;
@@ -294,27 +349,25 @@ static void test_rmt_loop_trans(size_t mem_block_symbols, bool with_dma)
 #undef TEST_LED_NUM
 }
 
-TEST_CASE("rmt_loop_trans_no_dma", "[rmt]")
+TEST_CASE("rmt finite loop transaction", "[rmt]")
 {
     test_rmt_loop_trans(SOC_RMT_MEM_WORDS_PER_CHANNEL * 2, false);
+#if SOC_RMT_SUPPORT_DMA
+    test_rmt_loop_trans(128, true);
+#endif
 }
 
-#if SOC_RMT_SUPPORT_DMA
-TEST_CASE("rmt_loop_trans_with_dma", "[rmt]")
-{
-    test_rmt_loop_trans(128, true);
-}
-#endif // SOC_RMT_SUPPORT_DMA
 #endif // SOC_RMT_SUPPORT_TX_LOOP_COUNT
 
-TEST_CASE("rmt_infinite_loop_trans", "[rmt]")
+TEST_CASE("rmt infinite loop transaction", "[rmt]")
 {
     rmt_tx_channel_config_t tx_channel_cfg = {
         .clk_src = RMT_CLK_SRC_DEFAULT,
         .resolution_hz = 1000000, // 1MHz, 1 tick = 1us
         .mem_block_symbols = SOC_RMT_MEM_WORDS_PER_CHANNEL,
-        .gpio_num = 2,
+        .gpio_num = TEST_RMT_GPIO_NUM_B,
         .trans_queue_depth = 3,
+        .intr_priority = 1
     };
     printf("install tx channel\r\n");
     rmt_channel_handle_t tx_channel = NULL;
@@ -391,9 +444,10 @@ static void test_rmt_tx_nec_carrier(size_t mem_block_symbols, bool with_dma)
         .clk_src = RMT_CLK_SRC_DEFAULT,
         .resolution_hz = 1000000, // 1MHz, 1 tick = 1us
         .mem_block_symbols = mem_block_symbols,
-        .gpio_num = 2,
+        .gpio_num = TEST_RMT_GPIO_NUM_B,
         .trans_queue_depth = 4,
         .flags.with_dma = with_dma,
+        .intr_priority = 3
     };
     printf("install tx channel\r\n");
     rmt_channel_handle_t tx_channel = NULL;
@@ -441,17 +495,13 @@ static void test_rmt_tx_nec_carrier(size_t mem_block_symbols, bool with_dma)
     TEST_ESP_OK(rmt_del_encoder(nec_encoder));
 }
 
-TEST_CASE("rmt_tx_nec_carrier_no_dma", "[rmt]")
+TEST_CASE("rmt tx nec with carrier", "[rmt]")
 {
     test_rmt_tx_nec_carrier(SOC_RMT_MEM_WORDS_PER_CHANNEL, false);
-}
-
 #if SOC_RMT_SUPPORT_DMA
-TEST_CASE("rmt_tx_nec_carrier_with_dma", "[rmt]")
-{
     test_rmt_tx_nec_carrier(128, true);
-}
 #endif
+}
 
 TEST_RMT_CALLBACK_ATTR
 static bool test_rmt_tx_done_cb_record_time(rmt_channel_handle_t channel, const rmt_tx_done_event_data_t *edata, void *user_data)
@@ -471,10 +521,11 @@ static void test_rmt_multi_channels_trans(size_t channel0_mem_block_symbols, siz
         .clk_src = RMT_CLK_SRC_DEFAULT,
         .resolution_hz = 10000000, // 10MHz, 1 tick = 0.1us (led strip needs a high resolution)
         .trans_queue_depth = 4,
+        .intr_priority = 3
     };
     printf("install tx channels\r\n");
     rmt_channel_handle_t tx_channels[TEST_RMT_CHANS] = {NULL};
-    int gpio_nums[TEST_RMT_CHANS] = {0, 2};
+    int gpio_nums[TEST_RMT_CHANS] = {TEST_RMT_GPIO_NUM_A, TEST_RMT_GPIO_NUM_B};
     size_t mem_blk_syms[TEST_RMT_CHANS] = {channel0_mem_block_symbols, channel1_mem_block_symbols};
     bool dma_flags[TEST_RMT_CHANS] = {channel0_with_dma, channel1_with_dma};
     for (int i = 0; i < TEST_RMT_CHANS; i++) {
@@ -596,14 +647,10 @@ static void test_rmt_multi_channels_trans(size_t channel0_mem_block_symbols, siz
 #undef TEST_RMT_CHANS
 }
 
-TEST_CASE("rmt_multi_channels_trans_no_dma", "[rmt]")
+TEST_CASE("rmt multiple channels transaction", "[rmt]")
 {
     test_rmt_multi_channels_trans(SOC_RMT_MEM_WORDS_PER_CHANNEL, SOC_RMT_MEM_WORDS_PER_CHANNEL, false, false);
-}
-
 #if SOC_RMT_SUPPORT_DMA
-TEST_CASE("rmt_multi_channels_trans_with_dma", "[rmt]")
-{
     test_rmt_multi_channels_trans(1024, SOC_RMT_MEM_WORDS_PER_CHANNEL, true, false);
-}
 #endif
+}

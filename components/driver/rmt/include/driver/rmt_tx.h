@@ -16,6 +16,7 @@
 extern "C" {
 #endif
 
+
 /**
  * @brief Group of RMT TX callbacks
  * @note The callbacks are all running under ISR environment
@@ -30,10 +31,12 @@ typedef struct {
  * @brief RMT TX channel specific configuration
  */
 typedef struct {
-    int gpio_num;               /*!< GPIO number used by RMT TX channel. Set to -1 if unused */
+    gpio_num_t gpio_num;        /*!< GPIO number used by RMT TX channel. Set to -1 if unused */
     rmt_clock_source_t clk_src; /*!< Clock source of RMT TX channel, channels in the same group must use the same clock source */
     uint32_t resolution_hz;     /*!< Channel clock resolution, in Hz */
-    size_t mem_block_symbols;   /*!< Size of memory block, in number of `rmt_symbol_word_t`, must be an even */
+    size_t mem_block_symbols;   /*!< Size of memory block, in number of `rmt_symbol_word_t`, must be an even.
+                                     In the DMA mode, this field controls the DMA buffer size, it can be set to a large value;
+                                     In the normal mode, this field controls the number of RMT memory block that will be used by the channel. */
     size_t trans_queue_depth;   /*!< Depth of internal transfer queue, increase this value can support more transfers pending in the background */
     struct {
         uint32_t invert_out: 1;   /*!< Whether to invert the RMT channel signal before output to GPIO pad */
@@ -41,6 +44,8 @@ typedef struct {
         uint32_t io_loop_back: 1; /*!< The signal output from the GPIO will be fed to the input path as well */
         uint32_t io_od_mode: 1;   /*!< Configure the GPIO as open-drain mode */
     } flags;                      /*!< TX channel config flags */
+    int intr_priority;            /*!< RMT interrupt priority,
+                                       if set to 0, the driver will try to allocate an interrupt with a relative low priority (1,2,3) */
 } rmt_tx_channel_config_t;
 
 /**

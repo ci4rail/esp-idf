@@ -166,7 +166,7 @@ const pmu_hp_system_clock_param_t * pmu_hp_system_clock_param_default(pmu_hp_mod
     .syscntl = {                \
         .uart_wakeup_en  = 1,   \
         .lp_pad_hold_all = 0,   \
-        .hp_pad_hold_all = 1,   \
+        .hp_pad_hold_all = 0,   \
         .dig_pad_slp_sel = 1,   \
         .dig_pause_wdt   = 1,   \
         .dig_cpu_stall   = 1    \
@@ -176,8 +176,8 @@ const pmu_hp_system_clock_param_t * pmu_hp_system_clock_param_default(pmu_hp_mod
 #define PMU_HP_SLEEP_DIGITAL_CONFIG_DEFAULT() { \
     .syscntl = {                \
         .uart_wakeup_en  = 1,   \
-        .lp_pad_hold_all = 1,   \
-        .hp_pad_hold_all = 1,   \
+        .lp_pad_hold_all = 0,   \
+        .hp_pad_hold_all = 0,   \
         .dig_pad_slp_sel = 0,   \
         .dig_pause_wdt   = 1,   \
         .dig_cpu_stall   = 1    \
@@ -212,7 +212,7 @@ const pmu_hp_system_digital_param_t * pmu_hp_system_digital_param_default(pmu_hp
         .xpd             = 1,   \
         .slp_mem_dbias   = 0x5, \
         .slp_logic_dbias = 0xc, \
-        .dbias           = 0xc \
+        .dbias           = 0xf \
     }, \
     .regulator1 = {             \
         .drv_b           = 0x1a \

@@ -22,12 +22,17 @@ typedef enum {
     WIFI_MODE_STA,       /**< WiFi station mode */
     WIFI_MODE_AP,        /**< WiFi soft-AP mode */
     WIFI_MODE_APSTA,     /**< WiFi station + soft-AP mode */
+    WIFI_MODE_NAN,       /**< WiFi NAN mode */
     WIFI_MODE_MAX
 } wifi_mode_t;
 
 typedef enum {
     WIFI_IF_STA = ESP_IF_WIFI_STA,
     WIFI_IF_AP  = ESP_IF_WIFI_AP,
+#if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2)
+    WIFI_IF_NAN = ESP_IF_WIFI_NAN,
+#endif
+    WIFI_IF_MAX
 } wifi_interface_t;
 
 #define WIFI_OFFCHAN_TX_REQ      1
@@ -51,18 +56,20 @@ typedef struct {
 } wifi_country_t;
 
 /* Strength of authmodes */
-/* OPEN < WEP < WPA_PSK < OWE < WPA2_PSK = WPA_WPA2_PSK < WAPI_PSK < WPA2_ENTERPRISE < WPA3_PSK = WPA2_WPA3_PSK */
+/* OPEN < WEP < WPA_PSK < OWE < WPA2_PSK = WPA_WPA2_PSK < WAPI_PSK < WPA3_PSK = WPA2_WPA3_PSK */
 typedef enum {
     WIFI_AUTH_OPEN = 0,         /**< authenticate mode : open */
     WIFI_AUTH_WEP,              /**< authenticate mode : WEP */
     WIFI_AUTH_WPA_PSK,          /**< authenticate mode : WPA_PSK */
     WIFI_AUTH_WPA2_PSK,         /**< authenticate mode : WPA2_PSK */
     WIFI_AUTH_WPA_WPA2_PSK,     /**< authenticate mode : WPA_WPA2_PSK */
-    WIFI_AUTH_WPA2_ENTERPRISE,  /**< authenticate mode : WPA2_ENTERPRISE */
+    WIFI_AUTH_ENTERPRISE,       /**< authenticate mode : WiFi EAP security */
+    WIFI_AUTH_WPA2_ENTERPRISE = WIFI_AUTH_ENTERPRISE,  /**< authenticate mode : WiFi EAP security */
     WIFI_AUTH_WPA3_PSK,         /**< authenticate mode : WPA3_PSK */
     WIFI_AUTH_WPA2_WPA3_PSK,    /**< authenticate mode : WPA2_WPA3_PSK */
     WIFI_AUTH_WAPI_PSK,         /**< authenticate mode : WAPI_PSK */
     WIFI_AUTH_OWE,              /**< authenticate mode : OWE */
+    WIFI_AUTH_WPA3_ENT_192,     /**< authenticate mode : WPA3_ENT_SUITE_B_192_BIT */
     WIFI_AUTH_MAX
 } wifi_auth_mode_t;
 
@@ -124,6 +131,7 @@ typedef enum {
     WIFI_REASON_AP_TSF_RESET                       = 206,
     WIFI_REASON_ROAMING                            = 207,
     WIFI_REASON_ASSOC_COMEBACK_TIME_TOO_LONG       = 208,
+    WIFI_REASON_SA_QUERY_TIMEOUT                   = 209,
 } wifi_err_reason_t;
 
 typedef enum {
@@ -159,6 +167,7 @@ typedef struct {
     bool show_hidden;            /**< enable to scan AP whose SSID is hidden */
     wifi_scan_type_t scan_type;  /**< scan type, active or passive */
     wifi_scan_time_t scan_time;  /**< scan time per channel */
+    uint8_t home_chan_dwell_time;/**< time spent at home channel between scanning consecutive channels.*/
 } wifi_scan_config_t;
 
 typedef enum {
@@ -280,16 +289,17 @@ typedef struct {
     uint8_t password[64];       /**< Password of soft-AP. */
     uint8_t ssid_len;           /**< Optional length of SSID field. */
     uint8_t channel;            /**< Channel of soft-AP */
-    wifi_auth_mode_t authmode;  /**< Auth mode of soft-AP. Do not support AUTH_WEP in soft-AP mode */
+    wifi_auth_mode_t authmode;  /**< Auth mode of soft-AP. Do not support AUTH_WEP, AUTH_WAPI_PSK and AUTH_OWE in soft-AP mode. When the auth mode is set to WPA2_PSK, WPA2_WPA3_PSK or WPA3_PSK, the pairwise cipher will be overwritten with WIFI_CIPHER_TYPE_CCMP.  */
     uint8_t ssid_hidden;        /**< Broadcast SSID or not, default 0, broadcast the SSID */
     uint8_t max_connection;     /**< Max number of stations allowed to connect in */
     uint16_t beacon_interval;   /**< Beacon interval which should be multiples of 100. Unit: TU(time unit, 1 TU = 1024 us). Range: 100 ~ 60000. Default value: 100 */
-    wifi_cipher_type_t pairwise_cipher;   /**< pairwise cipher of SoftAP, group cipher will be derived using this. cipher values are valid starting from WIFI_CIPHER_TYPE_TKIP, enum values before that will be considered as invalid and default cipher suites(TKIP+CCMP) will be used. Valid cipher suites in softAP mode are WIFI_CIPHER_TYPE_TKIP, WIFI_CIPHER_TYPE_CCMP and WIFI_CIPHER_TYPE_TKIP_CCMP. */
+    wifi_cipher_type_t pairwise_cipher;   /**< Pairwise cipher of SoftAP, group cipher will be derived using this. Cipher values are valid starting from WIFI_CIPHER_TYPE_TKIP, enum values before that will be considered as invalid and default cipher suites(TKIP+CCMP) will be used. Valid cipher suites in softAP mode are WIFI_CIPHER_TYPE_TKIP, WIFI_CIPHER_TYPE_CCMP and WIFI_CIPHER_TYPE_TKIP_CCMP. */
     bool ftm_responder;         /**< Enable FTM Responder mode */
     wifi_pmf_config_t pmf_cfg;  /**< Configuration for Protected Management Frame */
     wifi_sae_pwe_method_t sae_pwe_h2e;  /**< Configuration for SAE PWE derivation method */
 } wifi_ap_config_t;
 
+#define SAE_H2E_IDENTIFIER_LEN 32
 /** @brief STA configuration settings for the device */
 typedef struct {
     uint8_t ssid[32];                         /**< SSID of target AP. */
@@ -300,7 +310,7 @@ typedef struct {
     uint8_t channel;                          /**< channel of target AP. Set to 1~13 to scan starting from the specified channel before connecting to AP. If the channel of AP is unknown, set it to 0.*/
     uint16_t listen_interval;                 /**< Listen interval for ESP32 station to receive beacon when WIFI_PS_MAX_MODEM is set. Units: AP beacon intervals. Defaults to 3 if set to 0. */
     wifi_sort_method_t sort_method;           /**< sort the connect AP in the list by rssi or security mode */
-    wifi_scan_threshold_t  threshold;         /**< When sort_method is set, only APs which have an auth mode that is more secure than the selected auth mode and a signal stronger than the minimum RSSI will be used. */
+    wifi_scan_threshold_t  threshold;         /**< When scan_threshold is set, only APs which have an auth mode that is more secure than the selected auth mode and a signal stronger than the minimum RSSI will be used. */
     wifi_pmf_config_t pmf_cfg;                /**< Configuration for Protected Management Frame. Will be advertised in RSN Capabilities in RSN IE. */
     uint32_t rm_enabled:1;                    /**< Whether Radio Measurements are enabled for the connection */
     uint32_t btm_enabled:1;                   /**< Whether BSS Transition Management is enabled for the connection */
@@ -310,7 +320,7 @@ typedef struct {
     uint32_t transition_disable:1;            /**< Whether to enable transition disable feature */
     uint32_t reserved:26;                     /**< Reserved for future feature set */
     wifi_sae_pwe_method_t sae_pwe_h2e;        /**< Configuration for SAE PWE derivation method */
-    wifi_sae_pk_mode_t sae_pk_mode;           /**< SAE-PK mode */
+    wifi_sae_pk_mode_t sae_pk_mode;           /**< Configuration for SAE-PK (Public Key) Authentication method */
     uint8_t failure_retry_cnt;                /**< Number of connection retries station will do before moving to next AP. scan_method should be set as WIFI_ALL_CHANNEL_SCAN to use this config.
                                                    Note: Enabling this may cause connection time to increase incase best AP doesn't behave properly. */
     uint32_t he_dcm_set:1;                                        /**< Whether DCM max.constellation for transmission and reception is set. */
@@ -322,17 +332,30 @@ typedef struct {
     uint32_t he_trig_mu_bmforming_partial_feedback_disabled:1;    /**< Whether to disable support the transmission of partial-bandwidth MU feedback in an HE TB sounding sequence. */
     uint32_t he_trig_cqi_feedback_disabled:1;                     /**< Whether to disable support the transmission of CQI feedback in an HE TB sounding sequence. */
     uint32_t he_reserved:22;                                      /**< Reserved for future feature set */
+    uint8_t sae_h2e_identifier[SAE_H2E_IDENTIFIER_LEN];/**< Password identifier for H2E. this needs to be null terminated string */
 } wifi_sta_config_t;
 
-/** @brief Configuration data for device's AP or STA.
+/**
+  * @brief NAN Discovery start configuration
+  *
+  */
+typedef struct {
+    uint8_t op_channel;    /**< NAN Discovery operating channel */
+    uint8_t master_pref;   /**< Device's preference value to serve as NAN Master */
+    uint8_t scan_time;     /**< Scan time in seconds while searching for a NAN cluster */
+    uint16_t warm_up_sec;  /**< Warm up time before assuming NAN Anchor Master role */
+} wifi_nan_config_t;
+
+/** @brief Configuration data for device's AP or STA or NAN.
  *
- * The usage of this union (for ap or sta configuration) is determined by the accompanying
+ * The usage of this union (for ap, sta or nan configuration) is determined by the accompanying
  * interface argument passed to esp_wifi_set_config() or esp_wifi_get_config()
  *
  */
 typedef union {
     wifi_ap_config_t  ap;  /**< configuration of AP */
     wifi_sta_config_t sta; /**< configuration of STA */
+    wifi_nan_config_t nan; /**< configuration of NAN */
 } wifi_config_t;
 
 /** @brief Description of STA associated with AP */
@@ -631,6 +654,114 @@ typedef struct {
 } wifi_ftm_initiator_cfg_t;
 
 /**
+  * @brief WiFi beacon monitor parameter configuration
+  *
+  */
+typedef struct {
+    bool        enable;                     /**< Enable or disable beacon monitor */
+    uint8_t     loss_timeout;               /**< Beacon lost timeout */
+    uint8_t     loss_threshold;             /**< Maximum number of consecutive lost beacons allowed */
+    uint8_t     delta_intr_early;           /**< Delta early time for RF PHY on */
+    uint8_t     delta_loss_timeout;         /**< Delta timeout time for RF PHY off */
+#if MAC_SUPPORT_PMU_MODEM_STATE
+    uint8_t     beacon_abort: 1,            /**< Enable or disable beacon abort */
+                broadcast_wakeup: 1,        /**< Enable or disable TIM element multicast wakeup */
+                reserved: 6;                /**< Reserved */
+    uint8_t     tsf_time_sync_deviation;    /**< Deviation range to sync with AP TSF timestamp */
+    uint16_t    modem_state_consecutive;    /**< PMU MODEM state consecutive count limit */
+    uint16_t    rf_ctrl_wait_cycle;         /**< RF on wait time (unit: Modem APB clock cycle) */
+#endif
+} wifi_beacon_monitor_config_t;
+
+#define ESP_WIFI_NAN_MAX_SVC_SUPPORTED  2
+#define ESP_WIFI_NAN_DATAPATH_MAX_PEERS 2
+
+#define ESP_WIFI_NDP_ROLE_INITIATOR     1
+#define ESP_WIFI_NDP_ROLE_RESPONDER     2
+
+#define ESP_WIFI_MAX_SVC_NAME_LEN    256
+#define ESP_WIFI_MAX_FILTER_LEN      256
+#define ESP_WIFI_MAX_SVC_INFO_LEN    64
+
+/**
+  * @brief NAN Services types
+  *
+  */
+typedef enum {
+    NAN_PUBLISH_SOLICITED,  /**< Send unicast Publish frame to Subscribers that match the requirement */
+    NAN_PUBLISH_UNSOLICITED,/**< Send broadcast Publish frames in every Discovery Window(DW) */
+    NAN_SUBSCRIBE_ACTIVE,   /**< Send broadcast Subscribe frames in every DW */
+    NAN_SUBSCRIBE_PASSIVE,  /**< Passively listens to Publish frames */
+} wifi_nan_service_type_t;
+
+/**
+  * @brief NAN Publish service configuration parameters
+  *
+  */
+typedef struct {
+    char service_name[ESP_WIFI_MAX_SVC_NAME_LEN];   /**< Service name identifier */
+    wifi_nan_service_type_t type;                   /**< Service type */
+    char matching_filter[ESP_WIFI_MAX_FILTER_LEN];  /**< Comma separated filters for filtering services */
+    char svc_info[ESP_WIFI_MAX_SVC_INFO_LEN];       /**< Service info shared in Publish frame */
+    uint8_t single_replied_event:1;                 /**< Give single Replied event or every time */
+    uint8_t datapath_reqd:1;                        /**< NAN Datapath required for the service */
+    uint8_t reserved:6;                             /**< Reserved */
+} wifi_nan_publish_cfg_t;
+
+/**
+  * @brief NAN Subscribe service configuration parameters
+  *
+  */
+typedef struct {
+    char service_name[ESP_WIFI_MAX_SVC_NAME_LEN];   /**< Service name identifier */
+    wifi_nan_service_type_t type;                   /**< Service type */
+    char matching_filter[ESP_WIFI_MAX_FILTER_LEN];  /**< Comma separated filters for filtering services */
+    char svc_info[ESP_WIFI_MAX_SVC_INFO_LEN];       /**< Service info shared in Subscribe frame */
+    uint8_t single_match_event:1;                   /**< Give single Match event or every time */
+    uint8_t reserved:7;                             /**< Reserved */
+} wifi_nan_subscribe_cfg_t;
+
+/**
+  * @brief NAN Follow-up parameters
+  *
+  */
+typedef struct {
+    uint8_t inst_id;                         /**< Own service instance id */
+    uint8_t peer_inst_id;                    /**< Peer's service instance id */
+    uint8_t peer_mac[6];                     /**< Peer's MAC address */
+    char svc_info[ESP_WIFI_MAX_SVC_INFO_LEN];/**< Service info(or message) to be shared */
+} wifi_nan_followup_params_t;
+
+/**
+  * @brief NAN Datapath Request parameters
+  *
+  */
+typedef struct {
+    uint8_t pub_id;         /**< Publisher's service instance id */
+    uint8_t peer_mac[6];    /**< Peer's MAC address */
+    bool confirm_required;  /**< NDP Confirm frame required */
+} wifi_nan_datapath_req_t;
+
+/**
+  * @brief NAN Datapath Response parameters
+  *
+  */
+typedef struct {
+    bool accept;            /**< True - Accept incoming NDP, False - Reject it */
+    uint8_t ndp_id;         /**< NAN Datapath Identifier */
+    uint8_t peer_mac[6];    /**< Peer's MAC address */
+} wifi_nan_datapath_resp_t;
+
+/**
+  * @brief NAN Datapath End parameters
+  *
+  */
+typedef struct {
+    uint8_t ndp_id;         /**< NAN Datapath Identifier */
+    uint8_t peer_mac[6];    /**< Peer's MAC address */
+} wifi_nan_datapath_end_req_t;
+
+/**
   * @brief WiFi PHY rate encodings
   *
   */
@@ -650,35 +781,65 @@ typedef enum {
     WIFI_PHY_RATE_36M       = 0x0D, /**< 36 Mbps */
     WIFI_PHY_RATE_18M       = 0x0E, /**< 18 Mbps */
     WIFI_PHY_RATE_9M        = 0x0F, /**< 9 Mbps */
-    WIFI_PHY_RATE_MCS0_LGI  = 0x10, /**< MCS0 with long GI, 6.5 Mbps for 20MHz, 13.5 Mbps for 40MHz */
-    WIFI_PHY_RATE_MCS1_LGI  = 0x11, /**< MCS1 with long GI, 13 Mbps for 20MHz, 27 Mbps for 40MHz */
-    WIFI_PHY_RATE_MCS2_LGI  = 0x12, /**< MCS2 with long GI, 19.5 Mbps for 20MHz, 40.5 Mbps for 40MHz */
-    WIFI_PHY_RATE_MCS3_LGI  = 0x13, /**< MCS3 with long GI, 26 Mbps for 20MHz, 54 Mbps for 40MHz */
-    WIFI_PHY_RATE_MCS4_LGI  = 0x14, /**< MCS4 with long GI, 39 Mbps for 20MHz, 81 Mbps for 40MHz */
-    WIFI_PHY_RATE_MCS5_LGI  = 0x15, /**< MCS5 with long GI, 52 Mbps for 20MHz, 108 Mbps for 40MHz */
-    WIFI_PHY_RATE_MCS6_LGI  = 0x16, /**< MCS6 with long GI, 58.5 Mbps for 20MHz, 121.5 Mbps for 40MHz */
-    WIFI_PHY_RATE_MCS7_LGI  = 0x17, /**< MCS7 with long GI, 65 Mbps for 20MHz, 135 Mbps for 40MHz */
+    /**< rate table and guard interval information for each MCS rate*/
+    /*
+     -----------------------------------------------------------------------------------------------------------
+            MCS RATE             |          HT20           |          HT40           |          HE20           |
+     WIFI_PHY_RATE_MCS0_LGI      |     6.5 Mbps (800ns)    |    13.5 Mbps (800ns)    |     8.1 Mbps (1600ns)   |
+     WIFI_PHY_RATE_MCS1_LGI      |      13 Mbps (800ns)    |      27 Mbps (800ns)    |    16.3 Mbps (1600ns)   |
+     WIFI_PHY_RATE_MCS2_LGI      |    19.5 Mbps (800ns)    |    40.5 Mbps (800ns)    |    24.4 Mbps (1600ns)   |
+     WIFI_PHY_RATE_MCS3_LGI      |      26 Mbps (800ns)    |      54 Mbps (800ns)    |    32.5 Mbps (1600ns)   |
+     WIFI_PHY_RATE_MCS4_LGI      |      39 Mbps (800ns)    |      81 Mbps (800ns)    |    48.8 Mbps (1600ns)   |
+     WIFI_PHY_RATE_MCS5_LGI      |      52 Mbps (800ns)    |     108 Mbps (800ns)    |      65 Mbps (1600ns)   |
+     WIFI_PHY_RATE_MCS6_LGI      |    58.5 Mbps (800ns)    |   121.5 Mbps (800ns)    |    73.1 Mbps (1600ns)   |
+     WIFI_PHY_RATE_MCS7_LGI      |      65 Mbps (800ns)    |     135 Mbps (800ns)    |    81.3 Mbps (1600ns)   |
+     WIFI_PHY_RATE_MCS8_LGI      |          -----          |          -----          |    97.5 Mbps (1600ns)   |
+     WIFI_PHY_RATE_MCS9_LGI      |          -----          |          -----          |   108.3 Mbps (1600ns)   |
+     -----------------------------------------------------------------------------------------------------------
+    */
+    WIFI_PHY_RATE_MCS0_LGI  = 0x10, /**< MCS0 with long GI */
+    WIFI_PHY_RATE_MCS1_LGI  = 0x11, /**< MCS1 with long GI */
+    WIFI_PHY_RATE_MCS2_LGI  = 0x12, /**< MCS2 with long GI */
+    WIFI_PHY_RATE_MCS3_LGI  = 0x13, /**< MCS3 with long GI */
+    WIFI_PHY_RATE_MCS4_LGI  = 0x14, /**< MCS4 with long GI */
+    WIFI_PHY_RATE_MCS5_LGI  = 0x15, /**< MCS5 with long GI */
+    WIFI_PHY_RATE_MCS6_LGI  = 0x16, /**< MCS6 with long GI */
+    WIFI_PHY_RATE_MCS7_LGI  = 0x17, /**< MCS7 with long GI */
 #if CONFIG_SOC_WIFI_HE_SUPPORT
-    WIFI_PHY_RATE_MCS8_LGI,         /**< MCS8 */
-    WIFI_PHY_RATE_MCS9_LGI,         /**< MCS9 */
+    WIFI_PHY_RATE_MCS8_LGI,         /**< MCS8 with long GI */
+    WIFI_PHY_RATE_MCS9_LGI,         /**< MCS9 with long GI */
 #endif
-    WIFI_PHY_RATE_MCS0_SGI,         /**< MCS0 with short GI, 7.2 Mbps for 20MHz, 15 Mbps for 40MHz */
-    WIFI_PHY_RATE_MCS1_SGI,         /**< MCS1 with short GI, 14.4 Mbps for 20MHz, 30 Mbps for 40MHz */
-    WIFI_PHY_RATE_MCS2_SGI,         /**< MCS2 with short GI, 21.7 Mbps for 20MHz, 45 Mbps for 40MHz */
-    WIFI_PHY_RATE_MCS3_SGI,         /**< MCS3 with short GI, 28.9 Mbps for 20MHz, 60 Mbps for 40MHz */
-    WIFI_PHY_RATE_MCS4_SGI,         /**< MCS4 with short GI, 43.3 Mbps for 20MHz, 90 Mbps for 40MHz */
-    WIFI_PHY_RATE_MCS5_SGI,         /**< MCS5 with short GI, 57.8 Mbps for 20MHz, 120 Mbps for 40MHz */
-    WIFI_PHY_RATE_MCS6_SGI,         /**< MCS6 with short GI, 65 Mbps for 20MHz, 135 Mbps for 40MHz */
-    WIFI_PHY_RATE_MCS7_SGI,         /**< MCS7 with short GI, 72.2 Mbps for 20MHz, 150 Mbps for 40MHz */
+    /*
+     -----------------------------------------------------------------------------------------------------------
+            MCS RATE             |          HT20           |          HT40           |          HE20           |
+     WIFI_PHY_RATE_MCS0_SGI      |     7.2 Mbps (400ns)    |      15 Mbps (400ns)    |      8.6 Mbps (800ns)   |
+     WIFI_PHY_RATE_MCS1_SGI      |    14.4 Mbps (400ns)    |      30 Mbps (400ns)    |     17.2 Mbps (800ns)   |
+     WIFI_PHY_RATE_MCS2_SGI      |    21.7 Mbps (400ns)    |      45 Mbps (400ns)    |     25.8 Mbps (800ns)   |
+     WIFI_PHY_RATE_MCS3_SGI      |    28.9 Mbps (400ns)    |      60 Mbps (400ns)    |     34.4 Mbps (800ns)   |
+     WIFI_PHY_RATE_MCS4_SGI      |    43.3 Mbps (400ns)    |      90 Mbps (400ns)    |     51.6 Mbps (800ns)   |
+     WIFI_PHY_RATE_MCS5_SGI      |    57.8 Mbps (400ns)    |     120 Mbps (400ns)    |     68.8 Mbps (800ns)   |
+     WIFI_PHY_RATE_MCS6_SGI      |      65 Mbps (400ns)    |     135 Mbps (400ns)    |     77.4 Mbps (800ns)   |
+     WIFI_PHY_RATE_MCS7_SGI      |    72.2 Mbps (400ns)    |     150 Mbps (400ns)    |       86 Mbps (800ns)   |
+     WIFI_PHY_RATE_MCS8_SGI      |          -----          |          -----          |    103.2 Mbps (800ns)   |
+     WIFI_PHY_RATE_MCS9_SGI      |          -----          |          -----          |    114.7 Mbps (800ns)   |
+     -----------------------------------------------------------------------------------------------------------
+    */
+    WIFI_PHY_RATE_MCS0_SGI,         /**< MCS0 with short GI */
+    WIFI_PHY_RATE_MCS1_SGI,         /**< MCS1 with short GI */
+    WIFI_PHY_RATE_MCS2_SGI,         /**< MCS2 with short GI */
+    WIFI_PHY_RATE_MCS3_SGI,         /**< MCS3 with short GI */
+    WIFI_PHY_RATE_MCS4_SGI,         /**< MCS4 with short GI */
+    WIFI_PHY_RATE_MCS5_SGI,         /**< MCS5 with short GI */
+    WIFI_PHY_RATE_MCS6_SGI,         /**< MCS6 with short GI */
+    WIFI_PHY_RATE_MCS7_SGI,         /**< MCS7 with short GI */
 #if CONFIG_SOC_WIFI_HE_SUPPORT
-    WIFI_PHY_RATE_MCS8_SGI,         /**< MCS8 */
-    WIFI_PHY_RATE_MCS9_SGI,         /**< MCS9 */
+    WIFI_PHY_RATE_MCS8_SGI,         /**< MCS8 with short GI */
+    WIFI_PHY_RATE_MCS9_SGI,         /**< MCS9 with short GI */
 #endif
     WIFI_PHY_RATE_LORA_250K = 0x29, /**< 250 Kbps */
     WIFI_PHY_RATE_LORA_500K = 0x2A, /**< 500 Kbps */
     WIFI_PHY_RATE_MAX,
 } wifi_phy_rate_t;
-
 
 /** WiFi event declarations */
 typedef enum {
@@ -723,6 +884,15 @@ typedef enum {
     WIFI_EVENT_ITWT_TEARDOWN,           /**< iTWT teardown */
     WIFI_EVENT_ITWT_PROBE,              /**< iTWT probe */
     WIFI_EVENT_ITWT_SUSPEND,            /**< iTWT suspend */
+
+    WIFI_EVENT_NAN_STARTED,              /**< NAN Discovery has started */
+    WIFI_EVENT_NAN_STOPPED,              /**< NAN Discovery has stopped */
+    WIFI_EVENT_NAN_SVC_MATCH,            /**< NAN Service Discovery match found */
+    WIFI_EVENT_NAN_REPLIED,              /**< Replied to a NAN peer with Service Discovery match */
+    WIFI_EVENT_NAN_RECEIVE,              /**< Received a Follow-up message */
+    WIFI_EVENT_NDP_INDICATION,           /**< Received NDP Request from a NAN Peer */
+    WIFI_EVENT_NDP_CONFIRM,              /**< NDP Confirm Indication */
+    WIFI_EVENT_NDP_TERMINATED,           /**< NAN Datapath terminated indication */
 
     WIFI_EVENT_MAX,                      /**< Invalid WiFi event ID */
 } wifi_event_t;
@@ -801,6 +971,7 @@ typedef struct {
     uint8_t mac[6];           /**< MAC address of the station disconnects to soft-AP */
     uint8_t aid;              /**< the aid that soft-AP gave to the station disconnects to  */
     bool is_mesh_child;       /**< flag to identify mesh child */
+    uint8_t reason;           /**< reason of disconnection */
 } wifi_event_ap_stadisconnected_t;
 
 /** Argument structure for WIFI_EVENT_AP_PROBEREQRECVED event */
@@ -890,6 +1061,55 @@ typedef struct {
 typedef struct {
     uint8_t peer_macaddr[6];           /**< Enrollee mac address */
 } wifi_event_ap_wps_rg_success_t;
+
+/** Argument structure for WIFI_EVENT_NAN_SVC_MATCH event */
+typedef struct {
+    uint8_t subscribe_id;       /**< Subscribe Service Identifier */
+    uint8_t publish_id;         /**< Publish Service Identifier */
+    uint8_t pub_if_mac[6];      /**< NAN Interface MAC of the Publisher */
+    bool update_pub_id;         /**< Indicates whether publisher's service ID needs to be updated */
+} wifi_event_nan_svc_match_t;
+
+/** Argument structure for WIFI_EVENT_NAN_REPLIED event */
+typedef struct {
+    uint8_t publish_id;         /**< Publish Service Identifier */
+    uint8_t subscribe_id;       /**< Subscribe Service Identifier */
+    uint8_t sub_if_mac[6];      /**< NAN Interface MAC of the Subscriber */
+} wifi_event_nan_replied_t;
+
+/** Argument structure for WIFI_EVENT_NAN_RECEIVE event */
+typedef struct {
+    uint8_t inst_id;                                 /**< Our Service Identifier */
+    uint8_t peer_inst_id;                            /**< Peer's Service Identifier */
+    uint8_t peer_if_mac[6];                          /**< Peer's NAN Interface MAC */
+    uint8_t peer_svc_info[ESP_WIFI_MAX_SVC_INFO_LEN];/**< Peer Service Info */
+} wifi_event_nan_receive_t;
+
+/** Argument structure for WIFI_EVENT_NDP_INDICATION event */
+typedef struct {
+    uint8_t publish_id;                         /**< Publish Id for NAN Service */
+    uint8_t ndp_id;                             /**< NDP instance id */
+    uint8_t peer_nmi[6];                        /**< Peer's NAN Management Interface MAC */
+    uint8_t peer_ndi[6];                        /**< Peer's NAN Data Interface MAC */
+    uint8_t svc_info[ESP_WIFI_MAX_SVC_INFO_LEN];/**< Service Specific Info */
+} wifi_event_ndp_indication_t;
+
+/** Argument structure for WIFI_EVENT_NDP_CONFIRM event */
+typedef struct {
+    uint8_t status;                             /**< NDP status code */
+    uint8_t ndp_id;                             /**< NDP instance id */
+    uint8_t peer_nmi[6];                        /**< Peer's NAN Management Interface MAC */
+    uint8_t peer_ndi[6];                        /**< Peer's NAN Data Interface MAC */
+    uint8_t own_ndi[6];                         /**< Own NAN Data Interface MAC */
+    uint8_t svc_info[ESP_WIFI_MAX_SVC_INFO_LEN];/**< Service Specific Info */
+} wifi_event_ndp_confirm_t;
+
+/** Argument structure for WIFI_EVENT_NDP_TERMINATED event */
+typedef struct {
+    uint8_t reason;                             /**< Termination reason code */
+    uint8_t ndp_id;                             /**< NDP instance id */
+    uint8_t init_ndi[6];                        /**< Initiator's NAN Data Interface MAC */
+} wifi_event_ndp_terminated_t;
 
 #ifdef __cplusplus
 }

@@ -11,6 +11,7 @@ extern "C" {
 
 #include <stddef.h>
 #include "sdkconfig.h"
+#include "esp_heap_caps.h"
 #include "esp_err.h"
 
 // Forward declaration. Definition in linenoise/linenoise.h.
@@ -22,6 +23,7 @@ typedef struct linenoiseCompletions linenoiseCompletions;
 typedef struct {
     size_t max_cmdline_length;  //!< length of command line buffer, in bytes
     size_t max_cmdline_args;    //!< maximum number of command line arguments to parse
+    uint32_t heap_alloc_caps;   //!< where to (e.g. MALLOC_CAP_SPIRAM) allocate heap objects such as cmds used by esp_console
     int hint_color;             //!< ASCII color code of hint text
     int hint_bold;              //!< Set to 1 to print hint text in bold
 } esp_console_config_t;
@@ -30,12 +32,13 @@ typedef struct {
  * @brief Default console configuration value
  *
  */
-#define ESP_CONSOLE_CONFIG_DEFAULT() \
-    {                                \
-        .max_cmdline_length = 256,   \
-        .max_cmdline_args = 32,      \
-        .hint_color = 39,            \
-        .hint_bold = 0               \
+#define ESP_CONSOLE_CONFIG_DEFAULT()           \
+    {                                          \
+        .max_cmdline_length = 256,             \
+        .max_cmdline_args = 32,                \
+        .heap_alloc_caps = MALLOC_CAP_DEFAULT, \
+        .hint_color = 39,                      \
+        .hint_bold = 0                         \
     }
 
 /**
@@ -65,6 +68,7 @@ typedef struct {
         .max_cmdline_length = 0,          \
 }
 
+#if CONFIG_ESP_CONSOLE_UART_DEFAULT || CONFIG_ESP_CONSOLE_UART_CUSTOM
 /**
  * @brief Parameters for console device: UART
  *
@@ -76,7 +80,7 @@ typedef struct {
     int rx_gpio_num; //!< GPIO number for RX path, -1 means using default one
 } esp_console_dev_uart_config_t;
 
-#ifdef CONFIG_ESP_CONSOLE_UART_CUSTOM
+#if CONFIG_ESP_CONSOLE_UART_CUSTOM
 #define ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT()       \
 {                                                   \
     .channel = CONFIG_ESP_CONSOLE_UART_NUM,         \
@@ -92,8 +96,10 @@ typedef struct {
     .tx_gpio_num = -1,                             \
     .rx_gpio_num = -1,                             \
 }
-#endif
+#endif // CONFIG_ESP_CONSOLE_UART_CUSTOM
+#endif // CONFIG_ESP_CONSOLE_UART_DEFAULT || CONFIG_ESP_CONSOLE_UART_CUSTOM
 
+#if CONFIG_ESP_CONSOLE_USB_CDC || (defined __DOXYGEN__ && SOC_USB_OTG_SUPPORTED)
 /**
  * @brief Parameters for console device: USB CDC
  *
@@ -104,11 +110,10 @@ typedef struct {
 
 } esp_console_dev_usb_cdc_config_t;
 
-#define ESP_CONSOLE_DEV_CDC_CONFIG_DEFAULT() \
-{                                            \
-}
+#define ESP_CONSOLE_DEV_CDC_CONFIG_DEFAULT() {}
+#endif // CONFIG_ESP_CONSOLE_USB_CDC || (defined __DOXYGEN__ && SOC_USB_OTG_SUPPORTED)
 
-#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG || (defined __DOXYGEN__ && SOC_USB_SERIAL_JTAG_SUPPORTED)
 /**
  * @brief Parameters for console device: USB-SERIAL-JTAG
  *
@@ -120,8 +125,7 @@ typedef struct {
 } esp_console_dev_usb_serial_jtag_config_t;
 
 #define ESP_CONSOLE_DEV_USB_SERIAL_JTAG_CONFIG_DEFAULT() {}
-
-#endif // CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+#endif // CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG || (defined __DOXYGEN__ && SOC_USB_SERIAL_JTAG_SUPPORTED)
 
 /**
  * @brief initialize console module
@@ -271,7 +275,9 @@ const char *esp_console_get_hint(const char *buf, int *color, int *bold);
  * @brief Register a 'help' command
  *
  * Default 'help' command prints the list of registered commands along with
- * hints and help strings.
+ * hints and help strings if no additional argument is given. If an additional
+ * argument is given, the help command will look for a command with the same
+ * name and only print the hints and help strings of that command.
  *
  * @return
  *      - ESP_OK on success
@@ -304,6 +310,7 @@ struct esp_console_repl_s {
     esp_err_t (*del)(esp_console_repl_t *repl);
 };
 
+#if CONFIG_ESP_CONSOLE_UART_DEFAULT || CONFIG_ESP_CONSOLE_UART_CUSTOM
 /**
  * @brief Establish a console REPL environment over UART driver
  *
@@ -326,7 +333,9 @@ struct esp_console_repl_s {
  *      - ESP_FAIL Parameter error
  */
 esp_err_t esp_console_new_repl_uart(const esp_console_dev_uart_config_t *dev_config, const esp_console_repl_config_t *repl_config, esp_console_repl_t **ret_repl);
+#endif // CONFIG_ESP_CONSOLE_UART_DEFAULT || CONFIG_ESP_CONSOLE_UART_CUSTOM
 
+#if CONFIG_ESP_CONSOLE_USB_CDC || (defined __DOXYGEN__ && SOC_USB_OTG_SUPPORTED)
 /**
  * @brief Establish a console REPL environment over USB CDC
  *
@@ -347,8 +356,9 @@ esp_err_t esp_console_new_repl_uart(const esp_console_dev_uart_config_t *dev_con
  *      - ESP_FAIL Parameter error
  */
 esp_err_t esp_console_new_repl_usb_cdc(const esp_console_dev_usb_cdc_config_t *dev_config, const esp_console_repl_config_t *repl_config, esp_console_repl_t **ret_repl);
+#endif // CONFIG_ESP_CONSOLE_USB_CDC || (defined __DOXYGEN__ && SOC_USB_OTG_SUPPORTED)
 
-#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG || (defined __DOXYGEN__ && SOC_USB_SERIAL_JTAG_SUPPORTED)
 /**
  * @brief Establish a console REPL (Read-eval-print loop) environment over USB-SERIAL-JTAG
  *
@@ -369,7 +379,7 @@ esp_err_t esp_console_new_repl_usb_cdc(const esp_console_dev_usb_cdc_config_t *d
  *      - ESP_FAIL Parameter error
  */
 esp_err_t esp_console_new_repl_usb_serial_jtag(const esp_console_dev_usb_serial_jtag_config_t *dev_config, const esp_console_repl_config_t *repl_config, esp_console_repl_t **ret_repl);
-#endif // CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+#endif // CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG || (defined __DOXYGEN__ && SOC_USB_SERIAL_JTAG_SUPPORTED)
 
 /**
  * @brief Start REPL environment

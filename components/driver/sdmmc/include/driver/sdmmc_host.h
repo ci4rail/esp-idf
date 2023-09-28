@@ -40,12 +40,15 @@ extern "C" {
     .get_bus_width = &sdmmc_host_get_slot_width, \
     .set_bus_ddr_mode = &sdmmc_host_set_bus_ddr_mode, \
     .set_card_clk = &sdmmc_host_set_card_clk, \
+    .set_cclk_always_on = &sdmmc_host_set_cclk_always_on, \
     .do_transaction = &sdmmc_host_do_transaction, \
     .deinit = &sdmmc_host_deinit, \
     .io_int_enable = sdmmc_host_io_int_enable, \
     .io_int_wait = sdmmc_host_io_int_wait, \
     .command_timeout_ms = 0, \
-    .get_real_freq = &sdmmc_host_get_real_freq \
+    .get_real_freq = &sdmmc_host_get_real_freq, \
+    .input_delay_phase = SDMMC_DELAY_PHASE_0, \
+    .set_input_delay = &sdmmc_host_set_input_delay \
 }
 
 /**
@@ -78,6 +81,11 @@ typedef struct {
         /**< Enable internal pullups on enabled pins. The internal pullups
          are insufficient however, please make sure external pullups are
          connected on the bus. This is for debug / example purpose only.
+         */
+#define SDMMC_SLOT_FLAG_WP_ACTIVE_HIGH   BIT(1)
+        /**< GPIO write protect polarity.
+         * 0 means "active low", i.e. card is protected when the GPIO is low;
+         * 1 means "active high", i.e. card is protected when GPIO is high.
          */
 } sdmmc_slot_config_t;
 
@@ -205,6 +213,19 @@ esp_err_t sdmmc_host_set_card_clk(int slot, uint32_t freq_khz);
 esp_err_t sdmmc_host_set_bus_ddr_mode(int slot, bool ddr_enabled);
 
 /**
+ * @brief Enable or disable always-on card clock
+ * When cclk_always_on is false, the host controller is allowed to shut down
+ * the card clock between the commands. When cclk_always_on is true, the clock
+ * is generated even if no command is in progress.
+ * @param slot  slot number
+ * @param cclk_always_on  enable or disable always-on clock
+ * @return
+ *      - ESP_OK on success
+ *      - ESP_ERR_INVALID_ARG if the slot number is invalid
+ */
+esp_err_t sdmmc_host_set_cclk_always_on(int slot, bool cclk_always_on);
+
+/**
  * @brief Send command to the card and get response
  *
  * This function returns when command is sent and response is received,
@@ -276,6 +297,25 @@ esp_err_t sdmmc_host_deinit(void);
  *      - ESP_ERR_INVALID_ARG on real_freq_khz == NULL or invalid slot number used
  */
 esp_err_t sdmmc_host_get_real_freq(int slot, int* real_freq_khz);
+
+/**
+ * @brief set input delay
+ *
+ * @note ESP32 doesn't support this feature, you will get an `ESP_ERR_NOT_SUPPORTED`
+ *
+ * - This API sets delay when the SDMMC Host samples the signal from the SD Slave.
+ * - This API will check if the given `delay_phase` is valid or not.
+ * - This API will print out the delay time, in picosecond (ps)
+ *
+ * @param slot         slot number (SDMMC_HOST_SLOT_0 or SDMMC_HOST_SLOT_1)
+ * @param delay_phase  delay phase, this API will convert the phase into picoseconds and print it out
+ *
+ * @return
+ *        - ESP_OK:                ON success.
+ *        - ESP_ERR_INVALID_ARG:   Invalid argument.
+ *        - ESP_ERR_NOT_SUPPORTED: ESP32 doesn't support this feature.
+ */
+esp_err_t sdmmc_host_set_input_delay(int slot, sdmmc_delay_phase_t delay_phase);
 
 #ifdef __cplusplus
 }

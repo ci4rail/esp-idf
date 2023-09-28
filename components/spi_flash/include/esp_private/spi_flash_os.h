@@ -18,6 +18,7 @@
 #include "hal/spi_flash_hal.h"
 #include "spi_flash_override.h"
 #include "soc/soc_caps.h"
+#include "soc/clk_tree_defs.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,8 +40,9 @@ typedef enum {
     ESP_MSPI_IO_D7,
 #endif // SOC_SPI_MEM_SUPPORT_OPI_MODE
 #if CONFIG_SPIRAM
-    ESP_MSPI_IO_CS1 /* cs for spi ram */
+    ESP_MSPI_IO_CS1, /* cs for spi ram */
 #endif
+    ESP_MSPI_IO_MAX, /* Maximum IO MSPI occupied */
 } esp_mspi_io_t;
 
 /**
@@ -243,6 +245,7 @@ extern const spi_flash_guard_funcs_t g_flash_guard_no_os_ops;
  * @note Only called in startup. User should not call this function.
  */
 void spi_flash_rom_impl_init(void);
+
 
 
 #ifdef __cplusplus

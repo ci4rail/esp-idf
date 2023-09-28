@@ -11,6 +11,7 @@
  */
 
 #include "string.h"
+#include <inttypes.h>
 #include "esp_system.h"
 #include "unity.h"
 #include "esp_system.h"
@@ -103,7 +104,7 @@ static void start_wifi_as_sta(void)
 static void stop_wifi(void)
 {
     esp_event_loop_delete_default();
-    ESP_LOGI(TAG, "Stop wifi\n");
+    ESP_LOGI(TAG, "Stop wifi");
     TEST_ESP_OK(esp_wifi_stop());
     TEST_ESP_OK(esp_wifi_deinit());
     esp_wifi_clear_default_wifi_driver_and_handlers(wifi_netif);
@@ -135,7 +136,7 @@ void esp_send_action_frame(uint8_t *dest_mac, const uint8_t *buf, uint32_t len,
     req->rx_cb = dummy_rx_action;
     memcpy(req->data, buf, req->data_len);
 
-    ESP_LOGI(TAG, "Action Tx - MAC:" MACSTR ", Channel-%d, WaitT-%d",
+    ESP_LOGI(TAG, "Action Tx - MAC:" MACSTR ", Channel-%d, WaitT-%" PRId32 "",
              MAC2STR(dest_mac), channel, wait_time_ms);
 
     TEST_ESP_OK(esp_wifi_action_tx_req(WIFI_OFFCHAN_TX_REQ, channel, wait_time_ms, req));

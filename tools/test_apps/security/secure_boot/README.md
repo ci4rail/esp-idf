@@ -65,7 +65,7 @@ See the Getting Started Guide for full steps to configure and use ESP-IDF to bui
 
 # Secure Boot tests (For internal use only)
 
-Purpose of the example test cases (`example_test.py`) is to test the secure boot implementation and detect if it is broken. It consists of positive and negative test cases.
+Purpose of the test case (`pytest_secure_boot.py`) is to test the secure boot implementation and detect if it is broken. It consists of positive and negative test cases.
 
 ### Hardware required
 
@@ -95,21 +95,22 @@ Under `Security features`
 
 - Set UART ROM download mode to ENABLED (Required for the script to read the EFUSE)
 
-- Install and export TTFW requirements
-```
-python -m pip install -r $IDF_PATH/tools/ci/python_packages/ttfw_idf/requirements.txt
+- Install pytest requirements
 
-export PYTHONPATH="$IDF_PATH/tools:$IDF_PATH/tools/ci/python_packages"
-```
+    ```
+    bash $IDF_PATH/install.sh --enable-pytest
+    ```
 
 ### Build and test
 
 - Build the example
-```
-idf.py build
-```
+
+    ```
+    idf.py build
+    ```
 
 - Run the example test
-```
-python example_test.py
-```
+
+    ```
+    pytest --target esp32c3
+    ```

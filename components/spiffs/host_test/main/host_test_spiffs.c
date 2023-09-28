@@ -132,7 +132,6 @@ static void check_spiffs_files(spiffs *fs, const char *base_path, char *cur_path
 
         struct stat sb;
         stat(path, &sb);
-
         if (S_ISDIR(sb.st_mode)) {
             if (!strcmp(name, ".") || !strcmp(name, "..")) {
                 continue;
@@ -196,7 +195,8 @@ TEST(spiffs, format_disk_open_file_write_and_read_file)
     // Generate data
     spiffs_file file = spiffs_res;
 
-    uint32_t data_size = 100000;
+    uint32_t data_count = 5000;
+    uint32_t data_size = data_count * sizeof(uint32_t);
 
     char *data = (char *) malloc(data_size);
     char *read = (char *) malloc(data_size);
@@ -237,9 +237,10 @@ TEST(spiffs, can_read_spiffs_image)
     s32_t spiffs_res;
 
     const esp_partition_t *partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, "storage");
+    TEST_ASSERT_NOT_NULL(partition);
 
     // Write the contents of the image file to partition
-    FILE *img_file = fopen("image.bin", "r");
+    FILE *img_file = fopen(BUILD_DIR "/image.bin", "r");
     TEST_ASSERT_NOT_NULL(img_file);
 
     fseek(img_file, 0, SEEK_END);
@@ -249,8 +250,7 @@ TEST(spiffs, can_read_spiffs_image)
     char *img = (char *) malloc(img_size);
     TEST_ASSERT(fread(img, 1, img_size, img_file) == img_size);
     fclose(img_file);
-
-    TEST_ASSERT_TRUE(partition->size == img_size);
+    TEST_ASSERT_EQUAL(partition->size, img_size);
 
     esp_partition_erase_range(partition, 0, partition->size);
     esp_partition_write(partition, 0, img, img_size);
@@ -265,11 +265,11 @@ TEST(spiffs, can_read_spiffs_image)
     spiffs_res = SPIFFS_check(&fs);
     TEST_ASSERT_TRUE(spiffs_res == SPIFFS_OK);
 
-    char path_buf[PATH_MAX];
+    char path_buf[PATH_MAX] = {0};
 
     // The image is created from the spiffs source directory. Compare the files in that
     // directory to the files read from the SPIFFS image.
-    check_spiffs_files(&fs, "../spiffs", path_buf);
+    check_spiffs_files(&fs, BUILD_DIR "/../../spiffs", path_buf);
 
     deinit_spiffs(&fs);
 }

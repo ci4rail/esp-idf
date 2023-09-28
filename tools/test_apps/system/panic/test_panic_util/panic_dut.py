@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: Unlicense OR CC0-1.0
 import logging
 import os
+import re
 import subprocess
 import sys
-from typing import Any, Dict, List, Optional, TextIO
+from typing import Any, Dict, List, Optional, TextIO, Union
 
 import pexpect
 from panic_utils import NoGdbProcessError, attach_logger, quote_string, sha256, verify_valid_gdb_subprocess
@@ -88,13 +89,30 @@ class PanicTestDut(IdfDut):
         """Expect method for the register dump"""
         self.expect(r'Core\s+%d register dump:' % core)
 
+    def expect_cpu_reset(self) -> None:
+        # no digital system reset for panic handling restarts (see IDF-7255)
+        self.expect(r'.*rst:.*(RTC_SW_CPU_RST|SW_CPU_RESET|SW_CPU)')
+
     def expect_elf_sha256(self) -> None:
         """Expect method for ELF SHA256 line"""
         elf_sha256 = sha256(self.app.elf_file)
         elf_sha256_len = int(
-            self.app.sdkconfig.get('CONFIG_APP_RETRIEVE_LEN_ELF_SHA', '16')
+            self.app.sdkconfig.get('CONFIG_APP_RETRIEVE_LEN_ELF_SHA', '9')
         )
         self.expect_exact('ELF file SHA256: ' + elf_sha256[0:elf_sha256_len])
+
+    def expect_coredump(self, output_file_name: str, patterns: List[Union[str, re.Pattern]]) -> None:
+        with open(output_file_name, 'r') as file:
+            coredump = file.read()
+            for pattern in patterns:
+                if isinstance(pattern, str):
+                    position = coredump.find(pattern)
+                    assert position != -1, f"'{pattern}' not found in the coredump output"
+                elif isinstance(pattern, re.Pattern):
+                    match = pattern.findall(coredump)
+                    assert match, f"'{pattern.pattern}' not found in the coredump output"
+                else:
+                    raise ValueError(f'Unsupported input type: {type(pattern).__name__}')
 
     def _call_espcoredump(
         self, extra_args: List[str], coredump_file_name: str, output_file_name: str
@@ -122,7 +140,7 @@ class PanicTestDut(IdfDut):
         self.coredump_output.flush()
         self.coredump_output.seek(0)
 
-    def process_coredump_uart(self) -> None:
+    def process_coredump_uart(self, expected: Optional[List[Union[str, re.Pattern]]] = None) -> None:
         """Extract the core dump from UART output of the test, run espcoredump on it"""
         self.expect(self.COREDUMP_UART_START)
         res = self.expect('(.+)' + self.COREDUMP_UART_END)
@@ -135,8 +153,10 @@ class PanicTestDut(IdfDut):
         self._call_espcoredump(
             ['--core-format', 'b64'], coredump_file.name, output_file_name
         )
+        if expected:
+            self.expect_coredump(output_file_name, expected)
 
-    def process_coredump_flash(self) -> None:
+    def process_coredump_flash(self, expected: Optional[List[Union[str, re.Pattern]]] = None) -> None:
         """Extract the core dump from flash, run espcoredump on it"""
         coredump_file_name = os.path.join(self.logdir, 'coredump_data.bin')
         logging.info('Writing flash binary core dump to %s', coredump_file_name)
@@ -146,6 +166,8 @@ class PanicTestDut(IdfDut):
         self._call_espcoredump(
             ['--core-format', 'raw'], coredump_file_name, output_file_name
         )
+        if expected:
+            self.expect_coredump(output_file_name, expected)
 
     def gdb_write(self, command: str) -> Any:
         """
@@ -160,20 +182,21 @@ class PanicTestDut(IdfDut):
         Runs GDB and connects it to the "serial" port of the DUT.
         After this, the DUT expect methods can no longer be used to capture output.
         """
+        gdb_args = ['--nx', '--quiet', '--interpreter=mi2']
         if self.is_xtensa:
-            gdb_path = f'xtensa-{self.target}-elf-gdb'
+            gdb_path = 'xtensa-esp-elf-gdb-no-python'  # TODO: GCC-311
+            gdb_args = [f'--mcpu={self.target}'] + gdb_args
         else:
-            gdb_path = 'riscv32-esp-elf-gdb'
+            gdb_path = 'riscv32-esp-elf-gdb-no-python'  # TODO: GCC-311
         try:
             from pygdbmi.constants import GdbTimeoutError
-            default_gdb_args = ['--nx', '--quiet', '--interpreter=mi2']
-            gdb_command = [gdb_path] + default_gdb_args
+            gdb_command = [gdb_path] + gdb_args
             self.gdbmi = GdbController(command=gdb_command)
             pygdbmi_logger = attach_logger()
         except ImportError:
             # fallback for pygdbmi<0.10.0.0.
             from pygdbmi.gdbcontroller import GdbTimeoutError
-            self.gdbmi = GdbController(gdb_path=gdb_path)
+            self.gdbmi = GdbController(gdb_path=gdb_path, gdb_args=gdb_args)
             pygdbmi_logger = self.gdbmi.logger
 
         # pygdbmi logs to console by default, make it log to a file instead

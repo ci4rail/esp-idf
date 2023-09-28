@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -185,8 +185,8 @@ static void erase_ota_data(void)
 static void reboot_as_deep_sleep(void)
 {
     ESP_LOGI(TAG, "reboot as deep sleep");
-    esp_sleep_enable_timer_wakeup(2000);
-    esp_deep_sleep_start();
+    esp_deep_sleep(20000);
+    TEST_FAIL_MESSAGE("Should never be reachable except when sleep is rejected, abort");
 }
 
 /* @brief Copies a current app to next partition (OTA0-15), after that ESP is rebooting and run this (the next) OTAx.
@@ -486,6 +486,9 @@ static void test_flow4(void)
             break;
         case 3:
             ESP_LOGI(TAG, "OTA0");
+#ifdef BOOTLOADER_RESERVE_RTC_MEM
+            TEST_ASSERT_FALSE(bootloader_common_get_rtc_retain_mem_factory_reset_state());
+#endif
             TEST_ASSERT_EQUAL(ESP_PARTITION_SUBTYPE_APP_OTA_0, cur_app->subtype);
             mark_app_valid();
             set_output_pin(CONFIG_BOOTLOADER_NUM_PIN_FACTORY_RESET);
@@ -494,6 +497,10 @@ static void test_flow4(void)
         case 4:
             reset_output_pin(CONFIG_BOOTLOADER_NUM_PIN_FACTORY_RESET);
             ESP_LOGI(TAG, "Factory");
+#ifdef BOOTLOADER_RESERVE_RTC_MEM
+            TEST_ASSERT_TRUE(bootloader_common_get_rtc_retain_mem_factory_reset_state());
+            TEST_ASSERT_FALSE(bootloader_common_get_rtc_retain_mem_factory_reset_state());
+#endif
             TEST_ASSERT_EQUAL(ESP_PARTITION_SUBTYPE_APP_FACTORY, cur_app->subtype);
             erase_ota_data();
             break;

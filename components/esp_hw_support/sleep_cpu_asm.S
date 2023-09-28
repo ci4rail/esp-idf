@@ -9,7 +9,7 @@
 #include "soc/soc_caps.h"
 #include "sdkconfig.h"
 
-#if !CONFIG_IDF_TARGET_ESP32C6
+#if !CONFIG_IDF_TARGET_ESP32C6 && !CONFIG_IDF_TARGET_ESP32H2
 #include "soc/lp_aon_reg.h"
 #include "soc/extmem_reg.h"
 #endif
@@ -53,11 +53,12 @@ rv_core_critical_regs_save:
     sw      t2, RV_SLP_CTX_T2(t0)
     sw      s0, RV_SLP_CTX_S0(t0)
     sw      s1, RV_SLP_CTX_S1(t0)
-    sw      a0, RV_SLP_CTX_A0(t0)
 
-    /* !! WARNING, do not use the a0 register below, a0 carries important sleep
-     * information and will be returned as the return value !! */
+    /* a0 is caller saved, so it does not need to be saved, but it should be the
+       pointer value of RvCoreCriticalSleepFrame for return.
+     */
     mv      a0, t0
+    sw      a0, RV_SLP_CTX_A0(t0)
 
     sw      a1, RV_SLP_CTX_A1(t0)
     sw      a2, RV_SLP_CTX_A2(t0)
@@ -114,7 +115,7 @@ rv_core_critical_regs_save:
     csrr    t0, mscratch
     sw      t0, RV_SLP_CTX_T0(t3)
 
-#if !CONFIG_IDF_TARGET_ESP32C6
+#if !CONFIG_IDF_TARGET_ESP32C6 && !CONFIG_IDF_TARGET_ESP32H2
     /* writeback dcache is required here!!! */
     la      t0, EXTMEM_CACHE_SYNC_MAP_REG
     li      t1, 0x10

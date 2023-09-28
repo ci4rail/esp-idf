@@ -19,10 +19,22 @@
 #include "soc/rmt_periph.h"
 #include "hal/rmt_ll.h"
 #include "driver/gpio.h"
-#include "clk_tree.h"
+#include "esp_clk_tree.h"
 #include "esp_private/periph_ctrl.h"
 
 static const char *TAG = "rmt";
+
+#if SOC_PERIPH_CLK_CTRL_SHARED
+#define RMT_CLOCK_SRC_ATOMIC() PERIPH_RCC_ATOMIC()
+#else
+#define RMT_CLOCK_SRC_ATOMIC()
+#endif
+
+#if !SOC_RCC_IS_INDEPENDENT
+#define RMT_RCC_ATOMIC() PERIPH_RCC_ATOMIC()
+#else
+#define RMT_RCC_ATOMIC()
+#endif
 
 typedef struct rmt_platform_t {
     _lock_t mutex;                        // platform level mutex lock
@@ -50,9 +62,13 @@ rmt_group_t *rmt_acquire_group_handle(int group_id)
             group->occupy_mask = UINT32_MAX & ~((1 << SOC_RMT_CHANNELS_PER_GROUP) - 1);
             // group clock won't be configured at this stage, it will be set when allocate the first channel
             group->clk_src = 0;
-            // enable APB access RMT registers
-            periph_module_enable(rmt_periph_signals.groups[group_id].module);
-            periph_module_reset(rmt_periph_signals.groups[group_id].module);
+            // group interrupt priority is shared between all channels, it will be set when allocate the first channel
+            group->intr_priority = RMT_GROUP_INTR_PRIORITY_UNINITIALIZED;
+            // enable the bus clock for the RMT peripheral
+            RMT_RCC_ATOMIC() {
+                rmt_ll_enable_bus_clock(group_id, true);
+                rmt_ll_reset_register(group_id);
+            }
             // hal layer initialize
             rmt_hal_init(&group->hal);
         }
@@ -76,15 +92,23 @@ void rmt_release_group_handle(rmt_group_t *group)
     int group_id = group->group_id;
     rmt_clock_source_t clk_src = group->clk_src;
     bool do_deinitialize = false;
+    rmt_hal_context_t *hal = &group->hal;
 
     _lock_acquire(&s_platform.mutex);
     s_platform.group_ref_counts[group_id]--;
     if (s_platform.group_ref_counts[group_id] == 0) {
         do_deinitialize = true;
         s_platform.groups[group_id] = NULL;
+        // disable core clock
+        RMT_CLOCK_SRC_ATOMIC() {
+            rmt_ll_enable_group_clock(hal->regs, false);
+        }
         // hal layer deinitialize
-        rmt_hal_deinit(&group->hal);
-        periph_module_disable(rmt_periph_signals.groups[group_id].module);
+        rmt_hal_deinit(hal);
+        // disable bus clock
+        RMT_RCC_ATOMIC() {
+            rmt_ll_enable_bus_clock(group_id, false);
+        }
         free(group);
     }
     _lock_release(&s_platform.mutex);
@@ -132,7 +156,7 @@ esp_err_t rmt_select_periph_clock(rmt_channel_handle_t chan, rmt_clock_source_t 
 #endif // SOC_RMT_SUPPORT_RC_FAST
 
     // get clock source frequency
-    ESP_RETURN_ON_ERROR(clk_tree_src_get_freq_hz((soc_module_clk_t)clk_src, CLK_TREE_SRC_FREQ_PRECISION_CACHED, &periph_src_clk_hz),
+    ESP_RETURN_ON_ERROR(esp_clk_tree_src_get_freq_hz((soc_module_clk_t)clk_src, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &periph_src_clk_hz),
                         TAG, "get clock source frequency failed");
 
 #if CONFIG_PM_ENABLE
@@ -163,7 +187,10 @@ esp_err_t rmt_select_periph_clock(rmt_channel_handle_t chan, rmt_clock_source_t 
 #endif // CONFIG_PM_ENABLE
 
     // no division for group clock source, to achieve highest resolution
-    rmt_ll_set_group_clock_src(group->hal.regs, channel_id, clk_src, 1, 1, 0);
+    RMT_CLOCK_SRC_ATOMIC() {
+        rmt_ll_set_group_clock_src(group->hal.regs, channel_id, clk_src, 1, 1, 0);
+        rmt_ll_enable_group_clock(group->hal.regs, true);
+    }
     group->resolution_hz = periph_src_clk_hz;
     ESP_LOGD(TAG, "group clock resolution:%"PRIu32, group->resolution_hz);
     return ret;
@@ -203,4 +230,50 @@ esp_err_t rmt_disable(rmt_channel_handle_t channel)
     ESP_RETURN_ON_FALSE(channel, ESP_ERR_INVALID_ARG, TAG, "invalid argument");
     ESP_RETURN_ON_FALSE(channel->fsm == RMT_FSM_ENABLE, ESP_ERR_INVALID_STATE, TAG, "channel not in enable state");
     return channel->disable(channel);
+}
+
+bool rmt_set_intr_priority_to_group(rmt_group_t *group, int intr_priority)
+{
+    bool priority_conflict = false;
+    portENTER_CRITICAL(&group->spinlock);
+    if (group->intr_priority == RMT_GROUP_INTR_PRIORITY_UNINITIALIZED) {
+        // intr_priority never allocated, accept user's value unconditionally
+        // intr_priority could only be set once here
+        group->intr_priority = intr_priority;
+    } else {
+        // group intr_priority already specified
+        // If interrupt priority specified before, it CANNOT BE CHANGED until `rmt_release_group_handle()` called
+        // So we have to check if the new priority specified conflicts with the old one
+        if (intr_priority) {
+            // User specified intr_priority, check if conflict or not
+            // Even though the `group->intr_priority` is 0, an intr_priority must have been specified automatically too,
+            // although we do not know it exactly now, so specifying the intr_priority again might also cause conflict.
+            // So no matter if `group->intr_priority` is 0 or not, we have to check.
+            // Value `0` of `group->intr_priority` means "unknown", NOT "unspecified"!
+            if (intr_priority != (group->intr_priority)) {
+                // intr_priority conflicts!
+                priority_conflict = true;
+            }
+        }
+        // else do nothing
+        // user did not specify intr_priority, then keep the old priority
+        // We'll use the `RMT_INTR_ALLOC_FLAG | RMT_ALLOW_INTR_PRIORITY_MASK`, which should always success
+    }
+    // The `group->intr_priority` will not change any longer, even though another task tries to modify it.
+    // So we could exit critical here safely.
+    portEXIT_CRITICAL(&group->spinlock);
+    return priority_conflict;
+}
+
+int rmt_get_isr_flags(rmt_group_t *group)
+{
+    int isr_flags = RMT_INTR_ALLOC_FLAG;
+    if (group->intr_priority) {
+        // Use user-specified priority bit
+        isr_flags |= (1 << (group->intr_priority));
+    } else {
+        // Allow all LOWMED priority bits
+        isr_flags |= RMT_ALLOW_INTR_PRIORITY_MASK;
+    }
+    return isr_flags;
 }

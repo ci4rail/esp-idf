@@ -1,14 +1,23 @@
 menu "Example Configuration"
 
+    config EXAMPLE_GET_AP_INFO_FROM_STDIN
+        bool "Get AP info from console"
+        default n
+        help
+            If enabled, the example will prompt the user to enter the SSID and Password of the AP to be connected
+            via the console.
+
     config EXAMPLE_WIFI_SSID
         string "WiFi SSID"
         default "myssid"
+        depends on !EXAMPLE_GET_AP_INFO_FROM_STDIN
         help
             SSID (network name) for the example to connect to.
 
     config EXAMPLE_WIFI_PASSWORD
         string "WiFi Password"
         default "mypassword"
+        depends on !EXAMPLE_GET_AP_INFO_FROM_STDIN
         help
             WiFi password (WPA or WPA2) for the example to use.
 
@@ -19,6 +28,14 @@ menu "Example Configuration"
             Interval for station to listen to beacon from AP. The unit of listen interval is one beacon interval.
             For example, if beacon interval is 100 ms and listen interval is 3, the interval for station to listen
             to beacon is 300 ms.
+
+    config EXAMPLE_WIFI_BEACON_TIMEOUT
+        int "WiFi beacon timeout"
+        default 6
+        range 6 30
+        help
+            For Station, If the station does not receive a beacon frame from the connected SoftAP during the
+            inactive time, disconnect from SoftAP. Default 6s.
 
     choice EXAMPLE_POWER_SAVE_MODE
         prompt "power save mode"

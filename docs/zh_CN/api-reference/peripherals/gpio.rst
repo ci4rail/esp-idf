@@ -13,13 +13,20 @@ GPIO 汇总
 
 .. only:: SOC_RTCIO_INPUT_OUTPUT_SUPPORTED
 
-    当 GPIO 连接到 RTC 低功耗和模拟子系统时，{IDF_TARGET_NAME} 芯片还单独支持 RTC GPIO。可在以下情况时使用这些管脚功能：
+    .. only:: not SOC_LP_PERIPHERALS_SUPPORTED
+
+        当 GPIO 连接到 RTC 低功耗和模拟子系统时，{IDF_TARGET_NAME} 芯片还单独支持 RTC GPIO。可在以下情况时使用这些管脚功能：
+
+    .. only:: SOC_LP_PERIPHERALS_SUPPORTED
+
+        当 GPIO 连接到 RTC 低功耗、模拟子系统、低功耗外设时，{IDF_TARGET_NAME} 芯片还单独支持 RTC GPIO。可在以下情况时使用这些管脚功能：
 
     .. list::
 
         - 处于 Deep-sleep 模式时
-        :SOC_ULP_SUPPORTED: - :doc:`超低功耗协处理器 (ULP) <../../api-reference/system/ulp>` 运行时
+        :SOC_ULP_SUPPORTED and not esp32c6: - :doc:`超低功耗协处理器 (ULP) <../../api-reference/system/ulp>` 运行时
         - 使用 ADC/DAC 等模拟功能时
+        :SOC_LP_PERIPHERALS_SUPPORTED: - 使用低功耗外设时，例如： LP_UART ， LP_I2C 等
 
 
 .. only:: SOC_GPIO_SUPPORT_PIN_GLITCH_FILTER or SOC_GPIO_FLEX_GLITCH_FILTER_NUM
@@ -58,11 +65,17 @@ GPIO 汇总
 
     {IDF_TARGET_NAME} 支持输入引脚的硬件迟滞，这可以减少由于输入电压在逻辑 0、1 临界值附近时采样不稳定造成的 GPIO 中断误触，尤其是当输入逻辑电平转换较慢，电平建立时间较长时。
 
-    每个引脚可以独立启用迟滞功能。默认情况下，它由 eFuse 控制，且处于关闭状态，但也可以由软件控制启用或禁用。您可以通过配置 :cpp:member:`gpio_config_t::hys_ctrl_mode` 来选择迟滞控制模式。
+    .. only:: SOC_GPIO_SUPPORT_PIN_HYS_CTRL_BY_EFUSE
 
-    .. note::
+        每个引脚可以独立启用迟滞功能。默认情况下，它由 eFuse 控制，且处于关闭状态，但也可以由软件控制启用或禁用。你可以通过配置 :cpp:member:`gpio_config_t::hys_ctrl_mode` 来选择迟滞控制模式。迟滞控制模式会和其余 GPIO 配置一起在 :cpp:func:`gpio_config` 中生效。
 
-        当迟滞功能由 eFuse 控制时，仍然可以独立的控制每个引脚的该功能，您需要 `烧断 eFuse <https://docs.espressif.com/projects/esptool/en/latest/esp32/espefuse/index.html>`_ ，以在特定 GPIO上 启用迟滞功能。
+        .. note::
+
+            当迟滞功能由 eFuse 控制时，仍然可以独立的控制每个引脚的该功能，你需要 `烧断 eFuse <https://docs.espressif.com/projects/esptool/en/latest/esp32/espefuse/index.html>`_ ，以在特定 GPIO 上启用迟滞功能。
+
+    .. only:: not SOC_GPIO_SUPPORT_PIN_HYS_CTRL_BY_EFUSE
+
+        每个引脚可以独立启用迟滞功能。默认情况下，它处于关闭状态。你可以通过配置 :cpp:member:`gpio_config_t::hys_ctrl_mode` 来选择启用与否。迟滞控制模式会和其余 GPIO 配置一起在 :cpp:func:`gpio_config` 中生效。
 
 
 应用示例

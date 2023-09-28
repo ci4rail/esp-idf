@@ -150,6 +150,7 @@ typedef struct rtc_cpu_freq_config_s {
 #define RTC_VDDSDIO_TIEH_1_8V 0 //!< TIEH field value for 1.8V VDDSDIO
 #define RTC_VDDSDIO_TIEH_3_3V 1 //!< TIEH field value for 3.3V VDDSDIO
 
+
 /**
  * @brief Clock source to be calibrated using rtc_clk_cal function
  *
@@ -177,7 +178,7 @@ typedef struct {
     uint32_t clk_rtc_clk_div : 8;
     uint32_t clk_8m_clk_div : 3;               //!< RC_FAST clock divider (division is by clk_8m_div+1, i.e. 0 means ~20MHz frequency)
     uint32_t slow_clk_dcap : 8;                //!< RC_SLOW clock adjustment parameter (higher value leads to lower frequency)
-    uint32_t clk_8m_dfreq : 8;                 //!< RC_FAST clock adjustment parameter (higher value leads to higher frequency)
+    uint32_t clk_8m_dfreq : 10;                 //!< RC_FAST clock adjustment parameter (higher value leads to higher frequency)
     uint32_t rc32k_dfreq : 10;                 //!< Internal RC32K clock adjustment parameter (higher value leads to higher frequency)
 } rtc_clk_config_t;
 
@@ -373,30 +374,23 @@ void rtc_clk_cpu_freq_get_config(rtc_cpu_freq_config_t *out_config);
 void rtc_clk_cpu_freq_set_xtal(void);
 
 /**
+ * @brief Switch root clock source to PLL (only used by sleep) release root clock source locked by PMU
+ *
+ * wifi receiving beacon frame in PMU modem state strongly depends on the BBPLL
+ * clock, PMU will forcibly lock the root clock source as PLL, when the root
+ * clock source of the software system is selected as PLL, we need to release
+ * the root clock source locking and switch the root clock source to PLL in the
+ * sleep process (a critical section).
+ *
+ * @param[in] Maximum CPU frequency, in MHz
+ */
+void rtc_clk_cpu_freq_to_pll_and_pll_lock_release(int cpu_freq_mhz);
+
+/**
  * @brief Get the current APB frequency.
  * @return The calculated APB frequency value, in Hz.
  */
 uint32_t rtc_clk_apb_freq_get(void);
-
-/**
- * @brief Clock calibration function used by rtc_clk_cal
- *
- * Calibration of RTC_SLOW_CLK is performed using a special feature of TIMG0.
- * This feature counts the number of XTAL clock cycles within a given number of
- * RTC_SLOW_CLK cycles.
- *
- * Slow clock calibration feature has two modes of operation: one-off and cycling.
- * In cycling mode (which is enabled by default on SoC reset), counting of XTAL
- * cycles within RTC_SLOW_CLK cycle is done continuously. Cycling mode is enabled
- * using TIMG_RTC_CALI_START_CYCLING bit. In one-off mode counting is performed
- * once, and TIMG_RTC_CALI_RDY bit is set when counting is done. One-off mode is
- * enabled using TIMG_RTC_CALI_START bit.
- *
- * @param cal_clk which clock to calibrate
- * @param slowclk_cycles number of slow clock cycles to count
- * @return number of XTAL clock cycles within the given number of slow clock cycles
- */
-uint32_t rtc_clk_cal_internal(rtc_cal_sel_t cal_clk, uint32_t slowclk_cycles);
 
 /**
  * @brief Measure RTC slow clock's period, based on main XTAL frequency
