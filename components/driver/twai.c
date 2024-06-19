@@ -208,8 +208,6 @@ TWAI_ISR_ATTR static void twai_intr_handler_main(void *arg)
     }
     events = twai_hal_get_events(&twai_context);    //Get the events that triggered the interrupt
 
-    ets_printf("TWAI ISR events=%lx\n", events);
-
 #if defined(CONFIG_TWAI_ERRATA_FIX_RX_FRAME_INVALID) || defined(CONFIG_TWAI_ERRATA_FIX_RX_FIFO_CORRUPT)
     if (events & TWAI_HAL_EVENT_NEED_PERIPH_RESET) {
         twai_hal_prepare_for_reset(&twai_context);
