@@ -48,8 +48,7 @@
 #define TWAI_MALLOC_CAPS    MALLOC_CAP_DEFAULT
 #endif  //CONFIG_TWAI_ISR_IN_IRAM
 
-#define DRIVER_DEFAULT_INTERRUPTS   0xE7        //Exclude data overrun (bit[3]) and brp_div (bit[4])
-
+#define DRIVER_DEFAULT_INTERRUPTS   0x67        //Exclude bus error, data overrun (bit[3]) and brp_div (bit[4])
 #define ALERT_LOG_LEVEL_WARNING     TWAI_ALERT_ARB_LOST  //Alerts above and including this level use ESP_LOGW
 #define ALERT_LOG_LEVEL_ERROR       TWAI_ALERT_TX_FAILED //Alerts above and including this level use ESP_LOGE
 
@@ -208,6 +207,8 @@ TWAI_ISR_ATTR static void twai_intr_handler_main(void *arg)
         return;
     }
     events = twai_hal_get_events(&twai_context);    //Get the events that triggered the interrupt
+
+    ets_printf("TWAI ISR events=%lx\n", events);
 
 #if defined(CONFIG_TWAI_ERRATA_FIX_RX_FRAME_INVALID) || defined(CONFIG_TWAI_ERRATA_FIX_RX_FIFO_CORRUPT)
     if (events & TWAI_HAL_EVENT_NEED_PERIPH_RESET) {
@@ -439,7 +440,14 @@ esp_err_t twai_driver_install(const twai_general_config_t *g_config, const twai_
     bool init = twai_hal_init(&twai_context);
     assert(init);
     (void)init;
-    twai_hal_configure(&twai_context, t_config, f_config, DRIVER_DEFAULT_INTERRUPTS, g_config->clkout_divider);
+
+    // only enable bus error interrupt if user has enabled it. 
+    // bus error interrupts may flood the system and may cause a watchdog reset: https://github.com/ci4rail/esp_io4edge_twaiL2/issues/4
+    uint32_t intr_mask = DRIVER_DEFAULT_INTERRUPTS;
+    if(g_config->alerts_enabled & TWAI_ALERT_BUS_ERROR){
+        intr_mask |= TWAI_HAL_EVENT_BUS_ERR;
+    }
+    twai_hal_configure(&twai_context, t_config, f_config, intr_mask, g_config->clkout_divider);
     TWAI_EXIT_CRITICAL();
 
     //Allocate GPIO and Interrupts
