@@ -22,19 +22,6 @@ esp_err_t esp_console_setup_prompt(const char *prompt, esp_console_repl_com_t *r
     }
     snprintf(repl_com->prompt, CONSOLE_PROMPT_MAX_LEN - 1, LOG_COLOR_I "%s " LOG_RESET_COLOR, prompt_temp);
 
-    /* Figure out if the terminal supports escape sequences */
-    int probe_status = linenoiseProbe();
-    if (probe_status) {
-        /* zero indicates success */
-        linenoiseSetDumbMode(1);
-#if CONFIG_LOG_COLORS
-        /* Since the terminal doesn't support escape sequences,
-         * don't use color codes in the s_prompt.
-         */
-        snprintf(repl_com->prompt, CONSOLE_PROMPT_MAX_LEN - 1, "%s ", prompt_temp);
-#endif //CONFIG_LOG_COLORS
-    }
-
     return ESP_OK;
 }
 
@@ -85,10 +72,6 @@ esp_err_t esp_console_common_init(size_t max_cmdline_length, esp_console_repl_co
     if (ret != ESP_OK) {
         goto _exit;
     }
-
-    /* Configure linenoise line completion library */
-    /* Enable multiline editing. If not set, long commands will scroll within single line */
-    linenoiseSetMultiLine(1);
 
     /* Tell linenoise where to get command completions and hints */
     linenoiseSetCompletionCallback(&esp_console_get_completion);
@@ -150,14 +133,6 @@ void esp_console_repl_task(void *args)
            "Use UP/DOWN arrows to navigate through command history.\r\n"
            "Press TAB when typing command name to auto-complete.\r\n");
 
-    if (linenoiseIsDumbMode()) {
-        printf("\r\n"
-               "Your terminal application does not support escape sequences.\n\n"
-               "Line editing and history features are disabled.\n\n"
-               "On Windows, try using Putty instead.\r\n");
-    }
-
-    linenoiseSetMaxLineLen(repl_com->max_cmdline_length);
     while (repl_com->state == CONSOLE_REPL_STATE_START) {
         char *line = linenoise(repl_com->prompt);
         if (line == NULL) {
