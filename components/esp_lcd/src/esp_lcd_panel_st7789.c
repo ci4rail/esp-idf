@@ -41,6 +41,7 @@ typedef struct {
     unsigned int bits_per_pixel;
     uint8_t madctl_val; // save current value of LCD_CMD_MADCTL register
     uint8_t colmod_cal; // save surrent value of LCD_CMD_COLMOD register
+    uint8_t bits_per_pixel_to_send;
 } st7789_panel_t;
 
 esp_err_t esp_lcd_new_panel_st7789(const esp_lcd_panel_io_handle_t io, const esp_lcd_panel_dev_config_t *panel_dev_config, esp_lcd_panel_handle_t *ret_panel)
@@ -74,9 +75,11 @@ esp_err_t esp_lcd_new_panel_st7789(const esp_lcd_panel_io_handle_t io, const esp
     switch (panel_dev_config->bits_per_pixel) {
     case 16:
         st7789->colmod_cal = 0x55;
+        st7789->bits_per_pixel_to_send = 16;
         break;
     case 18:
         st7789->colmod_cal = 0x66;
+        st7789->bits_per_pixel_to_send = 24;
         break;
     default:
         ESP_GOTO_ON_FALSE(false, ESP_ERR_NOT_SUPPORTED, err, TAG, "unsupported pixel width");
@@ -186,7 +189,7 @@ static esp_err_t panel_st7789_draw_bitmap(esp_lcd_panel_t *panel, int x_start, i
         (y_end - 1) & 0xFF,
     }, 4);
     // transfer frame buffer
-    size_t len = (x_end - x_start) * (y_end - y_start) * st7789->bits_per_pixel / 8;
+    size_t len = (x_end - x_start) * (y_end - y_start) * st7789->bits_per_pixel_to_send / 8;
     esp_lcd_panel_io_tx_color(io, LCD_CMD_RAMWR, color_data, len);
 
     return ESP_OK;
