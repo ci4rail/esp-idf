@@ -1022,7 +1022,7 @@ char *linenoise(const char *prompt)
 {
     char buf[LINENOISE_MAX_LINE];
 
-    char *retval = linenoiseBlockingEdit(STDIN_FILENO, STDOUT_FILENO, buf, LINENOISE_MAX_LINE, prompt);
+    char *retval = linenoiseBlockingEdit(fileno(stdin), fileno(stdout), buf, LINENOISE_MAX_LINE, prompt);
     return retval;
 }
 
