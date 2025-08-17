@@ -1,22 +1,15 @@
 /*
- * SPDX-FileCopyrightText: 2024-2025 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "sdkconfig.h"
 #include <sys/cdefs.h> // __containerof
-#include <sys/param.h>
-#include <sys/fcntl.h>
 #include "esp_console.h"
 #include "console_private.h"
 #include "esp_log.h"
 #include "linenoise/linenoise.h"
-
-#include "esp_vfs_eventfd.h"
-#if CONFIG_IDF_TARGET_LINUX
-#include <unistd.h>
-#endif
 
 static const char *TAG = "console.common";
 
@@ -28,19 +21,6 @@ esp_err_t esp_console_setup_prompt(const char *prompt, esp_console_repl_com_t *r
         prompt_temp = prompt;
     }
     snprintf(repl_com->prompt, CONSOLE_PROMPT_MAX_LEN - 1, LOG_COLOR_I "%s " LOG_RESET_COLOR, prompt_temp);
-
-    /* Figure out if the terminal supports escape sequences */
-    int probe_status = linenoiseProbe();
-    if (probe_status) {
-        /* zero indicates success */
-        linenoiseSetDumbMode(1);
-#if CONFIG_LOG_COLORS
-        /* Since the terminal doesn't support escape sequences,
-         * don't use color codes in the s_prompt.
-         */
-        snprintf(repl_com->prompt, CONSOLE_PROMPT_MAX_LEN - 1, "%s ", prompt_temp);
-#endif //CONFIG_LOG_COLORS
-    }
 
     return ESP_OK;
 }
@@ -64,11 +44,6 @@ esp_err_t esp_console_setup_history(const char *history_path, uint32_t max_histo
     return ESP_OK;
 _exit:
     return ret;
-}
-
-__attribute__((weak)) esp_err_t esp_console_internal_set_event_fd(esp_console_repl_com_t *repl_com)
-{
-    return ESP_OK;
 }
 
 esp_err_t esp_console_common_init(size_t max_cmdline_length, esp_console_repl_com_t *repl_com)
@@ -98,44 +73,13 @@ esp_err_t esp_console_common_init(size_t max_cmdline_length, esp_console_repl_co
         goto _exit;
     }
 
-    /* Configure linenoise line completion library */
-    /* Enable multiline editing. If not set, long commands will scroll within single line */
-    linenoiseSetMultiLine(1);
-
     /* Tell linenoise where to get command completions and hints */
     linenoiseSetCompletionCallback(&esp_console_get_completion);
     linenoiseSetHintsCallback((linenoiseHintsCallback *)&esp_console_get_hint);
 
-#if CONFIG_VFS_SUPPORT_SELECT
-    ret = esp_console_internal_set_event_fd(repl_com);
-    if (ret != ESP_OK) {
-        goto _exit;
-    }
-#endif
-
     return ESP_OK;
 _exit:
     return ret;
-}
-
-__attribute__((weak)) esp_err_t esp_console_common_deinit(esp_console_repl_com_t *repl_com)
-{
-    // set the state to deinit to force the while loop in
-    // esp_console_repl_task to break
-    repl_com->state = CONSOLE_REPL_STATE_DEINIT;
-
-    /* Unregister the heap function to avoid memory leak, since it is created
-     * every time a console init is called. */
-    esp_err_t ret = esp_console_deregister_help_command();
-    if (ret != ESP_OK) {
-        return ret;
-    }
-
-    /* free the history to avoid memory leak, since it is created
-     * every time a console init is called. */
-    linenoiseHistoryFree();
-
-    return ESP_OK;
 }
 
 esp_err_t esp_console_start_repl(esp_console_repl_t *repl)
@@ -165,11 +109,6 @@ void esp_console_repl_task(void *args)
      * function is called. */
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-    if (repl_com->state_mux != NULL) {
-        BaseType_t ret_val = xSemaphoreTake(repl_com->state_mux, portMAX_DELAY);
-        assert(ret_val == pdTRUE);
-    }
-
     /* Change standard input and output of the task if the requested UART is
      * NOT the default one. This block will replace stdin, stdout and stderr.
      */
@@ -194,14 +133,6 @@ void esp_console_repl_task(void *args)
            "Use UP/DOWN arrows to navigate through command history.\r\n"
            "Press TAB when typing command name to auto-complete.\r\n");
 
-    if (linenoiseIsDumbMode()) {
-        printf("\r\n"
-               "Your terminal application does not support escape sequences.\n\n"
-               "Line editing and history features are disabled.\n\n"
-               "On Windows, try using Windows Terminal or Putty instead.\r\n");
-    }
-
-    linenoiseSetMaxLineLen(repl_com->max_cmdline_length);
     while (repl_com->state == CONSOLE_REPL_STATE_START) {
         char *line = linenoise(repl_com->prompt);
         if (line == NULL) {
@@ -230,10 +161,6 @@ void esp_console_repl_task(void *args)
         }
         /* linenoise allocates line buffer on the heap, so need to free it */
         linenoiseFree(line);
-    }
-
-    if (repl_com->state_mux != NULL) {
-        xSemaphoreGive(repl_com->state_mux);
     }
     ESP_LOGD(TAG, "The End");
     vTaskDelete(NULL);
