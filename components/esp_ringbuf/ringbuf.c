@@ -653,7 +653,15 @@ static void prvReturnItemDefault(Ringbuffer_t *pxRingbuffer, uint8_t *pucItem)
         if (pxRingbuffer->pucFree != pxRingbuffer->pucAcquire) {
             pxRingbuffer->uxRingbufferFlags &= ~rbBUFFER_FULL_FLAG;
         } else if (pxRingbuffer->pucFree == pxRingbuffer->pucAcquire && pxRingbuffer->pucFree == pxRingbuffer->pucRead) {
-            //Special case where a full buffer is completely freed in one go
+            // klauspopp@gmx.de:
+            // originally this was: Special case where a full buffer is completely freed in one go
+            // but this is not what the caller intends. Only the current item should be freed!
+            size_t xAlignedItemSize = rbALIGN_SIZE(pxCurHeader->xItemLen);
+            pxRingbuffer->pucFree += xAlignedItemSize + rbHEADER_SIZE;
+            if ((pxRingbuffer->pucTail - pxRingbuffer->pucFree) < rbHEADER_SIZE)
+            {
+                pxRingbuffer->pucFree = pxRingbuffer->pucHead;
+            }
             pxRingbuffer->uxRingbufferFlags &= ~rbBUFFER_FULL_FLAG;
         }
     }

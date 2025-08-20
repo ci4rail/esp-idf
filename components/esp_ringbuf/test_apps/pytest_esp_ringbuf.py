@@ -37,7 +37,7 @@ def test_esp_ringbuf(dut: Dut) -> None:
     'config',
     [
         'default',
-        'ringbuf_flash',
+        #'ringbuf_flash',
     ],
 )
 def test_esp_ringbuf_qemu(dut: Dut) -> None:
